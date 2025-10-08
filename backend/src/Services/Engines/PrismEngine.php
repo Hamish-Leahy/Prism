@@ -176,16 +176,25 @@ class PrismEngine implements EngineInterface
             throw new \RuntimeException('Engine not initialized');
         }
 
+        // Return cached title if available
+        if (!empty($this->pageMetadata['title'])) {
+            return $this->pageMetadata['title'];
+        }
+
         if ($this->dom) {
             $titleElements = $this->dom->getElementsByTagName('title');
             if ($titleElements->length > 0) {
-                return $titleElements->item(0)->textContent;
+                $title = trim($titleElements->item(0)->textContent);
+                $this->pageMetadata['title'] = $title;
+                return $title;
             }
         }
 
         // Fallback: extract title from HTML
         if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $this->pageContent, $matches)) {
-            return trim($matches[1]);
+            $title = trim($matches[1]);
+            $this->pageMetadata['title'] = $title;
+            return $title;
         }
 
         return 'Untitled';
