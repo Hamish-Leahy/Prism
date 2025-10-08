@@ -90,18 +90,48 @@ class PrismEngine implements EngineInterface
         }
 
         try {
+            $startTime = microtime(true);
             $this->currentUrl = $url;
             
-            // Fetch the page content
+            $this->logger->info("Navigating to URL", ['url' => $url]);
+            
+            // Fetch the page content using advanced HTTP client
             $response = $this->httpClient->get($url);
-            $this->pageContent = $response->getBody()->getContents();
+            
+            if (!$response['success']) {
+                throw new \RuntimeException("Navigation failed: " . ($response['error'] ?? 'Unknown error'));
+            }
+            
+            $this->pageContent = $response['body'];
+            $this->pageMetadata['response_time'] = microtime(true) - $startTime;
+            $this->pageMetadata['content_type'] = $response['headers']['content-type'][0] ?? 'text/html';
+            $this->pageMetadata['content_length'] = strlen($this->pageContent);
+            $this->pageMetadata['server'] = $response['headers']['server'][0] ?? '';
+            $this->pageMetadata['last_modified'] = $response['headers']['last-modified'][0] ?? null;
+            
+            // Update current URL to final URL after redirects
+            if (!empty($response['final_url'])) {
+                $this->currentUrl = $response['final_url'];
+            }
             
             // Parse HTML if enabled
             if ($this->config['html_parsing'] ?? true) {
                 $this->parseHtml();
+                $this->extractMetadata();
             }
             
-        } catch (RequestException $e) {
+            $this->logger->info("Navigation completed", [
+                'url' => $this->currentUrl,
+                'status' => $response['status'],
+                'size' => $this->pageMetadata['content_length'],
+                'time' => $this->pageMetadata['response_time']
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("Navigation failed", [
+                'url' => $url,
+                'error' => $e->getMessage()
+            ]);
             throw new \RuntimeException("Navigation failed: " . $e->getMessage());
         }
     }
