@@ -3,6 +3,7 @@
 namespace Prism\Backend\Services\Engines;
 
 use Prism\Backend\Services\HttpClientService;
+use Prism\Backend\Services\Html5ParserService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -11,6 +12,7 @@ class PrismEngine implements EngineInterface
 {
     private array $config;
     private ?HttpClientService $httpClient = null;
+    private ?Html5ParserService $htmlParser = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -19,6 +21,7 @@ class PrismEngine implements EngineInterface
     private array $pageMetadata = [];
     private array $cookies = [];
     private array $localStorage = [];
+    private array $parsedData = [];
 
     public function __construct(array $config)
     {
@@ -47,7 +50,20 @@ class PrismEngine implements EngineInterface
 
             $this->httpClient = new HttpClientService($httpConfig, $this->logger);
 
-            // Initialize DOM parser
+            // Initialize HTML5 parser
+            $parserConfig = [
+                'preserve_whitespace' => $this->config['preserve_whitespace'] ?? false,
+                'format_output' => $this->config['format_output'] ?? false,
+                'strict_error_checking' => $this->config['strict_error_checking'] ?? false,
+                'recover' => $this->config['recover'] ?? true,
+                'substitute_entities' => $this->config['substitute_entities'] ?? true,
+                'validate_on_parse' => $this->config['validate_on_parse'] ?? false,
+                'normalize_whitespace' => $this->config['normalize_whitespace'] ?? true,
+            ];
+            
+            $this->htmlParser = new Html5ParserService($parserConfig, $this->logger);
+
+            // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
             $this->dom->preserveWhiteSpace = false;
             $this->dom->formatOutput = true;
@@ -117,6 +133,7 @@ class PrismEngine implements EngineInterface
             // Parse HTML if enabled
             if ($this->config['html_parsing'] ?? true) {
                 $this->parseHtml();
+                $this->parseHtml5();
                 $this->extractMetadata();
             }
             
@@ -223,10 +240,12 @@ class PrismEngine implements EngineInterface
         }
         
         $this->httpClient = null;
+        $this->htmlParser = null;
         $this->dom = null;
         $this->currentUrl = '';
         $this->pageContent = '';
         $this->pageMetadata = [];
+        $this->parsedData = [];
         $this->cookies = [];
         $this->localStorage = [];
         $this->initialized = false;
@@ -280,7 +299,28 @@ class PrismEngine implements EngineInterface
             libxml_clear_errors();
             
         } catch (\Exception $e) {
-            error_log("HTML parsing failed: " . $e->getMessage());
+            $this->logger->error("HTML parsing failed: " . $e->getMessage());
+        }
+    }
+
+    private function parseHtml5(): void
+    {
+        if (empty($this->pageContent) || !$this->htmlParser) {
+            return;
+        }
+
+        try {
+            $this->parsedData = $this->htmlParser->parseHtml($this->pageContent, $this->currentUrl);
+            
+            $this->logger->debug("HTML5 parsing completed", [
+                'elements_count' => $this->parsedData['performance']['dom_elements'] ?? 0,
+                'links_count' => count($this->parsedData['links'] ?? []),
+                'images_count' => count($this->parsedData['media']['images'] ?? []),
+                'forms_count' => count($this->parsedData['forms'] ?? [])
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->logger->error("HTML5 parsing failed: " . $e->getMessage());
         }
     }
 
@@ -563,5 +603,346 @@ class PrismEngine implements EngineInterface
             'cache_stats' => $this->getCacheStats(),
             'request_count' => count($this->getRequestHistory())
         ];
+    }
+
+    // HTML5 Parser Methods
+
+    public function getParsedData(): array
+    {
+        return $this->parsedData;
+    }
+
+    public function getPageStructure(): array
+    {
+        return $this->parsedData['structure'] ?? [];
+    }
+
+    public function getPageContent(): array
+    {
+        return $this->parsedData['content'] ?? [];
+    }
+
+    public function getPageForms(): array
+    {
+        return $this->parsedData['forms'] ?? [];
+    }
+
+    public function getPageMedia(): array
+    {
+        return $this->parsedData['media'] ?? [];
+    }
+
+    public function getPageLinks(): array
+    {
+        return $this->parsedData['links'] ?? [];
+    }
+
+    public function getPageScripts(): array
+    {
+        return $this->parsedData['scripts'] ?? [];
+    }
+
+    public function getPageStyles(): array
+    {
+        return $this->parsedData['styles'] ?? [];
+    }
+
+    public function getAccessibilityInfo(): array
+    {
+        return $this->parsedData['accessibility'] ?? [];
+    }
+
+    public function getSemanticElements(): array
+    {
+        return $this->parsedData['semantic'] ?? [];
+    }
+
+    public function getMicrodata(): array
+    {
+        return $this->parsedData['microdata'] ?? [];
+    }
+
+    public function getJsonLd(): array
+    {
+        return $this->parsedData['json_ld'] ?? [];
+    }
+
+    public function getOpenGraphData(): array
+    {
+        return $this->parsedData['metadata']['open_graph'] ?? [];
+    }
+
+    public function getTwitterCardData(): array
+    {
+        return $this->parsedData['metadata']['twitter_card'] ?? [];
+    }
+
+    public function getSchemaOrgData(): array
+    {
+        return $this->parsedData['metadata']['schema_org'] ?? [];
+    }
+
+    public function getImages(): array
+    {
+        return $this->parsedData['media']['images'] ?? [];
+    }
+
+    public function getVideos(): array
+    {
+        return $this->parsedData['media']['videos'] ?? [];
+    }
+
+    public function getAudio(): array
+    {
+        return $this->parsedData['media']['audio'] ?? [];
+    }
+
+    public function getIframes(): array
+    {
+        return $this->parsedData['media']['iframes'] ?? [];
+    }
+
+    public function getHeadings(): array
+    {
+        return $this->parsedData['structure']['headings'] ?? [];
+    }
+
+    public function getSections(): array
+    {
+        return $this->parsedData['structure']['sections'] ?? [];
+    }
+
+    public function getNavigation(): array
+    {
+        return $this->parsedData['structure']['navigation'] ?? [];
+    }
+
+    public function getMainContent(): array
+    {
+        return $this->parsedData['structure']['main_content'] ?? [];
+    }
+
+    public function getSidebar(): array
+    {
+        return $this->parsedData['structure']['sidebar'] ?? [];
+    }
+
+    public function getFooter(): array
+    {
+        return $this->parsedData['structure']['footer'] ?? [];
+    }
+
+    public function getHeader(): array
+    {
+        return $this->parsedData['structure']['header'] ?? [];
+    }
+
+    public function getParagraphs(): array
+    {
+        return $this->parsedData['content']['paragraphs'] ?? [];
+    }
+
+    public function getLists(): array
+    {
+        return $this->parsedData['content']['lists'] ?? [];
+    }
+
+    public function getTables(): array
+    {
+        return $this->parsedData['content']['tables'] ?? [];
+    }
+
+    public function getBlockquotes(): array
+    {
+        return $this->parsedData['content']['blockquotes'] ?? [];
+    }
+
+    public function getCodeBlocks(): array
+    {
+        return $this->parsedData['content']['code_blocks'] ?? [];
+    }
+
+    public function getTextContent(): string
+    {
+        return $this->parsedData['content']['text_content'] ?? '';
+    }
+
+    // DOM Query Methods
+
+    public function querySelector(string $selector): ?\DOMElement
+    {
+        if (!$this->htmlParser) {
+            return null;
+        }
+
+        try {
+            $xpath = $this->htmlParser->getXPath();
+            if (!$xpath) {
+                return null;
+            }
+
+            // Convert CSS selector to XPath (basic implementation)
+            $xpathQuery = $this->cssToXPath($selector);
+            $nodes = $xpath->query($xpathQuery);
+            
+            return $nodes->length > 0 ? $nodes->item(0) : null;
+        } catch (\Exception $e) {
+            $this->logger->error("Query selector failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function querySelectorAll(string $selector): array
+    {
+        if (!$this->htmlParser) {
+            return [];
+        }
+
+        try {
+            $xpath = $this->htmlParser->getXPath();
+            if (!$xpath) {
+                return [];
+            }
+
+            $xpathQuery = $this->cssToXPath($selector);
+            $nodes = $xpath->query($xpathQuery);
+            
+            $elements = [];
+            foreach ($nodes as $node) {
+                $elements[] = $node;
+            }
+            
+            return $elements;
+        } catch (\Exception $e) {
+            $this->logger->error("Query selector all failed: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function getElementById(string $id): ?\DOMElement
+    {
+        if (!$this->htmlParser) {
+            return null;
+        }
+
+        return $this->htmlParser->getElementById($id);
+    }
+
+    public function getElementsByTagName(string $tagName): array
+    {
+        if (!$this->htmlParser) {
+            return [];
+        }
+
+        $nodes = $this->htmlParser->getElementsByTagName($tagName);
+        $elements = [];
+        
+        foreach ($nodes as $node) {
+            $elements[] = $node;
+        }
+        
+        return $elements;
+    }
+
+    public function getElementsByClassName(string $className): array
+    {
+        if (!$this->htmlParser) {
+            return [];
+        }
+
+        try {
+            $nodes = $this->htmlParser->getElementsByClassName($className);
+            $elements = [];
+            
+            foreach ($nodes as $node) {
+                $elements[] = $node;
+            }
+            
+            return $elements;
+        } catch (\Exception $e) {
+            $this->logger->error("Get elements by class name failed: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function cssToXPath(string $selector): string
+    {
+        // Basic CSS to XPath conversion
+        // This is a simplified implementation
+        
+        // Remove whitespace
+        $selector = trim($selector);
+        
+        // Handle ID selector
+        if (strpos($selector, '#') === 0) {
+            $id = substr($selector, 1);
+            return "//*[@id='$id']";
+        }
+        
+        // Handle class selector
+        if (strpos($selector, '.') === 0) {
+            $class = substr($selector, 1);
+            return "//*[contains(@class, '$class')]";
+        }
+        
+        // Handle tag selector
+        if (preg_match('/^[a-zA-Z][a-zA-Z0-9]*$/', $selector)) {
+            return "//$selector";
+        }
+        
+        // Handle attribute selector
+        if (preg_match('/^\[([^=]+)=([^\]]+)\]$/', $selector, $matches)) {
+            $attr = $matches[1];
+            $value = $matches[2];
+            return "//*[@$attr='$value']";
+        }
+        
+        // Default fallback
+        return "//$selector";
+    }
+
+    public function getHtml(): string
+    {
+        if ($this->htmlParser) {
+            return $this->htmlParser->getHtml();
+        }
+        
+        return $this->pageContent;
+    }
+
+    public function getInnerHtml(\DOMElement $element): string
+    {
+        if (!$this->htmlParser) {
+            return '';
+        }
+
+        return $this->htmlParser->getInnerHtml($element);
+    }
+
+    public function getTextContent(\DOMElement $element): string
+    {
+        if (!$this->htmlParser) {
+            return '';
+        }
+
+        return $this->htmlParser->getTextContent($element);
+    }
+
+    public function getAttribute(\DOMElement $element, string $name): ?string
+    {
+        if (!$this->htmlParser) {
+            return null;
+        }
+
+        return $this->htmlParser->getAttribute($element, $name);
+    }
+
+    public function hasAttribute(\DOMElement $element, string $name): bool
+    {
+        if (!$this->htmlParser) {
+            return false;
+        }
+
+        return $this->htmlParser->hasAttribute($element, $name);
     }
 }
