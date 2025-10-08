@@ -218,11 +218,20 @@ class PrismEngine implements EngineInterface
 
     public function close(): void
     {
+        if ($this->httpClient) {
+            $this->httpClient->close();
+        }
+        
         $this->httpClient = null;
         $this->dom = null;
         $this->currentUrl = '';
         $this->pageContent = '';
+        $this->pageMetadata = [];
+        $this->cookies = [];
+        $this->localStorage = [];
         $this->initialized = false;
+        
+        $this->logger->info("Prism engine closed");
     }
 
     public function isReady(): bool
@@ -330,5 +339,229 @@ class PrismEngine implements EngineInterface
         }
         
         return $limit;
+    }
+
+    private function extractMetadata(): void
+    {
+        if (!$this->dom) {
+            return;
+        }
+
+        try {
+            $xpath = new DOMXPath($this->dom);
+
+            // Extract basic meta tags
+            $this->pageMetadata['description'] = $this->extractMetaContent($xpath, 'description');
+            $this->pageMetadata['keywords'] = $this->extractMetaContent($xpath, 'keywords');
+            $this->pageMetadata['author'] = $this->extractMetaContent($xpath, 'author');
+            $this->pageMetadata['viewport'] = $this->extractMetaContent($xpath, 'viewport');
+            $this->pageMetadata['robots'] = $this->extractMetaContent($xpath, 'robots');
+            $this->pageMetadata['canonical'] = $this->extractLinkHref($xpath, 'canonical');
+
+            // Extract Open Graph meta tags
+            $this->pageMetadata['og_title'] = $this->extractMetaContent($xpath, 'og:title');
+            $this->pageMetadata['og_description'] = $this->extractMetaContent($xpath, 'og:description');
+            $this->pageMetadata['og_image'] = $this->extractMetaContent($xpath, 'og:image');
+
+            // Extract Twitter Card meta tags
+            $this->pageMetadata['twitter_card'] = $this->extractMetaContent($xpath, 'twitter:card');
+
+            // Extract charset
+            $charsetNodes = $xpath->query('//meta[@charset]');
+            if ($charsetNodes->length > 0) {
+                $this->pageMetadata['charset'] = $charsetNodes->item(0)->getAttribute('charset');
+            }
+
+            // Extract language
+            $htmlNodes = $xpath->query('//html[@lang]');
+            if ($htmlNodes->length > 0) {
+                $this->pageMetadata['language'] = $htmlNodes->item(0)->getAttribute('lang');
+            }
+
+        } catch (\Exception $e) {
+            $this->logger->warning("Failed to extract metadata: " . $e->getMessage());
+        }
+    }
+
+    private function extractMetaContent(DOMXPath $xpath, string $name): string
+    {
+        $nodes = $xpath->query("//meta[@name='$name' or @property='$name']");
+        if ($nodes->length > 0) {
+            return trim($nodes->item(0)->getAttribute('content'));
+        }
+        return '';
+    }
+
+    private function extractLinkHref(DOMXPath $xpath, string $rel): string
+    {
+        $nodes = $xpath->query("//link[@rel='$rel']");
+        if ($nodes->length > 0) {
+            return trim($nodes->item(0)->getAttribute('href'));
+        }
+        return '';
+    }
+
+    public function getPageMetadata(): array
+    {
+        return $this->pageMetadata;
+    }
+
+    public function getPageDescription(): string
+    {
+        return $this->pageMetadata['description'] ?? '';
+    }
+
+    public function getPageKeywords(): string
+    {
+        return $this->pageMetadata['keywords'] ?? '';
+    }
+
+    public function getPageAuthor(): string
+    {
+        return $this->pageMetadata['author'] ?? '';
+    }
+
+    public function getPageLanguage(): string
+    {
+        return $this->pageMetadata['language'] ?? 'en';
+    }
+
+    public function getResponseTime(): float
+    {
+        return $this->pageMetadata['response_time'] ?? 0.0;
+    }
+
+    public function getContentType(): string
+    {
+        return $this->pageMetadata['content_type'] ?? 'text/html';
+    }
+
+    public function getContentLength(): int
+    {
+        return $this->pageMetadata['content_length'] ?? 0;
+    }
+
+    public function getServer(): string
+    {
+        return $this->pageMetadata['server'] ?? '';
+    }
+
+    public function getLastModified(): ?string
+    {
+        return $this->pageMetadata['last_modified'];
+    }
+
+    public function downloadResource(string $url, string $destination): array
+    {
+        if (!$this->isReady()) {
+            throw new \RuntimeException('Engine not initialized');
+        }
+
+        return $this->httpClient->download($url, $destination);
+    }
+
+    public function postData(string $url, array $data): array
+    {
+        if (!$this->isReady()) {
+            throw new \RuntimeException('Engine not initialized');
+        }
+
+        return $this->httpClient->post($url, $data);
+    }
+
+    public function getRequestHistory(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        return $this->httpClient->getRequestHistory();
+    }
+
+    public function clearCache(): void
+    {
+        if ($this->httpClient) {
+            $this->httpClient->clearCache();
+        }
+    }
+
+    public function getCacheStats(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        return $this->httpClient->getCacheStats();
+    }
+
+    public function setProxy(string $proxy): void
+    {
+        if ($this->httpClient) {
+            $this->httpClient->setProxy($proxy);
+        }
+    }
+
+    public function setCustomHeaders(array $headers): void
+    {
+        if ($this->httpClient) {
+            $this->httpClient->setHeaders($headers);
+        }
+    }
+
+    public function setTimeout(int $timeout): void
+    {
+        if ($this->httpClient) {
+            $this->httpClient->setTimeout($timeout);
+        }
+    }
+
+    public function getCookies(): array
+    {
+        return $this->cookies;
+    }
+
+    public function setCookie(string $name, string $value, array $options = []): void
+    {
+        $this->cookies[$name] = [
+            'value' => $value,
+            'options' => $options
+        ];
+    }
+
+    public function getLocalStorage(): array
+    {
+        return $this->localStorage;
+    }
+
+    public function setLocalStorageItem(string $key, string $value): void
+    {
+        $this->localStorage[$key] = $value;
+    }
+
+    public function getLocalStorageItem(string $key): ?string
+    {
+        return $this->localStorage[$key] ?? null;
+    }
+
+    public function removeLocalStorageItem(string $key): void
+    {
+        unset($this->localStorage[$key]);
+    }
+
+    public function clearLocalStorage(): void
+    {
+        $this->localStorage = [];
+    }
+
+    public function getPerformanceMetrics(): array
+    {
+        return [
+            'response_time' => $this->getResponseTime(),
+            'content_length' => $this->getContentLength(),
+            'memory_usage' => $this->getMemoryUsage(),
+            'memory_limit' => $this->getMemoryLimit(),
+            'cache_stats' => $this->getCacheStats(),
+            'request_count' => count($this->getRequestHistory())
+        ];
     }
 }
