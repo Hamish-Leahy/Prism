@@ -2,58 +2,83 @@
 
 namespace Prism\Backend\Services\Engines;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
+use Prism\Backend\Services\HttpClientService;
 use DOMDocument;
 use DOMXPath;
+use Monolog\Logger;
 
 class PrismEngine implements EngineInterface
 {
     private array $config;
-    private ?Client $httpClient = null;
+    private ?HttpClientService $httpClient = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
     private bool $initialized = false;
+    private Logger $logger;
+    private array $pageMetadata = [];
+    private array $cookies = [];
+    private array $localStorage = [];
 
     public function __construct(array $config)
     {
         $this->config = $config;
+        $this->logger = new Logger('prism-engine');
     }
 
     public function initialize(): bool
     {
         try {
-            // Initialize HTTP client
-            $this->httpClient = new Client([
+            // Initialize advanced HTTP client
+            $httpConfig = [
                 'timeout' => $this->config['timeout'] ?? 30,
-                'connect_timeout' => 5,
-                'headers' => [
-                    'User-Agent' => $this->config['user_agent'] ?? 'Prism/1.0 (Custom Engine)',
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'en-US,en;q=0.5',
-                    'Accept-Encoding' => 'gzip, deflate',
-                    'Connection' => 'keep-alive',
-                    'Upgrade-Insecure-Requests' => '1',
-                ],
-                'verify' => false, // For development only
-                'allow_redirects' => [
-                    'max' => 10,
-                    'strict' => false,
-                    'referer' => true,
-                    'protocols' => ['http', 'https']
-                ]
-            ]);
+                'connect_timeout' => $this->config['connect_timeout'] ?? 10,
+                'read_timeout' => $this->config['read_timeout'] ?? 30,
+                'verify_ssl' => $this->config['verify_ssl'] ?? true,
+                'max_redirects' => $this->config['max_redirects'] ?? 10,
+                'strict_redirects' => $this->config['strict_redirects'] ?? false,
+                'follow_referer' => $this->config['follow_referer'] ?? true,
+                'allowed_protocols' => $this->config['allowed_protocols'] ?? ['http', 'https'],
+                'enable_cookies' => $this->config['cookies_enabled'] ?? true,
+                'cache_ttl' => $this->config['cache_ttl'] ?? 300,
+                'max_retries' => $this->config['max_retries'] ?? 3,
+                'user_agent' => $this->config['user_agent'] ?? 'Prism/1.0 (Custom Engine)',
+            ];
+
+            $this->httpClient = new HttpClientService($httpConfig, $this->logger);
 
             // Initialize DOM parser
             $this->dom = new DOMDocument();
             $this->dom->preserveWhiteSpace = false;
             $this->dom->formatOutput = true;
 
+            // Initialize page metadata
+            $this->pageMetadata = [
+                'title' => '',
+                'description' => '',
+                'keywords' => '',
+                'author' => '',
+                'viewport' => '',
+                'canonical' => '',
+                'og_title' => '',
+                'og_description' => '',
+                'og_image' => '',
+                'twitter_card' => '',
+                'robots' => '',
+                'charset' => 'utf-8',
+                'language' => 'en',
+                'last_modified' => null,
+                'content_type' => 'text/html',
+                'content_length' => 0,
+                'server' => '',
+                'response_time' => 0
+            ];
+
             $this->initialized = true;
+            $this->logger->info("Prism engine initialized successfully");
             return true;
         } catch (\Exception $e) {
-            error_log("Prism engine initialization failed: " . $e->getMessage());
+            $this->logger->error("Prism engine initialization failed: " . $e->getMessage());
             return false;
         }
     }
