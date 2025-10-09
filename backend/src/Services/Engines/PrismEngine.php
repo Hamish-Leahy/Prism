@@ -6,6 +6,7 @@ use Prism\Backend\Services\HttpClientService;
 use Prism\Backend\Services\Html5ParserService;
 use Prism\Backend\Services\CssParserService;
 use Prism\Backend\Services\CssRendererService;
+use Prism\Backend\Services\JavaScriptEngineService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -17,6 +18,7 @@ class PrismEngine implements EngineInterface
     private ?Html5ParserService $htmlParser = null;
     private ?CssParserService $cssParser = null;
     private ?CssRendererService $cssRenderer = null;
+    private ?JavaScriptEngineService $jsEngine = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -28,6 +30,8 @@ class PrismEngine implements EngineInterface
     private array $parsedData = [];
     private array $cssData = [];
     private array $renderedElements = [];
+    private array $jsData = [];
+    private array $executedScripts = [];
 
     public function __construct(array $config)
     {
@@ -75,6 +79,11 @@ class PrismEngine implements EngineInterface
 
             // Initialize CSS renderer
             $this->cssRenderer = new CssRendererService($cssConfig, $this->logger);
+
+            // Initialize JavaScript engine
+            $jsConfig = require __DIR__ . '/../../config/javascript_engine.php';
+            $this->jsEngine = new JavaScriptEngineService($jsConfig, $this->logger);
+            $this->jsEngine->initialize();
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
@@ -153,6 +162,11 @@ class PrismEngine implements EngineInterface
             // Parse CSS if enabled
             if ($this->config['css_parsing'] ?? true) {
                 $this->parseCss();
+            }
+            
+            // Execute JavaScript if enabled
+            if ($this->config['javascript_execution'] ?? true) {
+                $this->executeJavaScript();
             }
             
             $this->logger->info("Navigation completed", [
@@ -1167,7 +1181,320 @@ class PrismEngine implements EngineInterface
     }
 
     /**
-     * Update close method to include CSS services cleanup
+     * Execute JavaScript from the current page
+     */
+    private function executeJavaScript(): void
+    {
+        if (!$this->jsEngine || !$this->htmlParser) {
+            return;
+        }
+
+        try {
+            // Extract JavaScript from <script> tags
+            $scriptElements = $this->htmlParser->querySelectorAll('script');
+            $jsContent = '';
+            
+            foreach ($scriptElements as $script) {
+                $src = $this->htmlParser->getAttribute($script, 'src');
+                if ($src) {
+                    // External script
+                    $jsUrl = $this->resolveUrl($src, $this->currentUrl);
+                    $response = $this->httpClient->get($jsUrl);
+                    if ($response['success']) {
+                        $jsContent .= $response['body'] . "\n";
+                        $this->executedScripts[] = [
+                            'type' => 'external',
+                            'src' => $jsUrl,
+                            'content_length' => strlen($response['body'])
+                        ];
+                    }
+                } else {
+                    // Inline script
+                    $content = $this->htmlParser->getTextContent($script);
+                    if (!empty($content)) {
+                        $jsContent .= $content . "\n";
+                        $this->executedScripts[] = [
+                            'type' => 'inline',
+                            'content_length' => strlen($content)
+                        ];
+                    }
+                }
+            }
+            
+            if (!empty($jsContent)) {
+                // Set up DOM context for JavaScript
+                $domContext = $this->createDOMContext();
+                
+                // Execute JavaScript
+                $result = $this->jsEngine->execute($jsContent, $domContext);
+                
+                $this->jsData = [
+                    'executed' => true,
+                    'result' => $result,
+                    'scripts_count' => count($this->executedScripts),
+                    'total_length' => strlen($jsContent)
+                ];
+                
+                $this->logger->debug("JavaScript executed successfully", [
+                    'scripts_count' => count($this->executedScripts),
+                    'total_length' => strlen($jsContent)
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("JavaScript execution failed: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Create DOM context for JavaScript execution
+     */
+    private function createDOMContext(): array
+    {
+        if (!$this->htmlParser) {
+            return [];
+        }
+
+        return [
+            'document' => [
+                'URL' => $this->currentUrl,
+                'title' => $this->getPageTitle(),
+                'body' => $this->htmlParser->querySelector('body'),
+                'head' => $this->htmlParser->querySelector('head'),
+                'getElementById' => function($id) {
+                    return $this->htmlParser->getElementById($id);
+                },
+                'getElementsByClassName' => function($className) {
+                    return $this->htmlParser->getElementsByClassName($className);
+                },
+                'getElementsByTagName' => function($tagName) {
+                    return $this->htmlParser->getElementsByTagName($tagName);
+                },
+                'querySelector' => function($selector) {
+                    return $this->htmlParser->querySelector($selector);
+                },
+                'querySelectorAll' => function($selector) {
+                    return $this->htmlParser->querySelectorAll($selector);
+                }
+            ],
+            'window' => [
+                'location' => [
+                    'href' => $this->currentUrl,
+                    'protocol' => parse_url($this->currentUrl, PHP_URL_SCHEME) . ':',
+                    'host' => parse_url($this->currentUrl, PHP_URL_HOST),
+                    'hostname' => parse_url($this->currentUrl, PHP_URL_HOST),
+                    'port' => parse_url($this->currentUrl, PHP_URL_PORT) ?: '',
+                    'pathname' => parse_url($this->currentUrl, PHP_URL_PATH) ?: '/',
+                    'search' => parse_url($this->currentUrl, PHP_URL_QUERY) ? '?' . parse_url($this->currentUrl, PHP_URL_QUERY) : '',
+                    'hash' => parse_url($this->currentUrl, PHP_URL_FRAGMENT) ? '#' . parse_url($this->currentUrl, PHP_URL_FRAGMENT) : ''
+                ],
+                'navigator' => [
+                    'userAgent' => $this->config['user_agent'] ?? 'Prism/1.0 (Custom Engine)'
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Execute JavaScript code directly
+     */
+    public function executeJavaScript(string $code, array $variables = []): mixed
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $domContext = $this->createDOMContext();
+        $context = array_merge($domContext, $variables);
+        
+        return $this->jsEngine->execute($code, $context);
+    }
+
+    /**
+     * Execute JavaScript file
+     */
+    public function executeJavaScriptFile(string $filePath, array $variables = []): mixed
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $domContext = $this->createDOMContext();
+        $context = array_merge($domContext, $variables);
+        
+        return $this->jsEngine->executeFile($filePath, $context);
+    }
+
+    /**
+     * Create JavaScript context
+     */
+    public function createJavaScriptContext(string $name = null): string
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        return $this->jsEngine->createContext($name);
+    }
+
+    /**
+     * Set JavaScript context variable
+     */
+    public function setJavaScriptVariable(string $contextId, string $name, mixed $value): void
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $this->jsEngine->setContextVariable($contextId, $name, $value);
+    }
+
+    /**
+     * Get JavaScript context variable
+     */
+    public function getJavaScriptVariable(string $contextId, string $name): mixed
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        return $this->jsEngine->getContextVariable($contextId, $name);
+    }
+
+    /**
+     * Execute JavaScript in context
+     */
+    public function executeJavaScriptInContext(string $contextId, string $code): mixed
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        return $this->jsEngine->executeInContext($contextId, $code);
+    }
+
+    /**
+     * Add JavaScript event listener
+     */
+    public function addJavaScriptEventListener(string $event, callable $listener, array $options = []): void
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $this->jsEngine->addEventListener($event, $listener, $options);
+    }
+
+    /**
+     * Remove JavaScript event listener
+     */
+    public function removeJavaScriptEventListener(string $event, callable $listener): void
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $this->jsEngine->removeEventListener($event, $listener);
+    }
+
+    /**
+     * Dispatch JavaScript event
+     */
+    public function dispatchJavaScriptEvent(string $event, array $data = []): void
+    {
+        if (!$this->jsEngine) {
+            throw new \RuntimeException('JavaScript engine not initialized');
+        }
+
+        $this->jsEngine->dispatchEvent($event, $data);
+    }
+
+    /**
+     * Get JavaScript data
+     */
+    public function getJavaScriptData(): array
+    {
+        return $this->jsData;
+    }
+
+    /**
+     * Get executed scripts
+     */
+    public function getExecutedScripts(): array
+    {
+        return $this->executedScripts;
+    }
+
+    /**
+     * Get JavaScript memory usage
+     */
+    public function getJavaScriptMemoryUsage(): array
+    {
+        if (!$this->jsEngine) {
+            return [];
+        }
+
+        return $this->jsEngine->getMemoryUsage();
+    }
+
+    /**
+     * Get JavaScript timers
+     */
+    public function getJavaScriptTimers(): array
+    {
+        if (!$this->jsEngine) {
+            return [];
+        }
+
+        return $this->jsEngine->getTimers();
+    }
+
+    /**
+     * Clear JavaScript timers
+     */
+    public function clearJavaScriptTimers(): void
+    {
+        if (!$this->jsEngine) {
+            return;
+        }
+
+        $this->jsEngine->clearAllTimers();
+    }
+
+    /**
+     * Get JavaScript event listeners
+     */
+    public function getJavaScriptEventListeners(): array
+    {
+        if (!$this->jsEngine) {
+            return [];
+        }
+
+        return $this->jsEngine->getEventListeners();
+    }
+
+    /**
+     * Get JavaScript contexts
+     */
+    public function getJavaScriptContexts(): array
+    {
+        if (!$this->jsEngine) {
+            return [];
+        }
+
+        return $this->jsEngine->getContexts();
+    }
+
+    /**
+     * Check if JavaScript engine is initialized
+     */
+    public function isJavaScriptInitialized(): bool
+    {
+        return $this->jsEngine && $this->jsEngine->isInitialized();
+    }
+
+    /**
+     * Update close method to include JavaScript engine cleanup
      */
     public function close(): void
     {
@@ -1179,12 +1506,20 @@ class PrismEngine implements EngineInterface
         $this->htmlParser = null;
         $this->cssParser = null;
         $this->cssRenderer = null;
+        
+        if ($this->jsEngine) {
+            $this->jsEngine->close();
+            $this->jsEngine = null;
+        }
+        
         $this->dom = null;
         
         $this->pageMetadata = [];
         $this->parsedData = [];
         $this->cssData = [];
         $this->renderedElements = [];
+        $this->jsData = [];
+        $this->executedScripts = [];
         $this->cookies = [];
         $this->localStorage = [];
         
