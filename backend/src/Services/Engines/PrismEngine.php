@@ -8,6 +8,7 @@ use Prism\Backend\Services\CssParserService;
 use Prism\Backend\Services\CssRendererService;
 use Prism\Backend\Services\JavaScriptEngineService;
 use Prism\Backend\Services\CookieJarService;
+use Prism\Backend\Services\WebSocketService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -21,6 +22,7 @@ class PrismEngine implements EngineInterface
     private ?CssRendererService $cssRenderer = null;
     private ?JavaScriptEngineService $jsEngine = null;
     private ?CookieJarService $cookieJar = null;
+    private ?WebSocketService $webSocketService = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -102,6 +104,15 @@ class PrismEngine implements EngineInterface
 
             // Initialize local storage
             $this->loadLocalStorage();
+
+            // Initialize WebSocket service
+            $wsConfig = [
+                'enabled' => $this->config['websocket_enabled'] ?? true,
+                'timeout' => $this->config['websocket_timeout'] ?? 30,
+                'max_connections' => $this->config['websocket_max_connections'] ?? 10
+            ];
+            $this->webSocketService = new WebSocketService($wsConfig, $this->logger);
+            $this->webSocketService->initialize();
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
