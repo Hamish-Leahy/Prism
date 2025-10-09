@@ -37,9 +37,9 @@
 - [ x ] **1.3.2** Add HTML5 parsing with DOMDocument
 - [ x ] **1.3.3** Implement CSS parsing and rendering
 - [ ] **1.3.4** Add JavaScript execution with V8
-- [ ] **1.3.5** Implement cookie jar management
-- [ ] **1.3.6** Add local storage simulation
-- [ ] **1.3.7** Implement session storage
+- [x] **1.3.5** Implement cookie jar management
+- [x] **1.3.6** Add local storage simulation
+- [x] **1.3.7** Implement session storage
 - [ ] **1.3.8** Add WebSocket support
 - [ ] **1.3.9** Implement WebRTC basics
 - [ ] **1.3.10** Add WebAssembly support

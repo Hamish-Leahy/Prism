@@ -7,6 +7,7 @@ use Prism\Backend\Services\Html5ParserService;
 use Prism\Backend\Services\CssParserService;
 use Prism\Backend\Services\CssRendererService;
 use Prism\Backend\Services\JavaScriptEngineService;
+use Prism\Backend\Services\CookieJarService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -19,14 +20,18 @@ class PrismEngine implements EngineInterface
     private ?CssParserService $cssParser = null;
     private ?CssRendererService $cssRenderer = null;
     private ?JavaScriptEngineService $jsEngine = null;
+    private ?CookieJarService $cookieJar = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
     private bool $initialized = false;
     private Logger $logger;
     private array $pageMetadata = [];
-    private array $cookies = [];
     private array $localStorage = [];
+    private array $sessionStorage = [];
+    private string $localStoragePath;
+    private int $localStorageQuota = 5242880; // 5MB default quota
+    private int $sessionStorageQuota = 1048576; // 1MB default quota
     private array $parsedData = [];
     private array $cssData = [];
     private array $renderedElements = [];
@@ -37,6 +42,9 @@ class PrismEngine implements EngineInterface
     {
         $this->config = $config;
         $this->logger = new Logger('prism-engine');
+        $this->localStoragePath = $config['local_storage_path'] ?? sys_get_temp_dir() . '/prism_local_storage.json';
+        $this->localStorageQuota = $config['local_storage_quota'] ?? 5242880; // 5MB
+        $this->sessionStorageQuota = $config['session_storage_quota'] ?? 1048576; // 1MB
     }
 
     public function initialize(): bool
@@ -84,6 +92,16 @@ class PrismEngine implements EngineInterface
             $jsConfig = require __DIR__ . '/../../config/javascript_engine.php';
             $this->jsEngine = new JavaScriptEngineService($jsConfig, $this->logger);
             $this->jsEngine->initialize();
+
+            // Initialize cookie jar
+            $cookieConfig = [
+                'storage_path' => $this->config['cookie_storage_path'] ?? sys_get_temp_dir() . '/prism_cookies.json',
+                'persistent' => $this->config['cookie_persistent'] ?? true
+            ];
+            $this->cookieJar = new CookieJarService($cookieConfig, $this->logger);
+
+            // Initialize local storage
+            $this->loadLocalStorage();
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
@@ -133,8 +151,27 @@ class PrismEngine implements EngineInterface
             
             $this->logger->info("Navigating to URL", ['url' => $url]);
             
+            // Get cookies for this domain
+            $parsedUrl = parse_url($url);
+            $domain = $parsedUrl['host'] ?? '';
+            $path = $parsedUrl['path'] ?? '/';
+            
+            // Add cookies to request headers
+            $cookieHeader = $this->cookieJar->generateCookieHeader($domain, $path);
+            if (!empty($cookieHeader)) {
+                $this->httpClient->setHeaders(['Cookie' => $cookieHeader]);
+            }
+            
             // Fetch the page content using advanced HTTP client
             $response = $this->httpClient->get($url);
+            
+            // Parse and store cookies from response
+            if (isset($response['headers'])) {
+                $cookies = $this->cookieJar->parseCookiesFromHeaders($response['headers'], $domain, $path);
+                foreach ($cookies as $cookie) {
+                    $this->cookieJar->setCookie($cookie['name'], $cookie['value'], $cookie);
+                }
+            }
             
             if (!$response['success']) {
                 throw new \RuntimeException("Navigation failed: " . ($response['error'] ?? 'Unknown error'));
@@ -265,25 +302,6 @@ class PrismEngine implements EngineInterface
         throw new \RuntimeException('Screenshots not supported in Prism engine');
     }
 
-    public function close(): void
-    {
-        if ($this->httpClient) {
-            $this->httpClient->close();
-        }
-        
-        $this->httpClient = null;
-        $this->htmlParser = null;
-        $this->dom = null;
-        $this->currentUrl = '';
-        $this->pageContent = '';
-        $this->pageMetadata = [];
-        $this->parsedData = [];
-        $this->cookies = [];
-        $this->localStorage = [];
-        $this->initialized = false;
-        
-        $this->logger->info("Prism engine closed");
-    }
 
     public function isReady(): bool
     {
@@ -589,40 +607,363 @@ class PrismEngine implements EngineInterface
 
     public function getCookies(): array
     {
-        return $this->cookies;
+        if (!$this->cookieJar) {
+            return [];
+        }
+        return $this->cookieJar->getAllCookies();
     }
 
     public function setCookie(string $name, string $value, array $options = []): void
     {
-        $this->cookies[$name] = [
-            'value' => $value,
-            'options' => $options
-        ];
+        if ($this->cookieJar) {
+            $this->cookieJar->setCookie($name, $value, $options);
+        }
     }
 
+    public function getCookie(string $name, string $domain = '', string $path = '/'): ?string
+    {
+        if (!$this->cookieJar) {
+            return null;
+        }
+        return $this->cookieJar->getCookie($name, $domain, $path);
+    }
+
+    public function removeCookie(string $name, string $domain = '', string $path = '/'): bool
+    {
+        if (!$this->cookieJar) {
+            return false;
+        }
+        return $this->cookieJar->removeCookie($name, $domain, $path);
+    }
+
+    public function clearCookies(): bool
+    {
+        if (!$this->cookieJar) {
+            return false;
+        }
+        return $this->cookieJar->clearAllCookies();
+    }
+
+    public function getCookiesForDomain(string $domain): array
+    {
+        if (!$this->cookieJar) {
+            return [];
+        }
+        return $this->cookieJar->getCookiesForDomain($domain);
+    }
+
+    public function getCookieStats(): array
+    {
+        if (!$this->cookieJar) {
+            return [];
+        }
+        return $this->cookieJar->getStats();
+    }
+
+    public function cleanupExpiredCookies(): int
+    {
+        if (!$this->cookieJar) {
+            return 0;
+        }
+        return $this->cookieJar->cleanupExpiredCookies();
+    }
+
+    /**
+     * Load local storage from persistent storage
+     */
+    private function loadLocalStorage(): void
+    {
+        try {
+            if (file_exists($this->localStoragePath)) {
+                $content = file_get_contents($this->localStoragePath);
+                $data = json_decode($content, true);
+                if (is_array($data)) {
+                    $this->localStorage = $data;
+                    $this->logger->debug("Local storage loaded", [
+                        'items_count' => count($this->localStorage),
+                        'file_size' => strlen($content)
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to load local storage: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Save local storage to persistent storage
+     */
+    private function saveLocalStorage(): void
+    {
+        try {
+            $data = json_encode($this->localStorage, JSON_PRETTY_PRINT);
+            file_put_contents($this->localStoragePath, $data, LOCK_EX);
+            $this->logger->debug("Local storage saved", [
+                'items_count' => count($this->localStorage),
+                'file_size' => strlen($data)
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to save local storage: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Calculate storage size in bytes
+     */
+    private function calculateStorageSize(array $storage): int
+    {
+        $size = 0;
+        foreach ($storage as $key => $value) {
+            $size += strlen($key) + strlen($value);
+        }
+        return $size;
+    }
+
+    /**
+     * Check if storage quota would be exceeded
+     */
+    private function wouldExceedQuota(array $storage, string $key, string $value, int $quota): bool
+    {
+        $currentSize = $this->calculateStorageSize($storage);
+        $newSize = $currentSize + strlen($key) + strlen($value);
+        return $newSize > $quota;
+    }
+
+    /**
+     * Get all local storage items
+     */
     public function getLocalStorage(): array
     {
         return $this->localStorage;
     }
 
+    /**
+     * Set a local storage item
+     */
     public function setLocalStorageItem(string $key, string $value): void
     {
+        if (empty($key)) {
+            throw new \InvalidArgumentException('Storage key cannot be empty');
+        }
+
+        if ($this->wouldExceedQuota($this->localStorage, $key, $value, $this->localStorageQuota)) {
+            throw new \RuntimeException('Storage quota exceeded');
+        }
+
+        $oldValue = $this->localStorage[$key] ?? null;
         $this->localStorage[$key] = $value;
+        
+        // Save to persistent storage
+        $this->saveLocalStorage();
+        
+        // Dispatch storage event
+        $this->dispatchStorageEvent('localStorage', 'setItem', $key, $oldValue, $value);
+        
+        $this->logger->debug("Local storage item set", [
+            'key' => $key,
+            'value_length' => strlen($value),
+            'storage_size' => $this->calculateStorageSize($this->localStorage)
+        ]);
     }
 
+    /**
+     * Get a local storage item
+     */
     public function getLocalStorageItem(string $key): ?string
     {
         return $this->localStorage[$key] ?? null;
     }
 
+    /**
+     * Remove a local storage item
+     */
     public function removeLocalStorageItem(string $key): void
     {
-        unset($this->localStorage[$key]);
+        if (array_key_exists($key, $this->localStorage)) {
+            $oldValue = $this->localStorage[$key];
+            unset($this->localStorage[$key]);
+            
+            // Save to persistent storage
+            $this->saveLocalStorage();
+            
+            // Dispatch storage event
+            $this->dispatchStorageEvent('localStorage', 'removeItem', $key, $oldValue, null);
+            
+            $this->logger->debug("Local storage item removed", [
+                'key' => $key,
+                'storage_size' => $this->calculateStorageSize($this->localStorage)
+            ]);
+        }
     }
 
+    /**
+     * Clear all local storage items
+     */
     public function clearLocalStorage(): void
     {
+        $itemCount = count($this->localStorage);
         $this->localStorage = [];
+        
+        // Save to persistent storage
+        $this->saveLocalStorage();
+        
+        // Dispatch storage event
+        $this->dispatchStorageEvent('localStorage', 'clear', null, null, null);
+        
+        $this->logger->debug("Local storage cleared", [
+            'items_removed' => $itemCount
+        ]);
+    }
+
+    /**
+     * Get local storage quota information
+     */
+    public function getLocalStorageQuota(): array
+    {
+        $used = $this->calculateStorageSize($this->localStorage);
+        return [
+            'used' => $used,
+            'quota' => $this->localStorageQuota,
+            'available' => $this->localStorageQuota - $used,
+            'percentage' => round(($used / $this->localStorageQuota) * 100, 2)
+        ];
+    }
+
+    /**
+     * Get local storage statistics
+     */
+    public function getLocalStorageStats(): array
+    {
+        return [
+            'items_count' => count($this->localStorage),
+            'total_size' => $this->calculateStorageSize($this->localStorage),
+            'quota' => $this->getLocalStorageQuota(),
+            'keys' => array_keys($this->localStorage)
+        ];
+    }
+
+    /**
+     * Session Storage Methods
+     */
+
+    /**
+     * Get all session storage items
+     */
+    public function getSessionStorage(): array
+    {
+        return $this->sessionStorage;
+    }
+
+    /**
+     * Set a session storage item
+     */
+    public function setSessionStorageItem(string $key, string $value): void
+    {
+        if (empty($key)) {
+            throw new \InvalidArgumentException('Storage key cannot be empty');
+        }
+
+        if ($this->wouldExceedQuota($this->sessionStorage, $key, $value, $this->sessionStorageQuota)) {
+            throw new \RuntimeException('Session storage quota exceeded');
+        }
+
+        $oldValue = $this->sessionStorage[$key] ?? null;
+        $this->sessionStorage[$key] = $value;
+        
+        // Dispatch storage event
+        $this->dispatchStorageEvent('sessionStorage', 'setItem', $key, $oldValue, $value);
+        
+        $this->logger->debug("Session storage item set", [
+            'key' => $key,
+            'value_length' => strlen($value),
+            'storage_size' => $this->calculateStorageSize($this->sessionStorage)
+        ]);
+    }
+
+    /**
+     * Get a session storage item
+     */
+    public function getSessionStorageItem(string $key): ?string
+    {
+        return $this->sessionStorage[$key] ?? null;
+    }
+
+    /**
+     * Remove a session storage item
+     */
+    public function removeSessionStorageItem(string $key): void
+    {
+        if (array_key_exists($key, $this->sessionStorage)) {
+            $oldValue = $this->sessionStorage[$key];
+            unset($this->sessionStorage[$key]);
+            
+            // Dispatch storage event
+            $this->dispatchStorageEvent('sessionStorage', 'removeItem', $key, $oldValue, null);
+            
+            $this->logger->debug("Session storage item removed", [
+                'key' => $key,
+                'storage_size' => $this->calculateStorageSize($this->sessionStorage)
+            ]);
+        }
+    }
+
+    /**
+     * Clear all session storage items
+     */
+    public function clearSessionStorage(): void
+    {
+        $itemCount = count($this->sessionStorage);
+        $this->sessionStorage = [];
+        
+        // Dispatch storage event
+        $this->dispatchStorageEvent('sessionStorage', 'clear', null, null, null);
+        
+        $this->logger->debug("Session storage cleared", [
+            'items_removed' => $itemCount
+        ]);
+    }
+
+    /**
+     * Get session storage quota information
+     */
+    public function getSessionStorageQuota(): array
+    {
+        $used = $this->calculateStorageSize($this->sessionStorage);
+        return [
+            'used' => $used,
+            'quota' => $this->sessionStorageQuota,
+            'available' => $this->sessionStorageQuota - $used,
+            'percentage' => round(($used / $this->sessionStorageQuota) * 100, 2)
+        ];
+    }
+
+    /**
+     * Get session storage statistics
+     */
+    public function getSessionStorageStats(): array
+    {
+        return [
+            'items_count' => count($this->sessionStorage),
+            'total_size' => $this->calculateStorageSize($this->sessionStorage),
+            'quota' => $this->getSessionStorageQuota(),
+            'keys' => array_keys($this->sessionStorage)
+        ];
+    }
+
+    /**
+     * Dispatch storage change event
+     */
+    private function dispatchStorageEvent(string $storageType, string $action, ?string $key, ?string $oldValue, ?string $newValue): void
+    {
+        // This would typically dispatch to JavaScript event listeners
+        // For now, we'll just log the event
+        $this->logger->debug("Storage event dispatched", [
+            'storage_type' => $storageType,
+            'action' => $action,
+            'key' => $key,
+            'old_value' => $oldValue,
+            'new_value' => $newValue
+        ]);
     }
 
     public function getPerformanceMetrics(): array
@@ -649,7 +990,7 @@ class PrismEngine implements EngineInterface
         return $this->parsedData['structure'] ?? [];
     }
 
-    public function getPageContent(): array
+    public function getParsedPageContent(): array
     {
         return $this->parsedData['content'] ?? [];
     }
@@ -951,7 +1292,7 @@ class PrismEngine implements EngineInterface
         return $this->htmlParser->getInnerHtml($element);
     }
 
-    public function getTextContent(\DOMElement $element): string
+    public function getElementTextContent(\DOMElement $element): string
     {
         if (!$this->htmlParser) {
             return '';
@@ -1298,7 +1639,7 @@ class PrismEngine implements EngineInterface
     /**
      * Execute JavaScript code directly
      */
-    public function executeJavaScript(string $code, array $variables = []): mixed
+    public function executeJavaScriptCode(string $code, array $variables = []): mixed
     {
         if (!$this->jsEngine) {
             throw new \RuntimeException('JavaScript engine not initialized');
@@ -1512,6 +1853,11 @@ class PrismEngine implements EngineInterface
             $this->jsEngine = null;
         }
         
+        if ($this->cookieJar) {
+            $this->cookieJar->close();
+            $this->cookieJar = null;
+        }
+        
         $this->dom = null;
         
         $this->pageMetadata = [];
@@ -1520,8 +1866,13 @@ class PrismEngine implements EngineInterface
         $this->renderedElements = [];
         $this->jsData = [];
         $this->executedScripts = [];
-        $this->cookies = [];
+        
+        // Save local storage before clearing
+        if (!empty($this->localStorage)) {
+            $this->saveLocalStorage();
+        }
         $this->localStorage = [];
+        $this->sessionStorage = [];
         
         $this->initialized = false;
         $this->currentUrl = '';
