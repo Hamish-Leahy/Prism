@@ -4,6 +4,8 @@ namespace Prism\Backend\Services\Engines;
 
 use Prism\Backend\Services\HttpClientService;
 use Prism\Backend\Services\Html5ParserService;
+use Prism\Backend\Services\CssParserService;
+use Prism\Backend\Services\CssRendererService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -13,6 +15,8 @@ class PrismEngine implements EngineInterface
     private array $config;
     private ?HttpClientService $httpClient = null;
     private ?Html5ParserService $htmlParser = null;
+    private ?CssParserService $cssParser = null;
+    private ?CssRendererService $cssRenderer = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -22,6 +26,8 @@ class PrismEngine implements EngineInterface
     private array $cookies = [];
     private array $localStorage = [];
     private array $parsedData = [];
+    private array $cssData = [];
+    private array $renderedElements = [];
 
     public function __construct(array $config)
     {
@@ -62,6 +68,13 @@ class PrismEngine implements EngineInterface
             ];
             
             $this->htmlParser = new Html5ParserService($parserConfig, $this->logger);
+
+            // Initialize CSS parser
+            $cssConfig = require __DIR__ . '/../../config/css_parser.php';
+            $this->cssParser = new CssParserService($cssConfig, $this->logger);
+
+            // Initialize CSS renderer
+            $this->cssRenderer = new CssRendererService($cssConfig, $this->logger);
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
@@ -135,6 +148,11 @@ class PrismEngine implements EngineInterface
                 $this->parseHtml();
                 $this->parseHtml5();
                 $this->extractMetadata();
+            }
+            
+            // Parse CSS if enabled
+            if ($this->config['css_parsing'] ?? true) {
+                $this->parseCss();
             }
             
             $this->logger->info("Navigation completed", [
