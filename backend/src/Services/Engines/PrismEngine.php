@@ -963,4 +963,233 @@ class PrismEngine implements EngineInterface
 
         return $this->htmlParser->hasAttribute($element, $name);
     }
+
+    /**
+     * Parse CSS from the current page
+     */
+    private function parseCss(): void
+    {
+        if (!$this->cssParser || !$this->htmlParser) {
+            return;
+        }
+
+        try {
+            // Extract CSS from <style> tags
+            $styleElements = $this->htmlParser->querySelectorAll('style');
+            $cssContent = '';
+            
+            foreach ($styleElements as $style) {
+                $cssContent .= $this->htmlParser->getTextContent($style) . "\n";
+            }
+            
+            // Extract CSS from <link> tags
+            $linkElements = $this->htmlParser->querySelectorAll('link[rel="stylesheet"]');
+            foreach ($linkElements as $link) {
+                $href = $this->htmlParser->getAttribute($link, 'href');
+                if ($href) {
+                    // Resolve relative URLs
+                    $cssUrl = $this->resolveUrl($href, $this->currentUrl);
+                    
+                    // Fetch external CSS
+                    $response = $this->httpClient->get($cssUrl);
+                    if ($response['success']) {
+                        $cssContent .= $response['body'] . "\n";
+                    }
+                }
+            }
+            
+            if (!empty($cssContent)) {
+                $this->cssData = $this->cssParser->parseCss($cssContent, $this->currentUrl);
+                $this->logger->debug("CSS parsed successfully", [
+                    'rules_count' => count($this->cssData['rules'] ?? []),
+                    'media_queries_count' => count($this->cssData['media_queries'] ?? []),
+                    'keyframes_count' => count($this->cssData['keyframes'] ?? [])
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            $this->logger->error("CSS parsing failed: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get parsed CSS data
+     */
+    public function getCssData(): array
+    {
+        return $this->cssData;
+    }
+
+    /**
+     * Get CSS rules
+     */
+    public function getCssRules(): array
+    {
+        return $this->cssData['rules'] ?? [];
+    }
+
+    /**
+     * Get media queries
+     */
+    public function getMediaQueries(): array
+    {
+        return $this->cssData['media_queries'] ?? [];
+    }
+
+    /**
+     * Get CSS keyframes
+     */
+    public function getKeyframes(): array
+    {
+        return $this->cssData['keyframes'] ?? [];
+    }
+
+    /**
+     * Get CSS variables
+     */
+    public function getCssVariables(): array
+    {
+        return $this->cssData['variables'] ?? [];
+    }
+
+    /**
+     * Compute styles for an element
+     */
+    public function computeElementStyles(array $element): array
+    {
+        if (!$this->cssParser || !$this->cssRenderer) {
+            return [];
+        }
+
+        try {
+            $rules = $this->cssData['rules'] ?? [];
+            $computedStyles = $this->cssParser->computeStyles($rules, $element);
+            
+            return $computedStyles;
+        } catch (\Exception $e) {
+            $this->logger->error("Style computation failed: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Render an element with computed styles
+     */
+    public function renderElement(array $element, array $parentStyles = []): array
+    {
+        if (!$this->cssRenderer) {
+            return $element;
+        }
+
+        try {
+            $computedStyles = $this->computeElementStyles($element);
+            $rendered = $this->cssRenderer->renderElement($element, $computedStyles, $parentStyles);
+            
+            $this->renderedElements[] = $rendered;
+            return $rendered;
+        } catch (\Exception $e) {
+            $this->logger->error("Element rendering failed: " . $e->getMessage());
+            return $element;
+        }
+    }
+
+    /**
+     * Render the entire page
+     */
+    public function renderPage(): array
+    {
+        if (!$this->cssRenderer || !$this->htmlParser) {
+            return [];
+        }
+
+        try {
+            // Get all elements from HTML parser
+            $elements = $this->htmlParser->getParsedData()['elements'] ?? [];
+            
+            // Render the page
+            $rendered = $this->cssRenderer->renderPage($elements, $this->cssData);
+            
+            $this->logger->debug("Page rendered successfully", [
+                'elements_count' => count($rendered['elements'] ?? []),
+                'viewport' => $rendered['viewport'] ?? []
+            ]);
+            
+            return $rendered;
+        } catch (\Exception $e) {
+            $this->logger->error("Page rendering failed: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get rendered elements
+     */
+    public function getRenderedElements(): array
+    {
+        return $this->renderedElements;
+    }
+
+    /**
+     * Get CSS statistics
+     */
+    public function getCssStats(): array
+    {
+        return $this->cssData['stats'] ?? [];
+    }
+
+    /**
+     * Resolve relative URL to absolute URL
+     */
+    private function resolveUrl(string $url, string $baseUrl): string
+    {
+        if (empty($baseUrl)) {
+            return $url;
+        }
+        
+        if (preg_match('/^https?:\/\//', $url)) {
+            return $url;
+        }
+        
+        $base = parse_url($baseUrl);
+        if (!$base) {
+            return $url;
+        }
+        
+        if (strpos($url, '/') === 0) {
+            return $base['scheme'] . '://' . $base['host'] . (isset($base['port']) ? ':' . $base['port'] : '') . $url;
+        } else {
+            $basePath = isset($base['path']) ? dirname($base['path']) : '/';
+            if ($basePath === '.') {
+                $basePath = '/';
+            }
+            return $base['scheme'] . '://' . $base['host'] . (isset($base['port']) ? ':' . $base['port'] : '') . $basePath . '/' . $url;
+        }
+    }
+
+    /**
+     * Update close method to include CSS services cleanup
+     */
+    public function close(): void
+    {
+        if ($this->httpClient) {
+            $this->httpClient->close();
+            $this->httpClient = null;
+        }
+        
+        $this->htmlParser = null;
+        $this->cssParser = null;
+        $this->cssRenderer = null;
+        $this->dom = null;
+        
+        $this->pageMetadata = [];
+        $this->parsedData = [];
+        $this->cssData = [];
+        $this->renderedElements = [];
+        $this->cookies = [];
+        $this->localStorage = [];
+        
+        $this->initialized = false;
+        $this->currentUrl = '';
+        $this->pageContent = '';
+    }
 }
