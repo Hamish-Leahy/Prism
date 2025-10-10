@@ -446,7 +446,7 @@ class WebSocketService
     /**
      * Cleanup and close all connections
      */
-    public function close(): void
+    public function shutdown(): void
     {
         foreach (array_keys($this->connections) as $connectionId) {
             $this->close($connectionId);

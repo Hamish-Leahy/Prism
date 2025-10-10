@@ -40,13 +40,13 @@
 - [x] **1.3.5** Implement cookie jar management
 - [x] **1.3.6** Add local storage simulation
 - [x] **1.3.7** Implement session storage
-- [ ] **1.3.8** Add WebSocket support
+- [x] **1.3.8** Add WebSocket support
 - [ ] **1.3.9** Implement WebRTC basics
 - [ ] **1.3.10** Add WebAssembly support
 - [ ] **1.3.11** Implement Service Worker support
 - [ ] **1.3.12** Add push notification handling
 - [ ] **1.3.13** Implement offline functionality
-- [ ] **1.3.14** Add caching system
+- [x] **1.3.14** Add caching system
 - [ ] **1.3.15** Implement plugin architecture
 
 #### Engine Testing & Validation

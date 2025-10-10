@@ -9,6 +9,7 @@ use Prism\Backend\Services\CssRendererService;
 use Prism\Backend\Services\JavaScriptEngineService;
 use Prism\Backend\Services\CookieJarService;
 use Prism\Backend\Services\WebSocketService;
+use Prism\Backend\Services\CacheService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -23,6 +24,7 @@ class PrismEngine implements EngineInterface
     private ?JavaScriptEngineService $jsEngine = null;
     private ?CookieJarService $cookieJar = null;
     private ?WebSocketService $webSocketService = null;
+    private ?CacheService $cacheService = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -113,6 +115,16 @@ class PrismEngine implements EngineInterface
             ];
             $this->webSocketService = new WebSocketService($wsConfig, $this->logger);
             $this->webSocketService->initialize();
+
+            // Initialize cache service
+            $cacheConfig = [
+                'cache_path' => $this->config['cache_path'] ?? sys_get_temp_dir() . '/prism_cache',
+                'max_memory_size' => $this->config['cache_memory_size'] ?? 67108864, // 64MB
+                'max_disk_size' => $this->config['cache_disk_size'] ?? 1073741824, // 1GB
+                'default_ttl' => $this->config['cache_default_ttl'] ?? 3600, // 1 hour
+                'persistent' => $this->config['cache_persistent'] ?? true
+            ];
+            $this->cacheService = new CacheService($cacheConfig, $this->logger);
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
@@ -331,6 +343,9 @@ class PrismEngine implements EngineInterface
                 'images' => $this->config['images_enabled'] ?? true,
                 'cookies' => $this->config['cookies_enabled'] ?? true,
                 'local_storage' => $this->config['local_storage_enabled'] ?? false,
+                'session_storage' => $this->config['session_storage_enabled'] ?? true,
+                'websockets' => $this->config['websocket_enabled'] ?? true,
+                'caching' => $this->config['cache_enabled'] ?? true,
                 'screenshots' => false
             ],
             'config' => $this->config,
@@ -586,7 +601,7 @@ class PrismEngine implements EngineInterface
         }
     }
 
-    public function getCacheStats(): array
+    public function getHttpCacheStats(): array
     {
         if (!$this->isReady()) {
             return [];
@@ -975,6 +990,258 @@ class PrismEngine implements EngineInterface
             'old_value' => $oldValue,
             'new_value' => $newValue
         ]);
+    }
+
+    /**
+     * WebSocket Methods
+     */
+
+    /**
+     * Connect to a WebSocket server
+     */
+    public function connectWebSocket(string $url, array $options = []): ?string
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        return $this->webSocketService->connect($url, $options);
+    }
+
+    /**
+     * Send data through WebSocket connection
+     */
+    public function sendWebSocketData(string $connectionId, string $data, int $opcode = 1): bool
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        return $this->webSocketService->send($connectionId, $data, $opcode);
+    }
+
+    /**
+     * Receive data from WebSocket connection
+     */
+    public function receiveWebSocketData(string $connectionId): ?string
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        return $this->webSocketService->receive($connectionId);
+    }
+
+    /**
+     * Close WebSocket connection
+     */
+    public function closeWebSocket(string $connectionId): bool
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        return $this->webSocketService->close($connectionId);
+    }
+
+    /**
+     * Get WebSocket connection status
+     */
+    public function getWebSocketStatus(string $connectionId): ?array
+    {
+        if (!$this->webSocketService) {
+            return null;
+        }
+
+        return $this->webSocketService->getConnectionStatus($connectionId);
+    }
+
+    /**
+     * Get all WebSocket connections
+     */
+    public function getWebSocketConnections(): array
+    {
+        if (!$this->webSocketService) {
+            return [];
+        }
+
+        return $this->webSocketService->getConnections();
+    }
+
+    /**
+     * Add WebSocket event listener
+     */
+    public function addWebSocketEventListener(string $event, callable $listener): void
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        $this->webSocketService->addEventListener($event, $listener);
+    }
+
+    /**
+     * Remove WebSocket event listener
+     */
+    public function removeWebSocketEventListener(string $event, callable $listener): void
+    {
+        if (!$this->webSocketService) {
+            throw new \RuntimeException('WebSocket service not initialized');
+        }
+
+        $this->webSocketService->removeEventListener($event, $listener);
+    }
+
+    /**
+     * Get WebSocket service statistics
+     */
+    public function getWebSocketStats(): array
+    {
+        if (!$this->webSocketService) {
+            return [];
+        }
+
+        return $this->webSocketService->getStats();
+    }
+
+    /**
+     * Check if WebSocket service is initialized
+     */
+    public function isWebSocketInitialized(): bool
+    {
+        return $this->webSocketService && $this->webSocketService->isInitialized();
+    }
+
+    /**
+     * Cache Methods
+     */
+
+    /**
+     * Store data in cache
+     */
+    public function cacheSet(string $key, mixed $value, ?int $ttl = null): bool
+    {
+        if (!$this->cacheService) {
+            throw new \RuntimeException('Cache service not initialized');
+        }
+
+        return $this->cacheService->set($key, $value, $ttl);
+    }
+
+    /**
+     * Retrieve data from cache
+     */
+    public function cacheGet(string $key): mixed
+    {
+        if (!$this->cacheService) {
+            throw new \RuntimeException('Cache service not initialized');
+        }
+
+        return $this->cacheService->get($key);
+    }
+
+    /**
+     * Check if cache item exists
+     */
+    public function cacheHas(string $key): bool
+    {
+        if (!$this->cacheService) {
+            return false;
+        }
+
+        return $this->cacheService->has($key);
+    }
+
+    /**
+     * Delete cache item
+     */
+    public function cacheDelete(string $key): bool
+    {
+        if (!$this->cacheService) {
+            throw new \RuntimeException('Cache service not initialized');
+        }
+
+        return $this->cacheService->delete($key);
+    }
+
+    /**
+     * Clear all cache items
+     */
+    public function cacheClear(): bool
+    {
+        if (!$this->cacheService) {
+            throw new \RuntimeException('Cache service not initialized');
+        }
+
+        return $this->cacheService->clear();
+    }
+
+    /**
+     * Get cache statistics
+     */
+    public function getCacheStats(): array
+    {
+        if (!$this->cacheService) {
+            return [];
+        }
+
+        return $this->cacheService->getStats();
+    }
+
+    /**
+     * Get cache item metadata
+     */
+    public function getCacheMetadata(string $key): ?array
+    {
+        if (!$this->cacheService) {
+            return null;
+        }
+
+        return $this->cacheService->getMetadata($key);
+    }
+
+    /**
+     * Clean up expired cache items
+     */
+    public function cacheCleanup(): int
+    {
+        if (!$this->cacheService) {
+            return 0;
+        }
+
+        return $this->cacheService->cleanup();
+    }
+
+    /**
+     * Set cache configuration
+     */
+    public function setCacheConfig(array $config): void
+    {
+        if (!$this->cacheService) {
+            throw new \RuntimeException('Cache service not initialized');
+        }
+
+        $this->cacheService->setConfig($config);
+    }
+
+    /**
+     * Get cache configuration
+     */
+    public function getCacheConfig(): array
+    {
+        if (!$this->cacheService) {
+            return [];
+        }
+
+        return $this->cacheService->getConfig();
+    }
+
+    /**
+     * Check if cache service is initialized
+     */
+    public function isCacheInitialized(): bool
+    {
+        return $this->cacheService !== null;
     }
 
     public function getPerformanceMetrics(): array
@@ -1867,6 +2134,16 @@ class PrismEngine implements EngineInterface
         if ($this->cookieJar) {
             $this->cookieJar->close();
             $this->cookieJar = null;
+        }
+
+        if ($this->webSocketService) {
+            $this->webSocketService->shutdown();
+            $this->webSocketService = null;
+        }
+
+        if ($this->cacheService) {
+            $this->cacheService->close();
+            $this->cacheService = null;
         }
         
         $this->dom = null;
