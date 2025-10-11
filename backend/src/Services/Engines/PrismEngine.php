@@ -3012,6 +3012,198 @@ class PrismEngine implements EngineInterface
     }
 
     /**
+     * Plugin Architecture Methods
+     */
+
+    /**
+     * Load a plugin
+     */
+    public function loadPlugin(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+
+        return $this->pluginManager->loadPlugin($pluginName);
+    }
+
+    /**
+     * Unload a plugin
+     */
+    public function unloadPlugin(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            return false;
+        }
+
+        return $this->pluginManager->unloadPlugin($pluginName);
+    }
+
+    /**
+     * Get a plugin instance
+     */
+    public function getPlugin(string $pluginName): ?object
+    {
+        if (!$this->pluginManager) {
+            return null;
+        }
+
+        return $this->pluginManager->getPlugin($pluginName);
+    }
+
+    /**
+     * Get plugin information
+     */
+    public function getPluginInfo(string $pluginName): ?array
+    {
+        if (!$this->pluginManager) {
+            return null;
+        }
+
+        return $this->pluginManager->getPluginInfo($pluginName);
+    }
+
+    /**
+     * Get all loaded plugins
+     */
+    public function getAllPlugins(): array
+    {
+        if (!$this->pluginManager) {
+            return [];
+        }
+
+        return $this->pluginManager->getAllPlugins();
+    }
+
+    /**
+     * Get available plugins
+     */
+    public function getAvailablePlugins(): array
+    {
+        if (!$this->pluginManager) {
+            return [];
+        }
+
+        return $this->pluginManager->getAvailablePlugins();
+    }
+
+    /**
+     * Check if plugin is loaded
+     */
+    public function isPluginLoaded(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            return false;
+        }
+
+        return $this->pluginManager->isPluginLoaded($pluginName);
+    }
+
+    /**
+     * Check if plugin is enabled
+     */
+    public function isPluginEnabled(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            return false;
+        }
+
+        return $this->pluginManager->isPluginEnabled($pluginName);
+    }
+
+    /**
+     * Enable a plugin
+     */
+    public function enablePlugin(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+
+        return $this->pluginManager->enablePlugin($pluginName);
+    }
+
+    /**
+     * Disable a plugin
+     */
+    public function disablePlugin(string $pluginName): bool
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+
+        return $this->pluginManager->disablePlugin($pluginName);
+    }
+
+    /**
+     * Configure a plugin
+     */
+    public function configurePlugin(string $pluginName, array $config): bool
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+
+        return $this->pluginManager->configurePlugin($pluginName, $config);
+    }
+
+    /**
+     * Get plugin configuration
+     */
+    public function getPluginConfig(string $pluginName): ?array
+    {
+        if (!$this->pluginManager) {
+            return null;
+        }
+
+        return $this->pluginManager->getPluginConfig($pluginName);
+    }
+
+    /**
+     * Call a plugin method
+     */
+    public function callPluginMethod(string $pluginName, string $method, array $args = []): mixed
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+
+        return $this->pluginManager->callPluginMethod($pluginName, $method, $args);
+    }
+
+    /**
+     * Broadcast event to all plugins
+     */
+    public function broadcastPluginEvent(string $eventName, array $data = []): array
+    {
+        if (!$this->pluginManager) {
+            return [];
+        }
+
+        return $this->pluginManager->broadcastEvent($eventName, $data);
+    }
+
+    /**
+     * Get plugin statistics
+     */
+    public function getPluginStats(): array
+    {
+        if (!$this->pluginManager) {
+            return [];
+        }
+
+        return $this->pluginManager->getPluginStats();
+    }
+
+    /**
+     * Check if Plugin Manager is initialized
+     */
+    public function isPluginManagerInitialized(): bool
+    {
+        return $this->pluginManager && $this->pluginManager->isInitialized();
+    }
+
+    /**
      * Update close method to include JavaScript engine cleanup
      */
     public function close(): void
