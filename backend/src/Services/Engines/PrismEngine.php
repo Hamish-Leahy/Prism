@@ -14,6 +14,7 @@ use Prism\Backend\Services\WebRTCService;
 use Prism\Backend\Services\WebAssemblyService;
 use Prism\Backend\Services\ServiceWorkerService;
 use Prism\Backend\Services\PushNotificationService;
+use Prism\Backend\Services\OfflineService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -33,6 +34,7 @@ class PrismEngine implements EngineInterface
     private ?WebAssemblyService $webAssemblyService = null;
     private ?ServiceWorkerService $serviceWorkerService = null;
     private ?PushNotificationService $pushNotificationService = null;
+    private ?OfflineService $offlineService = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -188,6 +190,20 @@ class PrismEngine implements EngineInterface
             ];
             $this->pushNotificationService = new PushNotificationService($pushConfig, $this->logger);
             $this->pushNotificationService->initialize();
+
+            // Initialize Offline service
+            $offlineConfig = [
+                'enabled' => $this->config['offline_enabled'] ?? true,
+                'storage_path' => $this->config['offline_storage_path'] ?? sys_get_temp_dir() . '/prism_offline',
+                'max_cache_size' => $this->config['offline_max_cache_size'] ?? 104857600, // 100MB
+                'max_manifests' => $this->config['offline_max_manifests'] ?? 50,
+                'max_sync_queue' => $this->config['offline_max_sync_queue'] ?? 1000,
+                'default_ttl' => $this->config['offline_default_ttl'] ?? 86400, // 24 hours
+                'sync_interval' => $this->config['offline_sync_interval'] ?? 300, // 5 minutes
+                'auto_sync' => $this->config['offline_auto_sync'] ?? true
+            ];
+            $this->offlineService = new OfflineService($offlineConfig, $this->logger);
+            $this->offlineService->initialize();
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
