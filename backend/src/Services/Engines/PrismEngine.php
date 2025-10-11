@@ -10,6 +10,7 @@ use Prism\Backend\Services\JavaScriptEngineService;
 use Prism\Backend\Services\CookieJarService;
 use Prism\Backend\Services\WebSocketService;
 use Prism\Backend\Services\CacheService;
+use Prism\Backend\Services\WebRTCService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -25,6 +26,7 @@ class PrismEngine implements EngineInterface
     private ?CookieJarService $cookieJar = null;
     private ?WebSocketService $webSocketService = null;
     private ?CacheService $cacheService = null;
+    private ?WebRTCService $webRTCService = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
