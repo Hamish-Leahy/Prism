@@ -2835,6 +2835,11 @@ class PrismEngine implements EngineInterface
             $this->serviceWorkerService->cleanup();
             $this->serviceWorkerService = null;
         }
+
+        if ($this->pushNotificationService) {
+            $this->pushNotificationService->cleanup();
+            $this->pushNotificationService = null;
+        }
         
         $this->dom = null;
         
