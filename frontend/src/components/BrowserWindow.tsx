@@ -26,8 +26,6 @@ export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine }) => 
     setError(null)
     
     try {
-      // In a real implementation, this would communicate with the backend
-      // to load the page using the selected engine
       const response = await fetch(`http://localhost:8000/api/tabs/${tab?.id}/navigate`, {
         method: 'POST',
         headers: {
@@ -36,11 +34,12 @@ export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine }) => 
         body: JSON.stringify({ url }),
       })
       
+      const data = await response.json()
+      
       if (!response.ok) {
-        throw new Error('Failed to load page')
+        throw new Error(data.error || 'Failed to load page')
       }
       
-      const data = await response.json()
       setContent(data.content || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load page')
@@ -137,12 +136,24 @@ export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine }) => 
 
   return (
     <div className="h-full bg-arc-bg">
-      <iframe
-        src={tab.url}
-        className="w-full h-full border-0"
-        title={tab.title}
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-      />
+      {content ? (
+        <div 
+          className="w-full h-full overflow-auto p-4"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-arc-surface rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-arc-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-arc-text mb-2">No content loaded</h2>
+            <p className="text-arc-text-secondary">Enter a URL to start browsing</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

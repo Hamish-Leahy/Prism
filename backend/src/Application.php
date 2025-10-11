@@ -64,6 +64,8 @@ class Application
             $group->post('/switch', [EngineController::class, 'switch']);
             $group->get('/current', [EngineController::class, 'current']);
             $group->get('/{engine}/status', [EngineController::class, 'status']);
+            $group->get('/{engine}/info', [EngineController::class, 'info']);
+            $group->get('/{engine}/stats', [EngineController::class, 'stats']);
         });
         
         // Tab routes
@@ -74,6 +76,8 @@ class Application
             $group->put('/{id}', [TabController::class, 'update']);
             $group->delete('/{id}', [TabController::class, 'close']);
             $group->post('/{id}/navigate', [TabController::class, 'navigate']);
+            $group->get('/{id}/content', [TabController::class, 'content']);
+            $group->get('/{id}/metadata', [TabController::class, 'metadata']);
         });
         
         // Bookmark routes

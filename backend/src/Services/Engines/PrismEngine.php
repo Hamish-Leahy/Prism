@@ -3203,6 +3203,8 @@ class PrismEngine implements EngineInterface
         return $this->pluginManager && $this->pluginManager->isInitialized();
     }
 
+
+
     /**
      * Update close method to include JavaScript engine cleanup
      */

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Tab } from '../types/Tab'
+import { apiService } from '../services/api'
 
 export const useTabs = () => {
   const [tabs, setTabs] = useState<Tab[]>([])
   const [activeTab, setActiveTab] = useState<Tab | null>(null)
+  const [loading, setLoading] = useState<boolean>(false)
 
   useEffect(() => {
     loadTabs()
@@ -11,16 +13,17 @@ export const useTabs = () => {
 
   const loadTabs = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/tabs')
-      if (response.ok) {
-        const data = await response.json()
-        setTabs(data)
+      const response = await apiService.getTabs()
+      if (response.success && response.data) {
+        setTabs(response.data)
         
         // Set first tab as active if none is active
-        if (data.length > 0 && !activeTab) {
-          const firstActive = data.find((tab: Tab) => tab.isActive)
-          setActiveTab(firstActive || data[0])
+        if (response.data.length > 0 && !activeTab) {
+          const firstActive = response.data.find((tab: Tab) => tab.isActive)
+          setActiveTab(firstActive || response.data[0])
         }
+      } else {
+        console.error('Failed to load tabs:', response.error)
       }
     } catch (error) {
       console.error('Failed to load tabs:', error)
@@ -29,26 +32,20 @@ export const useTabs = () => {
 
   const createTab = async (title: string, url: string) => {
     try {
-      const response = await fetch('http://localhost:8000/api/tabs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title, url }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const newTab = { ...data, isActive: true }
+      const response = await apiService.createTab(title, url)
+      if (response.success && response.data) {
+        const newTab = { ...response.data, isActive: true }
         
         // Deactivate other tabs
-        setTabs(prevTabs => 
-          prevTabs.map(tab => ({ ...tab, isActive: false }))
+        setTabs((prevTabs: Tab[]) => 
+          prevTabs.map((tab: Tab) => ({ ...tab, isActive: false }))
         )
         
         // Add new tab
-        setTabs(prevTabs => [...prevTabs, newTab])
+        setTabs((prevTabs: Tab[]) => [...prevTabs, newTab])
         setActiveTab(newTab)
+      } else {
+        console.error('Failed to create tab:', response.error)
       }
     } catch (error) {
       console.error('Failed to create tab:', error)
@@ -57,13 +54,10 @@ export const useTabs = () => {
 
   const closeTab = async (tabId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/tabs/${tabId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        setTabs(prevTabs => {
-          const newTabs = prevTabs.filter(tab => tab.id !== tabId)
+      const response = await apiService.closeTab(tabId)
+      if (response.success) {
+        setTabs((prevTabs: Tab[]) => {
+          const newTabs = prevTabs.filter((tab: Tab) => tab.id !== tabId)
           
           // If we closed the active tab, set a new active tab
           if (activeTab?.id === tabId) {
@@ -77,6 +71,8 @@ export const useTabs = () => {
           
           return newTabs
         })
+      } else {
+        console.error('Failed to close tab:', response.error)
       }
     } catch (error) {
       console.error('Failed to close tab:', error)
@@ -85,25 +81,19 @@ export const useTabs = () => {
 
   const updateTab = async (tabId: string, updates: Partial<Tab>) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/tabs/${tabId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setTabs(prevTabs =>
-          prevTabs.map(tab =>
-            tab.id === tabId ? { ...tab, ...data } : tab
+      const response = await apiService.updateTab(tabId, updates)
+      if (response.success && response.data) {
+        setTabs((prevTabs: Tab[]) =>
+          prevTabs.map((tab: Tab) =>
+            tab.id === tabId ? { ...tab, ...response.data } : tab
           )
         )
         
         if (activeTab?.id === tabId) {
-          setActiveTab({ ...activeTab, ...data })
+          setActiveTab({ ...activeTab, ...response.data })
         }
+      } else {
+        console.error('Failed to update tab:', response.error)
       }
     } catch (error) {
       console.error('Failed to update tab:', error)
@@ -111,35 +101,33 @@ export const useTabs = () => {
   }
 
   const navigateTab = async (tabId: string, url: string) => {
+    setLoading(true)
     try {
-      const response = await fetch(`http://localhost:8000/api/tabs/${tabId}/navigate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setTabs(prevTabs =>
-          prevTabs.map(tab =>
-            tab.id === tabId ? { ...tab, ...data } : tab
+      const response = await apiService.navigateTab(tabId, url)
+      if (response.success && response.data) {
+        setTabs((prevTabs: Tab[]) =>
+          prevTabs.map((tab: Tab) =>
+            tab.id === tabId ? { ...tab, ...response.data } : tab
           )
         )
         
         if (activeTab?.id === tabId) {
-          setActiveTab({ ...activeTab, ...data })
+          setActiveTab({ ...activeTab, ...response.data })
         }
+      } else {
+        console.error('Failed to navigate tab:', response.error)
       }
     } catch (error) {
       console.error('Failed to navigate tab:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
   return {
     tabs,
     activeTab,
+    loading,
     createTab,
     closeTab,
     updateTab,

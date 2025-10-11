@@ -86,4 +86,63 @@ class EngineController
         $response->getBody()->write(json_encode($status));
         return $response->withHeader('Content-Type', 'application/json');
     }
+
+    public function info(Request $request, Response $response): Response
+    {
+        $args = $request->getAttribute('route')->getArguments();
+        $engineName = $args['engine'] ?? '';
+
+        if (empty($engineName)) {
+            $response->getBody()->write(json_encode(['error' => 'Engine name is required']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $engine = $this->engineManager->getEngine($engineName);
+        if (!$engine) {
+            $response->getBody()->write(json_encode(['error' => 'Engine not found']));
+            return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+        }
+
+        $info = $engine->getInfo();
+        
+        $response->getBody()->write(json_encode($info));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function stats(Request $request, Response $response): Response
+    {
+        $args = $request->getAttribute('route')->getArguments();
+        $engineName = $args['engine'] ?? '';
+
+        if (empty($engineName)) {
+            $response->getBody()->write(json_encode(['error' => 'Engine name is required']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $engine = $this->engineManager->getEngine($engineName);
+        if (!$engine) {
+            $response->getBody()->write(json_encode(['error' => 'Engine not found']));
+            return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+        }
+
+        $stats = [];
+        
+        // Get performance metrics if available
+        if (method_exists($engine, 'getPerformanceMetrics')) {
+            $stats['performance'] = $engine->getPerformanceMetrics();
+        }
+        
+        // Get cache stats if available
+        if (method_exists($engine, 'getCacheStats')) {
+            $stats['cache'] = $engine->getCacheStats();
+        }
+        
+        // Get memory usage if available
+        if (method_exists($engine, 'getMemoryUsage')) {
+            $stats['memory'] = $engine->getMemoryUsage();
+        }
+        
+        $response->getBody()->write(json_encode($stats));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
 }

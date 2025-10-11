@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Engine } from '../types/Engine'
+import { apiService } from '../services/api'
 
 export const useEngine = () => {
   const [engines, setEngines] = useState<Engine[]>([])
@@ -13,10 +14,11 @@ export const useEngine = () => {
 
   const loadEngines = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/engines')
-      if (response.ok) {
-        const data = await response.json()
-        setEngines(data)
+      const response = await apiService.getEngines()
+      if (response.success && response.data) {
+        setEngines(response.data)
+      } else {
+        console.error('Failed to load engines:', response.error)
       }
     } catch (error) {
       console.error('Failed to load engines:', error)
@@ -25,10 +27,11 @@ export const useEngine = () => {
 
   const loadCurrentEngine = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/engines/current')
-      if (response.ok) {
-        const data = await response.json()
-        setCurrentEngine(data)
+      const response = await apiService.getCurrentEngine()
+      if (response.success && response.data) {
+        setCurrentEngine(response.data)
+      } else {
+        console.error('Failed to load current engine:', response.error)
       }
     } catch (error) {
       console.error('Failed to load current engine:', error)
@@ -39,23 +42,15 @@ export const useEngine = () => {
 
   const switchEngine = async (engineId: string) => {
     try {
-      const response = await fetch('http://localhost:8000/api/engines/switch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ engine: engineId }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          // Update current engine
-          const engine = engines.find(e => e.id === engineId)
-          if (engine) {
-            setCurrentEngine(engine)
-          }
+      const response = await apiService.switchEngine(engineId)
+      if (response.success) {
+        // Update current engine
+        const engine = engines.find((e: Engine) => e.id === engineId)
+        if (engine) {
+          setCurrentEngine(engine)
         }
+      } else {
+        console.error('Failed to switch engine:', response.error)
       }
     } catch (error) {
       console.error('Failed to switch engine:', error)

@@ -13,7 +13,7 @@ import { useSettings } from './hooks/useSettings'
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const { currentEngine, switchEngine, engines } = useEngine()
-  const { tabs, createTab, closeTab, activeTab, setActiveTab } = useTabs()
+  const { tabs, createTab, closeTab, activeTab, setActiveTab, navigateTab, loading } = useTabs()
   const { settings, updateSettings } = useSettings()
 
   useEffect(() => {
@@ -51,7 +51,25 @@ function App() {
         </div>
 
         {/* Address Bar */}
-        <AddressBar />
+        <AddressBar
+          currentUrl={activeTab?.url || ''}
+          loading={loading}
+          onNavigate={(url) => {
+            if (activeTab) {
+              navigateTab(activeTab.id, url)
+            }
+          }}
+          onRefresh={() => {
+            if (activeTab && activeTab.url !== 'about:blank') {
+              navigateTab(activeTab.id, activeTab.url)
+            }
+          }}
+          onHome={() => {
+            if (activeTab) {
+              navigateTab(activeTab.id, 'about:blank')
+            }
+          }}
+        />
 
         {/* Bookmark Bar */}
         <BookmarkBar />
