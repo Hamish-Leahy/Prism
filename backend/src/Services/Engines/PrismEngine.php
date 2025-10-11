@@ -2127,6 +2127,138 @@ class PrismEngine implements EngineInterface
     }
 
     /**
+     * WebRTC Methods
+     */
+
+    /**
+     * Create a new WebRTC peer connection
+     */
+    public function createWebRTCPeerConnection(string $connectionId, array $options = []): array
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->createPeerConnection($connectionId, $options);
+    }
+
+    /**
+     * Create a WebRTC data channel
+     */
+    public function createWebRTCDataChannel(string $connectionId, string $channelName, array $options = []): array
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->createDataChannel($connectionId, $channelName, $options);
+    }
+
+    /**
+     * Set local description for WebRTC connection
+     */
+    public function setWebRTCLocalDescription(string $connectionId, array $description): bool
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->setLocalDescription($connectionId, $description);
+    }
+
+    /**
+     * Set remote description for WebRTC connection
+     */
+    public function setWebRTCRemoteDescription(string $connectionId, array $description): bool
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->setRemoteDescription($connectionId, $description);
+    }
+
+    /**
+     * Add ICE candidate to WebRTC connection
+     */
+    public function addWebRTCIceCandidate(string $connectionId, array $candidate): bool
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->addIceCandidate($connectionId, $candidate);
+    }
+
+    /**
+     * Send data via WebRTC data channel
+     */
+    public function sendWebRTCData(string $connectionId, string $channelName, string $data): bool
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->sendData($connectionId, $channelName, $data);
+    }
+
+    /**
+     * Get WebRTC connection information
+     */
+    public function getWebRTCConnection(string $connectionId): ?array
+    {
+        if (!$this->webRTCService) {
+            return null;
+        }
+
+        return $this->webRTCService->getConnection($connectionId);
+    }
+
+    /**
+     * Get WebRTC data channel information
+     */
+    public function getWebRTCDataChannel(string $connectionId, string $channelName): ?array
+    {
+        if (!$this->webRTCService) {
+            return null;
+        }
+
+        return $this->webRTCService->getDataChannel($connectionId, $channelName);
+    }
+
+    /**
+     * Close WebRTC connection
+     */
+    public function closeWebRTCConnection(string $connectionId): bool
+    {
+        if (!$this->webRTCService) {
+            return false;
+        }
+
+        return $this->webRTCService->closeConnection($connectionId);
+    }
+
+    /**
+     * Get WebRTC connection statistics
+     */
+    public function getWebRTCStats(string $connectionId): array
+    {
+        if (!$this->webRTCService) {
+            return [];
+        }
+
+        return $this->webRTCService->getStats($connectionId);
+    }
+
+    /**
+     * Check if WebRTC service is initialized
+     */
+    public function isWebRTCInitialized(): bool
+    {
+        return $this->webRTCService && $this->webRTCService->isInitialized();
+    }
+
+    /**
      * Update close method to include JavaScript engine cleanup
      */
     public function close(): void
@@ -2158,6 +2290,11 @@ class PrismEngine implements EngineInterface
         if ($this->cacheService) {
             $this->cacheService->close();
             $this->cacheService = null;
+        }
+
+        if ($this->webRTCService) {
+            $this->webRTCService->cleanup();
+            $this->webRTCService = null;
         }
         
         $this->dom = null;
