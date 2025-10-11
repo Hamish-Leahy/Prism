@@ -207,6 +207,20 @@ class PrismEngine implements EngineInterface
             $this->offlineService = new OfflineService($offlineConfig, $this->logger);
             $this->offlineService->initialize();
 
+            // Initialize Plugin Manager
+            $pluginConfig = [
+                'enabled' => $this->config['plugins_enabled'] ?? true,
+                'plugin_paths' => $this->config['plugin_paths'] ?? [
+                    __DIR__ . '/../Plugins/',
+                    __DIR__ . '/../../plugins/'
+                ],
+                'enabled_plugins' => $this->config['enabled_plugins'] ?? [],
+                'auto_load' => $this->config['plugins_auto_load'] ?? true,
+                'plugin_config' => $this->config['plugin_config'] ?? []
+            ];
+            $this->pluginManager = new PluginManager($pluginConfig, $this->logger);
+            $this->pluginManager->initialize();
+
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
             $this->dom->preserveWhiteSpace = false;
