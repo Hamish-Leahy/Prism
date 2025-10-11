@@ -2804,6 +2804,198 @@ class PrismEngine implements EngineInterface
     }
 
     /**
+     * Offline Functionality Methods
+     */
+
+    /**
+     * Set online/offline status
+     */
+    public function setOnlineStatus(bool $isOnline): void
+    {
+        if (!$this->offlineService) {
+            throw new \RuntimeException('Offline service not initialized');
+        }
+
+        $this->offlineService->setOnlineStatus($isOnline);
+    }
+
+    /**
+     * Check if currently online
+     */
+    public function isOnline(): bool
+    {
+        if (!$this->offlineService) {
+            return true; // Default to online if service not available
+        }
+
+        return $this->offlineService->isOnline();
+    }
+
+    /**
+     * Create offline manifest
+     */
+    public function createOfflineManifest(string $manifestId, array $resources, array $options = []): bool
+    {
+        if (!$this->offlineService) {
+            throw new \RuntimeException('Offline service not initialized');
+        }
+
+        return $this->offlineService->createOfflineManifest($manifestId, $resources, $options);
+    }
+
+    /**
+     * Cache resource for offline use
+     */
+    public function cacheResourceForOffline(string $url, string $content, array $headers = [], array $options = []): bool
+    {
+        if (!$this->offlineService) {
+            throw new \RuntimeException('Offline service not initialized');
+        }
+
+        return $this->offlineService->cacheResource($url, $content, $headers, $options);
+    }
+
+    /**
+     * Get cached resource
+     */
+    public function getCachedResource(string $url): ?array
+    {
+        if (!$this->offlineService) {
+            return null;
+        }
+
+        return $this->offlineService->getCachedResource($url);
+    }
+
+    /**
+     * Check if resource is cached
+     */
+    public function isResourceCached(string $url): bool
+    {
+        if (!$this->offlineService) {
+            return false;
+        }
+
+        return $this->offlineService->isResourceCached($url);
+    }
+
+    /**
+     * Get offline response for URL
+     */
+    public function getOfflineResponse(string $url, array $requestHeaders = []): ?array
+    {
+        if (!$this->offlineService) {
+            return null;
+        }
+
+        return $this->offlineService->getOfflineResponse($url, $requestHeaders);
+    }
+
+    /**
+     * Add item to sync queue
+     */
+    public function addToSyncQueue(string $action, array $data, array $options = []): string
+    {
+        if (!$this->offlineService) {
+            throw new \RuntimeException('Offline service not initialized');
+        }
+
+        return $this->offlineService->addToSyncQueue($action, $data, $options);
+    }
+
+    /**
+     * Process sync queue
+     */
+    public function processSyncQueue(): int
+    {
+        if (!$this->offlineService) {
+            return 0;
+        }
+
+        return $this->offlineService->processSyncQueue();
+    }
+
+    /**
+     * Get offline manifest
+     */
+    public function getOfflineManifest(string $manifestId): ?array
+    {
+        if (!$this->offlineService) {
+            return null;
+        }
+
+        return $this->offlineService->getOfflineManifest($manifestId);
+    }
+
+    /**
+     * Update offline manifest
+     */
+    public function updateOfflineManifest(string $manifestId, array $updates): bool
+    {
+        if (!$this->offlineService) {
+            return false;
+        }
+
+        return $this->offlineService->updateOfflineManifest($manifestId, $updates);
+    }
+
+    /**
+     * Delete offline manifest
+     */
+    public function deleteOfflineManifest(string $manifestId): bool
+    {
+        if (!$this->offlineService) {
+            return false;
+        }
+
+        return $this->offlineService->deleteOfflineManifest($manifestId);
+    }
+
+    /**
+     * Clear offline cache
+     */
+    public function clearOfflineCache(array $filters = []): int
+    {
+        if (!$this->offlineService) {
+            return 0;
+        }
+
+        return $this->offlineService->clearOfflineCache($filters);
+    }
+
+    /**
+     * Get sync queue status
+     */
+    public function getSyncQueueStatus(): array
+    {
+        if (!$this->offlineService) {
+            return [];
+        }
+
+        return $this->offlineService->getSyncQueueStatus();
+    }
+
+    /**
+     * Get offline service statistics
+     */
+    public function getOfflineStats(): array
+    {
+        if (!$this->offlineService) {
+            return [];
+        }
+
+        return $this->offlineService->getStats();
+    }
+
+    /**
+     * Check if Offline service is initialized
+     */
+    public function isOfflineInitialized(): bool
+    {
+        return $this->offlineService && $this->offlineService->isInitialized();
+    }
+
+    /**
      * Update close method to include JavaScript engine cleanup
      */
     public function close(): void
@@ -2855,6 +3047,11 @@ class PrismEngine implements EngineInterface
         if ($this->pushNotificationService) {
             $this->pushNotificationService->cleanup();
             $this->pushNotificationService = null;
+        }
+
+        if ($this->offlineService) {
+            $this->offlineService->cleanup();
+            $this->offlineService = null;
         }
         
         $this->dom = null;
