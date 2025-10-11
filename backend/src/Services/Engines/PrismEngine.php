@@ -11,6 +11,9 @@ use Prism\Backend\Services\CookieJarService;
 use Prism\Backend\Services\WebSocketService;
 use Prism\Backend\Services\CacheService;
 use Prism\Backend\Services\WebRTCService;
+use Prism\Backend\Services\WebAssemblyService;
+use Prism\Backend\Services\ServiceWorkerService;
+use Prism\Backend\Services\PushNotificationService;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -27,6 +30,9 @@ class PrismEngine implements EngineInterface
     private ?WebSocketService $webSocketService = null;
     private ?CacheService $cacheService = null;
     private ?WebRTCService $webRTCService = null;
+    private ?WebAssemblyService $webAssemblyService = null;
+    private ?ServiceWorkerService $serviceWorkerService = null;
+    private ?PushNotificationService $pushNotificationService = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
@@ -139,6 +145,49 @@ class PrismEngine implements EngineInterface
             ];
             $this->webRTCService = new WebRTCService($webrtcConfig, $this->logger);
             $this->webRTCService->initialize();
+
+            // Initialize WebAssembly service
+            $wasmConfig = [
+                'enabled' => $this->config['webassembly_enabled'] ?? true,
+                'wasm_runtime_path' => $this->config['wasm_runtime_path'] ?? null,
+                'nodejs_path' => $this->config['nodejs_path'] ?? null,
+                'memory_limit' => $this->config['wasm_memory_limit'] ?? 134217728, // 128MB
+                'max_modules' => $this->config['wasm_max_modules'] ?? 10,
+                'max_instances' => $this->config['wasm_max_instances'] ?? 50
+            ];
+            $this->webAssemblyService = new WebAssemblyService($wasmConfig, $this->logger);
+            $this->webAssemblyService->initialize();
+
+            // Initialize Service Worker service
+            $swConfig = [
+                'enabled' => $this->config['service_worker_enabled'] ?? true,
+                'storage_path' => $this->config['service_worker_storage_path'] ?? sys_get_temp_dir() . '/prism_service_workers',
+                'max_workers' => $this->config['service_worker_max_workers'] ?? 10,
+                'max_caches' => $this->config['service_worker_max_caches'] ?? 50,
+                'cache_size_limit' => $this->config['service_worker_cache_size_limit'] ?? 104857600, // 100MB
+                'update_check_interval' => $this->config['service_worker_update_check_interval'] ?? 300 // 5 minutes
+            ];
+            $this->serviceWorkerService = new ServiceWorkerService($swConfig, $this->logger);
+            $this->serviceWorkerService->initialize();
+
+            // Initialize Push Notification service
+            $pushConfig = [
+                'enabled' => $this->config['push_notifications_enabled'] ?? true,
+                'endpoints' => $this->config['push_endpoints'] ?? [
+                    'fcm' => 'https://fcm.googleapis.com/fcm/send',
+                    'apns' => 'https://api.push.apple.com/3/device/',
+                    'web_push' => 'https://web.push.apple.com/3/device/'
+                ],
+                'max_subscriptions' => $this->config['push_max_subscriptions'] ?? 1000,
+                'max_notifications' => $this->config['push_max_notifications'] ?? 10000,
+                'retry_attempts' => $this->config['push_retry_attempts'] ?? 3,
+                'retry_delay' => $this->config['push_retry_delay'] ?? 60, // seconds
+                'vapid_public_key' => $this->config['vapid_public_key'] ?? '',
+                'vapid_private_key' => $this->config['vapid_private_key'] ?? '',
+                'vapid_subject' => $this->config['vapid_subject'] ?? ''
+            ];
+            $this->pushNotificationService = new PushNotificationService($pushConfig, $this->logger);
+            $this->pushNotificationService->initialize();
 
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
@@ -2259,6 +2308,486 @@ class PrismEngine implements EngineInterface
     }
 
     /**
+     * WebAssembly Methods
+     */
+
+    /**
+     * Compile a WebAssembly module
+     */
+    public function compileWebAssemblyModule(string $wasmBinary): ?string
+    {
+        if (!$this->webAssemblyService) {
+            throw new \RuntimeException('WebAssembly service not initialized');
+        }
+
+        return $this->webAssemblyService->compileModule($wasmBinary);
+    }
+
+    /**
+     * Instantiate a WebAssembly module
+     */
+    public function instantiateWebAssemblyModule(string $moduleId, array $imports = []): ?string
+    {
+        if (!$this->webAssemblyService) {
+            throw new \RuntimeException('WebAssembly service not initialized');
+        }
+
+        return $this->webAssemblyService->instantiateModule($moduleId, $imports);
+    }
+
+    /**
+     * Call a WebAssembly function
+     */
+    public function callWebAssemblyFunction(string $instanceId, string $functionName, array $args = []): mixed
+    {
+        if (!$this->webAssemblyService) {
+            throw new \RuntimeException('WebAssembly service not initialized');
+        }
+
+        return $this->webAssemblyService->callFunction($instanceId, $functionName, $args);
+    }
+
+    /**
+     * Get WebAssembly memory
+     */
+    public function getWebAssemblyMemory(string $instanceId, int $offset = 0, int $length = null): string
+    {
+        if (!$this->webAssemblyService) {
+            throw new \RuntimeException('WebAssembly service not initialized');
+        }
+
+        return $this->webAssemblyService->getMemory($instanceId, $offset, $length);
+    }
+
+    /**
+     * Set WebAssembly memory
+     */
+    public function setWebAssemblyMemory(string $instanceId, int $offset, string $data): bool
+    {
+        if (!$this->webAssemblyService) {
+            throw new \RuntimeException('WebAssembly service not initialized');
+        }
+
+        return $this->webAssemblyService->setMemory($instanceId, $offset, $data);
+    }
+
+    /**
+     * Get WebAssembly module information
+     */
+    public function getWebAssemblyModule(string $moduleId): ?array
+    {
+        if (!$this->webAssemblyService) {
+            return null;
+        }
+
+        return $this->webAssemblyService->getModule($moduleId);
+    }
+
+    /**
+     * Get WebAssembly instance information
+     */
+    public function getWebAssemblyInstance(string $instanceId): ?array
+    {
+        if (!$this->webAssemblyService) {
+            return null;
+        }
+
+        return $this->webAssemblyService->getInstance($instanceId);
+    }
+
+    /**
+     * Close WebAssembly instance
+     */
+    public function closeWebAssemblyInstance(string $instanceId): bool
+    {
+        if (!$this->webAssemblyService) {
+            return false;
+        }
+
+        return $this->webAssemblyService->closeInstance($instanceId);
+    }
+
+    /**
+     * Close WebAssembly module
+     */
+    public function closeWebAssemblyModule(string $moduleId): bool
+    {
+        if (!$this->webAssemblyService) {
+            return false;
+        }
+
+        return $this->webAssemblyService->closeModule($moduleId);
+    }
+
+    /**
+     * Get WebAssembly service statistics
+     */
+    public function getWebAssemblyStats(): array
+    {
+        if (!$this->webAssemblyService) {
+            return [];
+        }
+
+        return $this->webAssemblyService->getStats();
+    }
+
+    /**
+     * Check if WebAssembly service is initialized
+     */
+    public function isWebAssemblyInitialized(): bool
+    {
+        return $this->webAssemblyService && $this->webAssemblyService->isInitialized();
+    }
+
+    /**
+     * Service Worker Methods
+     */
+
+    /**
+     * Register a service worker
+     */
+    public function registerServiceWorker(string $scope, string $scriptUrl, array $options = []): string
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->registerServiceWorker($scope, $scriptUrl, $options);
+    }
+
+    /**
+     * Create a service worker
+     */
+    public function createServiceWorker(string $registrationId, string $scriptUrl, array $options = []): string
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->createServiceWorker($registrationId, $scriptUrl, $options);
+    }
+
+    /**
+     * Install a service worker
+     */
+    public function installServiceWorker(string $workerId): bool
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->installServiceWorker($workerId);
+    }
+
+    /**
+     * Activate a service worker
+     */
+    public function activateServiceWorker(string $workerId): bool
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->activateServiceWorker($workerId);
+    }
+
+    /**
+     * Execute a service worker event
+     */
+    public function executeServiceWorkerEvent(string $workerId, string $eventType, array $data = []): mixed
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->executeServiceWorkerEvent($workerId, $eventType, $data);
+    }
+
+    /**
+     * Add client to service worker
+     */
+    public function addServiceWorkerClient(string $workerId, string $clientId): bool
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->addClient($workerId, $clientId);
+    }
+
+    /**
+     * Remove client from service worker
+     */
+    public function removeServiceWorkerClient(string $workerId, string $clientId): bool
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->removeClient($workerId, $clientId);
+    }
+
+    /**
+     * Create a service worker cache
+     */
+    public function createServiceWorkerCache(string $cacheName, array $options = []): string
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->createCache($cacheName, $options);
+    }
+
+    /**
+     * Add entry to service worker cache
+     */
+    public function addToServiceWorkerCache(string $cacheId, string $request, string $response, array $options = []): bool
+    {
+        if (!$this->serviceWorkerService) {
+            throw new \RuntimeException('Service Worker service not initialized');
+        }
+
+        return $this->serviceWorkerService->addToCache($cacheId, $request, $response, $options);
+    }
+
+    /**
+     * Get entry from service worker cache
+     */
+    public function getFromServiceWorkerCache(string $cacheId, string $request): ?array
+    {
+        if (!$this->serviceWorkerService) {
+            return null;
+        }
+
+        return $this->serviceWorkerService->getFromCache($cacheId, $request);
+    }
+
+    /**
+     * Delete entry from service worker cache
+     */
+    public function deleteFromServiceWorkerCache(string $cacheId, string $request): bool
+    {
+        if (!$this->serviceWorkerService) {
+            return false;
+        }
+
+        return $this->serviceWorkerService->deleteFromCache($cacheId, $request);
+    }
+
+    /**
+     * Get service worker registration
+     */
+    public function getServiceWorkerRegistration(string $registrationId): ?array
+    {
+        if (!$this->serviceWorkerService) {
+            return null;
+        }
+
+        return $this->serviceWorkerService->getRegistration($registrationId);
+    }
+
+    /**
+     * Get service worker
+     */
+    public function getServiceWorker(string $workerId): ?array
+    {
+        if (!$this->serviceWorkerService) {
+            return null;
+        }
+
+        return $this->serviceWorkerService->getWorker($workerId);
+    }
+
+    /**
+     * Get service worker cache
+     */
+    public function getServiceWorkerCache(string $cacheId): ?array
+    {
+        if (!$this->serviceWorkerService) {
+            return null;
+        }
+
+        return $this->serviceWorkerService->getCache($cacheId);
+    }
+
+    /**
+     * Unregister service worker
+     */
+    public function unregisterServiceWorker(string $registrationId): bool
+    {
+        if (!$this->serviceWorkerService) {
+            return false;
+        }
+
+        return $this->serviceWorkerService->unregisterServiceWorker($registrationId);
+    }
+
+    /**
+     * Get service worker statistics
+     */
+    public function getServiceWorkerStats(): array
+    {
+        if (!$this->serviceWorkerService) {
+            return [];
+        }
+
+        return $this->serviceWorkerService->getStats();
+    }
+
+    /**
+     * Check if Service Worker service is initialized
+     */
+    public function isServiceWorkerInitialized(): bool
+    {
+        return $this->serviceWorkerService && $this->serviceWorkerService->isInitialized();
+    }
+
+    /**
+     * Push Notification Methods
+     */
+
+    /**
+     * Subscribe to push notifications
+     */
+    public function subscribeToPushNotifications(string $subscriptionId, array $subscriptionData): bool
+    {
+        if (!$this->pushNotificationService) {
+            throw new \RuntimeException('Push Notification service not initialized');
+        }
+
+        return $this->pushNotificationService->subscribe($subscriptionId, $subscriptionData);
+    }
+
+    /**
+     * Unsubscribe from push notifications
+     */
+    public function unsubscribeFromPushNotifications(string $subscriptionId): bool
+    {
+        if (!$this->pushNotificationService) {
+            return false;
+        }
+
+        return $this->pushNotificationService->unsubscribe($subscriptionId);
+    }
+
+    /**
+     * Send push notification
+     */
+    public function sendPushNotification(string $subscriptionId, array $payload, array $options = []): bool
+    {
+        if (!$this->pushNotificationService) {
+            throw new \RuntimeException('Push Notification service not initialized');
+        }
+
+        return $this->pushNotificationService->sendNotification($subscriptionId, $payload, $options);
+    }
+
+    /**
+     * Send bulk push notifications
+     */
+    public function sendBulkPushNotifications(array $subscriptionIds, array $payload, array $options = []): array
+    {
+        if (!$this->pushNotificationService) {
+            throw new \RuntimeException('Push Notification service not initialized');
+        }
+
+        return $this->pushNotificationService->sendBulkNotification($subscriptionIds, $payload, $options);
+    }
+
+    /**
+     * Get push notification subscription
+     */
+    public function getPushNotificationSubscription(string $subscriptionId): ?array
+    {
+        if (!$this->pushNotificationService) {
+            return null;
+        }
+
+        return $this->pushNotificationService->getSubscription($subscriptionId);
+    }
+
+    /**
+     * Get push notification
+     */
+    public function getPushNotification(string $notificationId): ?array
+    {
+        if (!$this->pushNotificationService) {
+            return null;
+        }
+
+        return $this->pushNotificationService->getNotification($notificationId);
+    }
+
+    /**
+     * Get push notification subscriptions by user
+     */
+    public function getPushNotificationSubscriptionsByUser(string $userId): array
+    {
+        if (!$this->pushNotificationService) {
+            return [];
+        }
+
+        return $this->pushNotificationService->getSubscriptionsByUser($userId);
+    }
+
+    /**
+     * Get push notifications by subscription
+     */
+    public function getPushNotificationsBySubscription(string $subscriptionId): array
+    {
+        if (!$this->pushNotificationService) {
+            return [];
+        }
+
+        return $this->pushNotificationService->getNotificationsBySubscription($subscriptionId);
+    }
+
+    /**
+     * Update push notification subscription
+     */
+    public function updatePushNotificationSubscription(string $subscriptionId, array $updates): bool
+    {
+        if (!$this->pushNotificationService) {
+            return false;
+        }
+
+        return $this->pushNotificationService->updateSubscription($subscriptionId, $updates);
+    }
+
+    /**
+     * Retry failed push notification
+     */
+    public function retryFailedPushNotification(string $notificationId): bool
+    {
+        if (!$this->pushNotificationService) {
+            return false;
+        }
+
+        return $this->pushNotificationService->retryFailedNotification($notificationId);
+    }
+
+    /**
+     * Get push notification statistics
+     */
+    public function getPushNotificationStats(): array
+    {
+        if (!$this->pushNotificationService) {
+            return [];
+        }
+
+        return $this->pushNotificationService->getStats();
+    }
+
+    /**
+     * Check if Push Notification service is initialized
+     */
+    public function isPushNotificationInitialized(): bool
+    {
+        return $this->pushNotificationService && $this->pushNotificationService->isInitialized();
+    }
+
+    /**
      * Update close method to include JavaScript engine cleanup
      */
     public function close(): void
@@ -2295,6 +2824,16 @@ class PrismEngine implements EngineInterface
         if ($this->webRTCService) {
             $this->webRTCService->cleanup();
             $this->webRTCService = null;
+        }
+
+        if ($this->webAssemblyService) {
+            $this->webAssemblyService->cleanup();
+            $this->webAssemblyService = null;
+        }
+
+        if ($this->serviceWorkerService) {
+            $this->serviceWorkerService->cleanup();
+            $this->serviceWorkerService = null;
         }
         
         $this->dom = null;
