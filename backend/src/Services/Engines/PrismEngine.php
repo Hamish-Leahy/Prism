@@ -3261,6 +3261,11 @@ class PrismEngine implements EngineInterface
             $this->offlineService->cleanup();
             $this->offlineService = null;
         }
+
+        if ($this->pluginManager) {
+            $this->pluginManager->cleanup();
+            $this->pluginManager = null;
+        }
         
         $this->dom = null;
         
