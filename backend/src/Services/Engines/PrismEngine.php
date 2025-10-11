@@ -15,6 +15,7 @@ use Prism\Backend\Services\WebAssemblyService;
 use Prism\Backend\Services\ServiceWorkerService;
 use Prism\Backend\Services\PushNotificationService;
 use Prism\Backend\Services\OfflineService;
+use Prism\Backend\Services\PluginManager;
 use DOMDocument;
 use DOMXPath;
 use Monolog\Logger;
@@ -35,6 +36,7 @@ class PrismEngine implements EngineInterface
     private ?ServiceWorkerService $serviceWorkerService = null;
     private ?PushNotificationService $pushNotificationService = null;
     private ?OfflineService $offlineService = null;
+    private ?PluginManager $pluginManager = null;
     private ?DOMDocument $dom = null;
     private string $currentUrl = '';
     private string $pageContent = '';
