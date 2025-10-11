@@ -128,6 +128,18 @@ class PrismEngine implements EngineInterface
             ];
             $this->cacheService = new CacheService($cacheConfig, $this->logger);
 
+            // Initialize WebRTC service
+            $webrtcConfig = [
+                'ice_servers' => $this->config['webrtc_ice_servers'] ?? [
+                    ['urls' => 'stun:stun.l.google.com:19302'],
+                    ['urls' => 'stun:stun1.l.google.com:19302']
+                ],
+                'turn_servers' => $this->config['webrtc_turn_servers'] ?? [],
+                'enabled' => $this->config['webrtc_enabled'] ?? true
+            ];
+            $this->webRTCService = new WebRTCService($webrtcConfig, $this->logger);
+            $this->webRTCService->initialize();
+
             // Initialize legacy DOM parser for backward compatibility
             $this->dom = new DOMDocument();
             $this->dom->preserveWhiteSpace = false;
