@@ -103,7 +103,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
         <div className="flex-1 p-6 overflow-y-auto">
           {activeTab === 'general' && (
             <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-arc-text">General Settings</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-arc-text">General Settings</h3>
+                <button
+                  onClick={handleResetSettings}
+                  className="text-sm text-arc-text-secondary hover:text-arc-text transition-colors"
+                >
+                  Reset to Default
+                </button>
+              </div>
+              
+              {error && (
+                <div className="bg-arc-error/10 border border-arc-error/20 rounded-lg p-3">
+                  <p className="text-sm text-arc-error">{error}</p>
+                </div>
+              )}
               
               <div className="space-y-4">
                 <div>
@@ -112,8 +126,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   </label>
                   <input
                     type="url"
-                    value={settings.homePage}
-                    onChange={(e) => handleSettingChange('homePage', e.target.value)}
+                    value={browserSettings.homepage}
+                    onChange={(e) => handleSettingChange('browser.homepage', e.target.value, 'general')}
                     className="input w-full"
                     placeholder="https://example.com"
                   />
@@ -121,18 +135,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-arc-text mb-2">
-                    Search Engine
+                    New Tab Page
                   </label>
-                  <select
-                    value={settings.searchEngine}
-                    onChange={(e) => handleSettingChange('searchEngine', e.target.value)}
+                  <input
+                    type="url"
+                    value={browserSettings.newTabPage}
+                    onChange={(e) => handleSettingChange('browser.new_tab_page', e.target.value, 'general')}
                     className="input w-full"
-                  >
-                    <option value="google">Google</option>
-                    <option value="bing">Bing</option>
-                    <option value="duckduckgo">DuckDuckGo</option>
-                    <option value="yahoo">Yahoo</option>
-                  </select>
+                    placeholder="about:blank"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -146,25 +157,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.showBookmarksBar}
-                    onChange={(e) => handleSettingChange('showBookmarksBar', e.target.checked)}
-                    className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-medium text-arc-text">
-                      Auto-save Downloads
-                    </label>
-                    <p className="text-xs text-arc-text-secondary">
-                      Automatically save downloaded files
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.autoSaveDownloads}
-                    onChange={(e) => handleSettingChange('autoSaveDownloads', e.target.checked)}
+                    checked={true} // This would come from settings
+                    onChange={(e) => handleSettingChange('browser.show_bookmarks_bar', e.target.checked, 'general')}
                     className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
                   />
                 </div>
