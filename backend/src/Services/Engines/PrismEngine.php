@@ -440,6 +440,7 @@ class PrismEngine implements EngineInterface
                 'local_storage' => $this->config['local_storage_enabled'] ?? false,
                 'session_storage' => $this->config['session_storage_enabled'] ?? true,
                 'websockets' => $this->config['websocket_enabled'] ?? true,
+                'webrtc' => $this->config['webrtc_enabled'] ?? true,
                 'caching' => $this->config['cache_enabled'] ?? true,
                 'screenshots' => false
             ],
@@ -2337,6 +2338,150 @@ class PrismEngine implements EngineInterface
     public function isWebRTCInitialized(): bool
     {
         return $this->webRTCService && $this->webRTCService->isInitialized();
+    }
+
+    /**
+     * Create a WebRTC media stream
+     */
+    public function createWebRTCMediaStream(string $streamId, array $options = []): array
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->createMediaStream($streamId, $options);
+    }
+
+    /**
+     * Add media track to WebRTC stream
+     */
+    public function addWebRTCMediaTrack(string $streamId, string $trackId, string $kind, array $options = []): array
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        return $this->webRTCService->addMediaTrack($streamId, $trackId, $kind, $options);
+    }
+
+    /**
+     * Get WebRTC media stream
+     */
+    public function getWebRTCMediaStream(string $streamId): ?array
+    {
+        if (!$this->webRTCService) {
+            return null;
+        }
+
+        return $this->webRTCService->getMediaStream($streamId);
+    }
+
+    /**
+     * Update WebRTC connection state
+     */
+    public function updateWebRTCConnectionState(string $connectionId, string $state): bool
+    {
+        if (!$this->webRTCService) {
+            return false;
+        }
+
+        return $this->webRTCService->updateConnectionState($connectionId, $state);
+    }
+
+    /**
+     * Update WebRTC ICE connection state
+     */
+    public function updateWebRTCIceConnectionState(string $connectionId, string $state): bool
+    {
+        if (!$this->webRTCService) {
+            return false;
+        }
+
+        return $this->webRTCService->updateIceConnectionState($connectionId, $state);
+    }
+
+    /**
+     * Update WebRTC ICE gathering state
+     */
+    public function updateWebRTCIceGatheringState(string $connectionId, string $state): bool
+    {
+        if (!$this->webRTCService) {
+            return false;
+        }
+
+        return $this->webRTCService->updateIceGatheringState($connectionId, $state);
+    }
+
+    /**
+     * Register WebRTC event handler
+     */
+    public function onWebRTCEvent(string $event, callable $handler): void
+    {
+        if (!$this->webRTCService) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        $this->webRTCService->on($event, $handler);
+    }
+
+    /**
+     * Get all WebRTC connections
+     */
+    public function getAllWebRTCConnections(): array
+    {
+        if (!$this->webRTCService) {
+            return [];
+        }
+
+        return $this->webRTCService->getAllConnections();
+    }
+
+    /**
+     * Get all WebRTC data channels
+     */
+    public function getAllWebRTCDataChannels(): array
+    {
+        if (!$this->webRTCService) {
+            return [];
+        }
+
+        return $this->webRTCService->getAllDataChannels();
+    }
+
+    /**
+     * Get all WebRTC media streams
+     */
+    public function getAllWebRTCMediaStreams(): array
+    {
+        if (!$this->webRTCService) {
+            return [];
+        }
+
+        return $this->webRTCService->getAllMediaStreams();
+    }
+
+    /**
+     * Close WebRTC media stream
+     */
+    public function closeWebRTCMediaStream(string $streamId): bool
+    {
+        if (!$this->webRTCService) {
+            return false;
+        }
+
+        return $this->webRTCService->closeMediaStream($streamId);
+    }
+
+    /**
+     * Get enhanced WebRTC statistics
+     */
+    public function getWebRTCEnhancedStats(string $connectionId): array
+    {
+        if (!$this->webRTCService) {
+            return [];
+        }
+
+        return $this->webRTCService->getEnhancedStats($connectionId);
     }
 
     /**

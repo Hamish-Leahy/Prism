@@ -10,8 +10,10 @@ class WebRTCService
     private Logger $logger;
     private array $connections = [];
     private array $dataChannels = [];
+    private array $mediaStreams = [];
     private array $iceServers = [];
     private bool $initialized = false;
+    private array $eventHandlers = [];
 
     public function __construct(array $config, Logger $logger)
     {
@@ -111,12 +113,11 @@ class WebRTCService
                 'maxRetransmitTime' => $options['max_retransmit_time'] ?? null,
                 'protocol' => $options['protocol'] ?? '',
                 'negotiated' => $options['negotiated'] ?? false,
-                'id' => $options['id'] ?? null,
+                'channel_id' => $options['id'] ?? null,
                 'readyState' => 'connecting',
                 'bufferedAmount' => 0,
                 'bufferedAmountLowThreshold' => 0,
                 'maxPacketLifeTime' => null,
-                'maxRetransmits' => null,
                 'binaryType' => 'blob',
                 'created_at' => time()
             ];
@@ -316,10 +317,299 @@ class WebRTCService
         ];
     }
 
+    /**
+     * Create a media stream
+     */
+    public function createMediaStream(string $streamId, array $options = []): array
+    {
+        if (!$this->initialized) {
+            throw new \RuntimeException('WebRTC service not initialized');
+        }
+
+        try {
+            $stream = [
+                'id' => $streamId,
+                'audio' => $options['audio'] ?? false,
+                'video' => $options['video'] ?? false,
+                'audio_tracks' => [],
+                'video_tracks' => [],
+                'active' => true,
+                'created_at' => time(),
+                'last_activity' => time()
+            ];
+
+            $this->mediaStreams[$streamId] = $stream;
+
+            $this->logger->info("Created media stream", [
+                'stream_id' => $streamId,
+                'audio' => $stream['audio'],
+                'video' => $stream['video']
+            ]);
+
+            return $stream;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to create media stream: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Add media track to stream
+     */
+    public function addMediaTrack(string $streamId, string $trackId, string $kind, array $options = []): array
+    {
+        if (!isset($this->mediaStreams[$streamId])) {
+            throw new \RuntimeException('Media stream not found');
+        }
+
+        try {
+            $track = [
+                'id' => $trackId,
+                'kind' => $kind, // 'audio' or 'video'
+                'enabled' => $options['enabled'] ?? true,
+                'muted' => $options['muted'] ?? false,
+                'readyState' => 'live',
+                'settings' => $options['settings'] ?? [],
+                'created_at' => time()
+            ];
+
+            $this->mediaStreams[$streamId][$kind . '_tracks'][] = $track;
+            $this->mediaStreams[$streamId]['last_activity'] = time();
+
+            $this->logger->info("Added media track", [
+                'stream_id' => $streamId,
+                'track_id' => $trackId,
+                'kind' => $kind
+            ]);
+
+            return $track;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to add media track: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Get media stream
+     */
+    public function getMediaStream(string $streamId): ?array
+    {
+        return $this->mediaStreams[$streamId] ?? null;
+    }
+
+    /**
+     * Update connection state
+     */
+    public function updateConnectionState(string $connectionId, string $state): bool
+    {
+        if (!isset($this->connections[$connectionId])) {
+            return false;
+        }
+
+        try {
+            $oldState = $this->connections[$connectionId]['state'];
+            $this->connections[$connectionId]['state'] = $state;
+            $this->connections[$connectionId]['last_activity'] = time();
+
+            $this->logger->info("Updated connection state", [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            // Trigger state change event
+            $this->triggerEvent('connectionStateChange', [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to update connection state: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update ICE connection state
+     */
+    public function updateIceConnectionState(string $connectionId, string $state): bool
+    {
+        if (!isset($this->connections[$connectionId])) {
+            return false;
+        }
+
+        try {
+            $oldState = $this->connections[$connectionId]['iceConnectionState'];
+            $this->connections[$connectionId]['iceConnectionState'] = $state;
+            $this->connections[$connectionId]['last_activity'] = time();
+
+            $this->logger->info("Updated ICE connection state", [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            // Trigger ICE state change event
+            $this->triggerEvent('iceConnectionStateChange', [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to update ICE connection state: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update ICE gathering state
+     */
+    public function updateIceGatheringState(string $connectionId, string $state): bool
+    {
+        if (!isset($this->connections[$connectionId])) {
+            return false;
+        }
+
+        try {
+            $oldState = $this->connections[$connectionId]['iceGatheringState'];
+            $this->connections[$connectionId]['iceGatheringState'] = $state;
+            $this->connections[$connectionId]['last_activity'] = time();
+
+            $this->logger->info("Updated ICE gathering state", [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            // Trigger ICE gathering state change event
+            $this->triggerEvent('iceGatheringStateChange', [
+                'connection_id' => $connectionId,
+                'old_state' => $oldState,
+                'new_state' => $state
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to update ICE gathering state: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Register event handler
+     */
+    public function on(string $event, callable $handler): void
+    {
+        if (!isset($this->eventHandlers[$event])) {
+            $this->eventHandlers[$event] = [];
+        }
+        $this->eventHandlers[$event][] = $handler;
+    }
+
+    /**
+     * Trigger event
+     */
+    private function triggerEvent(string $event, array $data = []): void
+    {
+        if (isset($this->eventHandlers[$event])) {
+            foreach ($this->eventHandlers[$event] as $handler) {
+                try {
+                    $handler($data);
+                } catch (\Exception $e) {
+                    $this->logger->error("Event handler error for {$event}: " . $e->getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Get all connections
+     */
+    public function getAllConnections(): array
+    {
+        return $this->connections;
+    }
+
+    /**
+     * Get all data channels
+     */
+    public function getAllDataChannels(): array
+    {
+        return $this->dataChannels;
+    }
+
+    /**
+     * Get all media streams
+     */
+    public function getAllMediaStreams(): array
+    {
+        return $this->mediaStreams;
+    }
+
+    /**
+     * Close media stream
+     */
+    public function closeMediaStream(string $streamId): bool
+    {
+        if (!isset($this->mediaStreams[$streamId])) {
+            return false;
+        }
+
+        try {
+            $this->mediaStreams[$streamId]['active'] = false;
+            unset($this->mediaStreams[$streamId]);
+
+            $this->logger->info("Closed media stream", ['stream_id' => $streamId]);
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to close media stream: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get connection statistics with enhanced metrics
+     */
+    public function getEnhancedStats(string $connectionId): array
+    {
+        if (!isset($this->connections[$connectionId])) {
+            return [];
+        }
+
+        $connection = $this->connections[$connectionId];
+        $dataChannels = array_filter($this->dataChannels, function($channel) use ($connectionId) {
+            return $channel['connection_id'] === $connectionId;
+        });
+
+        return [
+            'connection_id' => $connectionId,
+            'state' => $connection['state'],
+            'ice_connection_state' => $connection['iceConnectionState'],
+            'ice_gathering_state' => $connection['iceGatheringState'],
+            'signaling_state' => $connection['signalingState'],
+            'data_channels_count' => count($connection['dataChannels']),
+            'data_channels' => array_values($dataChannels),
+            'local_candidates_count' => count($connection['localCandidates']),
+            'remote_candidates_count' => count($connection['remoteCandidates']),
+            'created_at' => $connection['created_at'],
+            'last_activity' => $connection['last_activity'],
+            'uptime' => time() - $connection['created_at'],
+            'has_local_description' => $connection['localDescription'] !== null,
+            'has_remote_description' => $connection['remoteDescription'] !== null,
+            'ice_servers_count' => count($this->iceServers)
+        ];
+    }
+
     public function cleanup(): void
     {
         $this->connections = [];
         $this->dataChannels = [];
+        $this->mediaStreams = [];
+        $this->eventHandlers = [];
         $this->initialized = false;
         $this->logger->info("WebRTC service cleaned up");
     }
