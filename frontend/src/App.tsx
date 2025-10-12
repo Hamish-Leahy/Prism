@@ -13,7 +13,28 @@ import { useSettings } from './hooks/useSettings'
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const { currentEngine, switchEngine, engines } = useEngine()
-  const { tabs, createTab, closeTab, activeTab, setActiveTab, navigateTab, loading } = useTabs()
+  const { 
+    tabs, 
+    tabGroups, 
+    createTab, 
+    closeTab, 
+    activeTab, 
+    setActiveTab, 
+    navigateTab, 
+    loading,
+    searchQuery,
+    setSearchQuery,
+    createTabGroup,
+    updateTabGroup,
+    deleteTabGroup,
+    addTabToGroup,
+    removeTabFromGroup,
+    pinTab,
+    unpinTab,
+    duplicateTab,
+    getTabsByGroup,
+    getUngroupedTabs
+  } = useTabs()
   const { settings, updateSettings } = useSettings()
 
   useEffect(() => {
@@ -80,10 +101,22 @@ function App() {
           <div className="w-64 sidebar flex flex-col">
             <TabManager
               tabs={tabs}
+              tabGroups={tabGroups}
               activeTab={activeTab}
+              searchQuery={searchQuery}
               onTabSelect={setActiveTab}
               onTabClose={closeTab}
-              onNewTab={() => createTab('New Tab', 'about:blank')}
+              onTabPin={pinTab}
+              onTabUnpin={unpinTab}
+              onTabDuplicate={duplicateTab}
+              onNewTab={(groupId) => createTab('New Tab', 'about:blank', groupId)}
+              onSearchChange={setSearchQuery}
+              onCreateGroup={createTabGroup}
+              onGroupUpdate={updateTabGroup}
+              onGroupDelete={deleteTabGroup}
+              onTabRemoveFromGroup={removeTabFromGroup}
+              getTabsByGroup={getTabsByGroup}
+              getUngroupedTabs={getUngroupedTabs}
             />
           </div>
 
