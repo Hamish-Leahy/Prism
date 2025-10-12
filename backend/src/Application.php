@@ -11,6 +11,8 @@ use Prism\Backend\Controllers\EngineController;
 use Prism\Backend\Controllers\TabController;
 use Prism\Backend\Controllers\BookmarkController;
 use Prism\Backend\Controllers\HistoryController;
+use Prism\Backend\Controllers\SettingsController;
+use Prism\Backend\Controllers\DownloadController;
 use Prism\Backend\Services\EngineManager;
 use Prism\Backend\Services\DatabaseService;
 use Monolog\Logger;
@@ -95,6 +97,27 @@ class Application
             $group->post('', [HistoryController::class, 'add']);
             $group->delete('/{id}', [HistoryController::class, 'delete']);
             $group->delete('', [HistoryController::class, 'clear']);
+        });
+        
+        // Settings routes
+        $this->app->group('/api/settings', function ($group) use ($container) {
+            $group->get('', [SettingsController::class, 'list']);
+            $group->get('/{key}', [SettingsController::class, 'get']);
+            $group->put('/{key}', [SettingsController::class, 'update']);
+            $group->put('', [SettingsController::class, 'updateMultiple']);
+            $group->delete('/{key}', [SettingsController::class, 'delete']);
+            $group->post('/reset', [SettingsController::class, 'reset']);
+        });
+        
+        // Download routes
+        $this->app->group('/api/downloads', function ($group) use ($container) {
+            $group->get('', [DownloadController::class, 'list']);
+            $group->post('', [DownloadController::class, 'create']);
+            $group->get('/{id}', [DownloadController::class, 'get']);
+            $group->post('/{id}/pause', [DownloadController::class, 'pause']);
+            $group->post('/{id}/resume', [DownloadController::class, 'resume']);
+            $group->post('/{id}/cancel', [DownloadController::class, 'cancel']);
+            $group->delete('/{id}', [DownloadController::class, 'delete']);
         });
         
         // Health check
