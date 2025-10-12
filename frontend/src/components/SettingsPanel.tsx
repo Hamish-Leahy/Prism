@@ -54,7 +54,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     { id: 'privacy', label: 'Privacy', icon: Shield },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'engines', label: 'Engines', icon: Globe },
+    { id: 'performance', label: 'Performance', icon: SettingsIcon },
   ]
+
+  const browserSettings = getBrowserSettings()
+  const privacySettings = getPrivacySettings()
+  const appearanceSettings = getAppearanceSettings()
+  const performanceSettings = getPerformanceSettings()
+  const securitySettings = getSecuritySettings()
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
