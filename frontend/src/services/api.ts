@@ -147,6 +147,82 @@ class ApiService {
     return this.request<any>(`/engines/${engineId}/stats`)
   }
 
+  // Settings API
+  async getSettings(category?: string): Promise<ApiResponse<any>> {
+    const endpoint = category ? `/settings?category=${category}` : '/settings'
+    return this.request<any>(endpoint)
+  }
+
+  async getSetting(key: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/settings/${key}`)
+  }
+
+  async updateSetting(key: string, value: any, category?: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/settings/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value, category }),
+    })
+  }
+
+  async updateSettings(settings: Record<string, any>): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    })
+  }
+
+  async resetSettings(): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>('/settings/reset', {
+      method: 'POST',
+    })
+  }
+
+  // Downloads API
+  async getDownloads(status?: string, limit?: number, offset?: number): Promise<ApiResponse<any[]>> {
+    const params = new URLSearchParams()
+    if (status) params.append('status', status)
+    if (limit) params.append('limit', limit.toString())
+    if (offset) params.append('offset', offset.toString())
+    
+    const endpoint = params.toString() ? `/downloads?${params}` : '/downloads'
+    return this.request<any[]>(endpoint)
+  }
+
+  async createDownload(url: string, filename?: string): Promise<ApiResponse<any>> {
+    return this.request<any>('/downloads', {
+      method: 'POST',
+      body: JSON.stringify({ url, filename }),
+    })
+  }
+
+  async getDownload(id: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/downloads/${id}`)
+  }
+
+  async pauseDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/downloads/${id}/pause`, {
+      method: 'POST',
+    })
+  }
+
+  async resumeDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/downloads/${id}/resume`, {
+      method: 'POST',
+    })
+  }
+
+  async cancelDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/downloads/${id}/cancel`, {
+      method: 'POST',
+    })
+  }
+
+  async deleteDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/downloads/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
   // Health check
   async healthCheck(): Promise<ApiResponse<{ status: string; timestamp: number }>> {
     return this.request<{ status: string; timestamp: number }>('/health')
