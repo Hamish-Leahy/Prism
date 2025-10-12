@@ -1,0 +1,234 @@
+# AI Development Workflow for Prism Browser
+
+## 🚀 **Code Modification Workflow**
+
+### **1. Branch Management**
+- Check if branch exists, create or switch to feature branch
+- Use descriptive branch names: `feature/component/description`, `bugfix/issue-description`, etc.
+
+### **2. Development Process**
+- Create/update TODO list with specific tasks
+- Read existing code to understand current implementation
+- Make incremental changes with proper TypeScript types
+- Test changes as I go
+- Run linter checks before committing
+
+### **3. Code Quality Standards**
+- Follow existing code patterns and conventions
+- Add proper TypeScript interfaces and types
+- Include comprehensive error handling
+- Add meaningful comments for complex logic
+- Ensure backward compatibility when possible
+
+### **4. Git Workflow**
+- Stage all changes: `git add .`
+- Write descriptive commit messages with conventional format:
+  ```
+  feat(component): brief description
+  
+  - Detailed bullet points of changes
+  - Include any breaking changes
+  - Reference related issues
+  ```
+- Push to remote branch: `git push origin branch-name`
+
+### **5. Pull Request Template**
+- Fill out the comprehensive PR template
+- Include detailed description of changes
+- Mark appropriate checkboxes for testing, documentation, etc.
+- Add screenshots when UI changes are made
+- Provide clear implementation notes
+
+### **6. Documentation**
+- Update relevant documentation files
+- Add code comments for new functionality
+- Update type definitions and interfaces
+- Maintain changelog when appropriate
+
+## 📋 **Pull Request Template**
+
+```markdown
+# Pull Request
+
+## 📋 Description
+Brief description of what this PR does.
+
+## 🔗 Related Issues
+Fixes #(issue number)
+Closes #(issue number)
+Related to #(issue number)
+
+## 🎯 Type of Change
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+- [ ] Performance improvement
+- [ ] Code refactoring
+- [ ] Test coverage improvement
+- [ ] Security improvement
+
+## 🧪 Testing
+### Test Coverage
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] E2E tests added/updated
+- [ ] Manual testing completed
+
+### Test Results
+- [ ] All tests pass
+- [ ] No new test failures
+- [ ] Coverage maintained/improved
+
+## 📝 Changes Made
+### Backend Changes
+- [ ] API endpoints added/modified
+- [ ] Database schema changes
+- [ ] Service layer updates
+- [ ] Configuration changes
+
+### Frontend Changes
+- [ ] Components added/modified
+- [ ] Hooks added/modified
+- [ ] Services updated
+- [ ] UI/UX improvements
+
+### Engine Changes
+- [ ] Engine functionality added/modified
+- [ ] Performance improvements
+- [ ] Security enhancements
+- [ ] Compatibility updates
+
+## 🔍 Code Quality
+### Code Review Checklist
+- [ ] Code follows project style guidelines
+- [ ] Self-review completed
+- [ ] Code is properly commented
+- [ ] No hardcoded values
+- [ ] Error handling implemented
+- [ ] Logging added where appropriate
+
+### Performance
+- [ ] No performance regressions
+- [ ] Memory usage optimized
+- [ ] CPU usage optimized
+- [ ] Network usage optimized
+
+### Security
+- [ ] Input validation implemented
+- [ ] Output encoding applied
+- [ ] Authentication/authorization checked
+- [ ] Sensitive data protected
+- [ ] Security best practices followed
+
+## 📚 Documentation
+### Documentation Updates
+- [ ] README updated
+- [ ] API documentation updated
+- [ ] Code comments added/updated
+- [ ] Changelog updated
+- [ ] User documentation updated
+
+### Breaking Changes
+- [ ] Breaking changes documented
+- [ ] Migration guide provided
+- [ ] Deprecation notices added
+- [ ] Version compatibility noted
+
+## 🚀 Deployment
+### Deployment Checklist
+- [ ] Environment variables updated
+- [ ] Database migrations included
+- [ ] Configuration changes documented
+- [ ] Rollback plan prepared
+- [ ] Monitoring updated
+
+### Dependencies
+- [ ] Dependencies updated
+- [ ] Security vulnerabilities addressed
+- [ ] License compatibility checked
+- [ ] Version constraints updated
+
+## 📸 Screenshots
+If applicable, add screenshots to show the changes.
+
+## 🔄 Additional Notes
+Any additional information, context, or notes for reviewers.
+
+## 📝 Checklist
+### Pre-submission
+- [ ] I have performed a self-review of my code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] Any dependent changes have been merged and published
+
+### Post-submission
+- [ ] All CI checks pass
+- [ ] Code review feedback addressed
+- [ ] Conflicts resolved
+- [ ] Branch is up to date with target branch
+- [ ] Ready for merge
+
+## 🏷️ Labels
+Please add appropriate labels:
+- [ ] bug
+- [ ] enhancement
+- [ ] documentation
+- [ ] performance
+- [ ] security
+- [ ] breaking-change
+- [ ] needs-review
+- [ ] ready-to-merge
+
+---
+
+**Thank you for contributing to Prism Browser! 🎉**
+```
+
+## 🎯 **Key Principles**
+
+1. **Always start with understanding existing code**
+2. **Create TODO lists for complex tasks**
+3. **Make incremental, testable changes**
+4. **Follow TypeScript best practices**
+5. **Write descriptive commit messages**
+6. **Fill out comprehensive PR templates**
+7. **Maintain code quality and documentation**
+
+## 📁 **Project Structure Reminders**
+
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Backend**: PHP with Composer
+- **Engines**: Chromium, Firefox, Prism (custom)
+- **Architecture**: Multi-engine browser with privacy focus
+- **UI Style**: Arc-inspired design with dark/light themes
+
+## 🔧 **Common Commands**
+
+```bash
+# Check current branch
+git branch
+
+# Create new feature branch
+git checkout -b feature/component/description
+
+# Stage and commit changes
+git add .
+git commit -m "feat(component): description"
+
+# Push to remote
+git push origin feature/component/description
+
+# Check for linter errors
+npm run lint
+
+# Run tests
+npm test
+```
+
+---
+
+**This workflow ensures consistency, quality, and maintainability across all Prism Browser development.**
