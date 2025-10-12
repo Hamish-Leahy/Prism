@@ -40,6 +40,16 @@ export interface NavigationResult {
   }
 }
 
+export interface Bookmark {
+  id: string
+  title: string
+  url: string
+  favicon?: string
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -219,6 +229,64 @@ class ApiService {
 
   async deleteDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>(`/downloads/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Bookmarks API
+  async getBookmarks(): Promise<ApiResponse<Bookmark[]>> {
+    return this.request<Bookmark[]>('/bookmarks')
+  }
+
+  async createBookmark(title: string, url: string, description?: string): Promise<ApiResponse<Bookmark>> {
+    return this.request<Bookmark>('/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify({ title, url, description }),
+    })
+  }
+
+  async getBookmark(id: string): Promise<ApiResponse<Bookmark>> {
+    return this.request<Bookmark>(`/bookmarks/${id}`)
+  }
+
+  async updateBookmark(id: string, updates: Partial<Bookmark>): Promise<ApiResponse<Bookmark>> {
+    return this.request<Bookmark>(`/bookmarks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteBookmark(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/bookmarks/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // History API
+  async getHistory(limit?: number, offset?: number): Promise<ApiResponse<any[]>> {
+    const params = new URLSearchParams()
+    if (limit) params.append('limit', limit.toString())
+    if (offset) params.append('offset', offset.toString())
+    
+    const endpoint = params.toString() ? `/history?${params}` : '/history'
+    return this.request<any[]>(endpoint)
+  }
+
+  async addHistoryEntry(title: string, url: string): Promise<ApiResponse<any>> {
+    return this.request<any>('/history', {
+      method: 'POST',
+      body: JSON.stringify({ title, url }),
+    })
+  }
+
+  async deleteHistoryEntry(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/history/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async clearHistory(): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>('/history', {
       method: 'DELETE',
     })
   }
