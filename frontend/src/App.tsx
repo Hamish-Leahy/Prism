@@ -99,8 +99,6 @@ function App() {
         {/* Settings Panel */}
         {showSettings && (
           <SettingsPanel
-            settings={settings}
-            onSettingsChange={updateSettings}
             onClose={() => setShowSettings(false)}
           />
         )}

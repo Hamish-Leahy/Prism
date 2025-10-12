@@ -235,8 +235,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                     Theme
                   </label>
                   <select
-                    value={settings.theme}
-                    onChange={(e) => handleSettingChange('theme', e.target.value)}
+                    value={appearanceSettings.theme}
+                    onChange={(e) => handleSettingChange('appearance.theme', e.target.value, 'appearance')}
                     className="input w-full"
                   >
                     <option value="dark">Dark</option>
@@ -249,32 +249,19 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   <label className="block text-sm font-medium text-arc-text mb-2">
                     Font Size
                   </label>
-                  <select
-                    value={settings.fontSize}
-                    onChange={(e) => handleSettingChange('fontSize', e.target.value)}
-                    className="input w-full"
-                  >
-                    <option value="small">Small</option>
-                    <option value="medium">Medium</option>
-                    <option value="large">Large</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-medium text-arc-text">
-                      Compact Mode
-                    </label>
-                    <p className="text-xs text-arc-text-secondary">
-                      Use compact interface elements
-                    </p>
-                  </div>
                   <input
-                    type="checkbox"
-                    checked={settings.compactMode}
-                    onChange={(e) => handleSettingChange('compactMode', e.target.checked)}
-                    className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
+                    type="range"
+                    min="10"
+                    max="24"
+                    value={appearanceSettings.fontSize}
+                    onChange={(e) => handleSettingChange('appearance.font_size', parseInt(e.target.value), 'appearance')}
+                    className="w-full h-2 bg-arc-border rounded-lg appearance-none cursor-pointer"
                   />
+                  <div className="flex justify-between text-xs text-arc-text-secondary mt-1">
+                    <span>10px</span>
+                    <span>{appearanceSettings.fontSize}px</span>
+                    <span>24px</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -290,8 +277,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                     Default Engine
                   </label>
                   <select
-                    value={settings.defaultEngine}
-                    onChange={(e) => handleSettingChange('defaultEngine', e.target.value)}
+                    value={browserSettings.defaultEngine}
+                    onChange={(e) => handleSettingChange('browser.default_engine', e.target.value, 'engine')}
                     className="input w-full"
                   >
                     <option value="chromium">Chromium</option>
@@ -300,19 +287,64 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   </select>
                 </div>
 
+                <div className="bg-arc-bg rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-arc-text mb-3">Engine Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-arc-text-secondary">Chromium:</span>
+                      <span className="text-arc-text">Full compatibility, heavy resource usage</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-arc-text-secondary">Firefox:</span>
+                      <span className="text-arc-text">Privacy focused, moderate usage</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-arc-text-secondary">Prism:</span>
+                      <span className="text-arc-text">Lightweight, fast, limited compatibility</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'performance' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-arc-text">Performance Settings</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-arc-text mb-2">
+                    Cache Size (MB)
+                  </label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="1000"
+                    value={performanceSettings.cacheSize}
+                    onChange={(e) => handleSettingChange('performance.cache_size', parseInt(e.target.value), 'performance')}
+                    className="w-full h-2 bg-arc-border rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-xs text-arc-text-secondary mt-1">
+                    <span>10MB</span>
+                    <span>{performanceSettings.cacheSize}MB</span>
+                    <span>1000MB</span>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-arc-text">
-                      Auto-switch for Compatibility
+                      Hardware Acceleration
                     </label>
                     <p className="text-xs text-arc-text-secondary">
-                      Automatically switch engines for better compatibility
+                      Use GPU acceleration when available
                     </p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.autoSwitchEngines}
-                    onChange={(e) => handleSettingChange('autoSwitchEngines', e.target.checked)}
+                    checked={true} // This would come from settings
+                    onChange={(e) => handleSettingChange('performance.hardware_acceleration', e.target.checked, 'performance')}
                     className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
                   />
                 </div>
