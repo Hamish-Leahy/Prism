@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Tab } from '../types/Tab'
+import { Tab, TabGroup } from '../types/Tab'
 import { apiService } from '../services/api'
 
 export const useTabs = () => {
   const [tabs, setTabs] = useState<Tab[]>([])
+  const [tabGroups, setTabGroups] = useState<TabGroup[]>([])
   const [activeTab, setActiveTab] = useState<Tab | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   useEffect(() => {
     loadTabs()
@@ -30,11 +32,19 @@ export const useTabs = () => {
     }
   }
 
-  const createTab = async (title: string, url: string) => {
+  const createTab = async (title: string, url: string, groupId?: string) => {
     try {
       const response = await apiService.createTab(title, url)
       if (response.success && response.data) {
-        const newTab = { ...response.data, isActive: true }
+        const newTab = { 
+          ...response.data, 
+          isActive: true,
+          groupId: groupId,
+          isPinned: false,
+          isLoading: false,
+          canGoBack: false,
+          canGoForward: false
+        }
         
         // Deactivate other tabs
         setTabs((prevTabs: Tab[]) => 
