@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Bookmark } from '../types/Bookmark'
-import { Star, Plus } from 'lucide-react'
+import { apiService } from '../services/api'
+import { Star, Plus, Settings } from 'lucide-react'
+import { BookmarkManager } from './BookmarkManager'
 
 interface BookmarkBarProps {
   onBookmarkClick?: (bookmark: Bookmark) => void
@@ -12,21 +14,26 @@ export const BookmarkBar: React.FC<BookmarkBarProps> = ({
   onAddBookmark
 }) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+  const [showBookmarkManager, setShowBookmarkManager] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Load bookmarks from API
     loadBookmarks()
   }, [])
 
   const loadBookmarks = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/bookmarks')
-      if (response.ok) {
-        const data = await response.json()
-        setBookmarks(data)
+      setLoading(true)
+      const response = await apiService.getBookmarks()
+      if (response.success && response.data) {
+        setBookmarks(response.data)
+      } else {
+        console.error('Failed to load bookmarks:', response.error)
       }
     } catch (error) {
       console.error('Failed to load bookmarks:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
