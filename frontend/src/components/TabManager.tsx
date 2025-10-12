@@ -1,22 +1,51 @@
-import React from 'react'
-import { Tab } from '../types/Tab'
-import { Plus, X } from 'lucide-react'
+import React, { useState } from 'react'
+import { Tab, TabGroup } from '../types/Tab'
+import { Plus, X, Search, FolderPlus, Pin, Copy, MoreHorizontal } from 'lucide-react'
+import { TabGroup as TabGroupComponent } from './TabGroup'
+import { TabSearch } from './TabSearch'
+import { GroupCreator } from './GroupCreator'
 
 interface TabManagerProps {
   tabs: Tab[]
+  tabGroups: TabGroup[]
   activeTab: Tab | null
+  searchQuery: string
   onTabSelect: (tab: Tab) => void
   onTabClose: (tabId: string) => void
-  onNewTab: () => void
+  onTabPin: (tabId: string) => void
+  onTabUnpin: (tabId: string) => void
+  onTabDuplicate: (tabId: string) => void
+  onNewTab: (groupId?: string) => void
+  onSearchChange: (query: string) => void
+  onCreateGroup: (name: string, color: string, icon?: string) => void
+  onGroupUpdate: (groupId: string, updates: Partial<TabGroup>) => void
+  onGroupDelete: (groupId: string) => void
+  onTabRemoveFromGroup: (tabId: string) => void
+  getTabsByGroup: (groupId?: string) => Tab[]
+  getUngroupedTabs: () => Tab[]
 }
 
 export const TabManager: React.FC<TabManagerProps> = ({
   tabs,
+  tabGroups,
   activeTab,
+  searchQuery,
   onTabSelect,
   onTabClose,
-  onNewTab
+  onTabPin,
+  onTabUnpin,
+  onTabDuplicate,
+  onNewTab,
+  onSearchChange,
+  onCreateGroup,
+  onGroupUpdate,
+  onGroupDelete,
+  onTabRemoveFromGroup,
+  getTabsByGroup,
+  getUngroupedTabs
 }) => {
+  const [showGroupCreator, setShowGroupCreator] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
   return (
     <div className="h-full flex flex-col">
       {/* Tab List */}

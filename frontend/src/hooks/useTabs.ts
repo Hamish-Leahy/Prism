@@ -134,15 +134,134 @@ export const useTabs = () => {
     }
   }
 
+  // Tab grouping functions
+  const createTabGroup = (name: string, color: string, icon?: string) => {
+    const newGroup: TabGroup = {
+      id: `group-${Date.now()}`,
+      name,
+      color,
+      icon,
+      isCollapsed: false,
+      tabIds: [],
+      createdAt: new Date().toISOString()
+    }
+    setTabGroups(prev => [...prev, newGroup])
+    return newGroup
+  }
+
+  const updateTabGroup = (groupId: string, updates: Partial<TabGroup>) => {
+    setTabGroups(prev => 
+      prev.map(group => 
+        group.id === groupId ? { ...group, ...updates } : group
+      )
+    )
+  }
+
+  const deleteTabGroup = (groupId: string) => {
+    // Move tabs out of group
+    setTabs(prev => 
+      prev.map(tab => 
+        tab.groupId === groupId ? { ...tab, groupId: undefined } : tab
+      )
+    )
+    setTabGroups(prev => prev.filter(group => group.id !== groupId))
+  }
+
+  const addTabToGroup = (tabId: string, groupId: string) => {
+    setTabs(prev => 
+      prev.map(tab => 
+        tab.id === tabId ? { ...tab, groupId } : tab
+      )
+    )
+    setTabGroups(prev => 
+      prev.map(group => 
+        group.id === groupId 
+          ? { ...group, tabIds: [...group.tabIds, tabId] }
+          : group
+      )
+    )
+  }
+
+  const removeTabFromGroup = (tabId: string) => {
+    setTabs(prev => 
+      prev.map(tab => 
+        tab.id === tabId ? { ...tab, groupId: undefined } : tab
+      )
+    )
+    setTabGroups(prev => 
+      prev.map(group => ({
+        ...group,
+        tabIds: group.tabIds.filter(id => id !== tabId)
+      }))
+    )
+  }
+
+  // Tab pinning functions
+  const pinTab = (tabId: string) => {
+    setTabs(prev => 
+      prev.map(tab => 
+        tab.id === tabId ? { ...tab, isPinned: true } : tab
+      )
+    )
+  }
+
+  const unpinTab = (tabId: string) => {
+    setTabs(prev => 
+      prev.map(tab => 
+        tab.id === tabId ? { ...tab, isPinned: false } : tab
+      )
+    )
+  }
+
+  // Tab duplication
+  const duplicateTab = async (tabId: string) => {
+    const tabToDuplicate = tabs.find(tab => tab.id === tabId)
+    if (tabToDuplicate) {
+      await createTab(tabToDuplicate.title, tabToDuplicate.url, tabToDuplicate.groupId)
+    }
+  }
+
+  // Tab search and filtering
+  const filteredTabs = tabs.filter(tab => 
+    searchQuery === '' || 
+    tab.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tab.url.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const getTabsByGroup = (groupId?: string) => {
+    return filteredTabs.filter(tab => tab.groupId === groupId)
+  }
+
+  const getUngroupedTabs = () => {
+    return filteredTabs.filter(tab => !tab.groupId)
+  }
+
   return {
-    tabs,
+    tabs: filteredTabs,
+    tabGroups,
     activeTab,
     loading,
+    searchQuery,
+    setSearchQuery,
     createTab,
     closeTab,
     updateTab,
     navigateTab,
     setActiveTab,
-    refreshTabs: loadTabs
+    refreshTabs: loadTabs,
+    // Group functions
+    createTabGroup,
+    updateTabGroup,
+    deleteTabGroup,
+    addTabToGroup,
+    removeTabFromGroup,
+    // Pin functions
+    pinTab,
+    unpinTab,
+    // Duplicate function
+    duplicateTab,
+    // Filter functions
+    getTabsByGroup,
+    getUngroupedTabs
   }
 }
