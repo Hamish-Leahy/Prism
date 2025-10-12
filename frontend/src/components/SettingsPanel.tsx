@@ -1,25 +1,52 @@
 import React, { useState } from 'react'
-import { Settings } from '../types/Settings'
-import { X, Monitor, Shield, Palette, Globe } from 'lucide-react'
+import { X, Monitor, Shield, Palette, Globe, Settings as SettingsIcon } from 'lucide-react'
+import { useSettings } from '../hooks/useSettings'
 
 interface SettingsPanelProps {
-  settings: Settings
-  onSettingsChange: (settings: Settings) => void
   onClose: () => void
 }
 
-export const SettingsPanel: React.FC<SettingsPanelProps> = ({
-  settings,
-  onSettingsChange,
-  onClose
-}) => {
+export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('general')
+  const {
+    settings,
+    loading,
+    error,
+    updateSetting,
+    updateSettings,
+    resetSettings,
+    getBrowserSettings,
+    getPrivacySettings,
+    getAppearanceSettings,
+    getPerformanceSettings,
+    getSecuritySettings
+  } = useSettings()
 
-  const handleSettingChange = (key: keyof Settings, value: any) => {
-    onSettingsChange({
-      ...settings,
-      [key]: value
-    })
+  const handleSettingChange = async (key: string, value: any, category: string = 'general') => {
+    await updateSetting(key, value, category)
+  }
+
+  const handleMultipleSettingsChange = async (settingsToUpdate: Record<string, any>) => {
+    await updateSettings(settingsToUpdate)
+  }
+
+  const handleResetSettings = async () => {
+    if (window.confirm('Are you sure you want to reset all settings to default?')) {
+      await resetSettings()
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-arc-surface border border-arc-border rounded-lg p-8">
+          <div className="flex items-center space-x-3">
+            <div className="w-6 h-6 border-2 border-arc-accent border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-arc-text">Loading settings...</span>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const tabs = [
