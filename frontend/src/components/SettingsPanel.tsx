@@ -182,8 +182,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.blockTrackers}
-                    onChange={(e) => handleSettingChange('blockTrackers', e.target.checked)}
+                    checked={privacySettings.blockTrackers}
+                    onChange={(e) => handleSettingChange('privacy.block_trackers', e.target.checked, 'privacy')}
+                    className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-arc-text">
+                      Block Ads
+                    </label>
+                    <p className="text-xs text-arc-text-secondary">
+                      Block advertisements and ad networks
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={privacySettings.blockAds}
+                    onChange={(e) => handleSettingChange('privacy.block_ads', e.target.checked, 'privacy')}
                     className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
                   />
                 </div>
@@ -199,25 +216,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.clearDataOnExit}
-                    onChange={(e) => handleSettingChange('clearDataOnExit', e.target.checked)}
-                    className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-medium text-arc-text">
-                      Send Do Not Track
-                    </label>
-                    <p className="text-xs text-arc-text-secondary">
-                      Send Do Not Track header with requests
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.sendDoNotTrack}
-                    onChange={(e) => handleSettingChange('sendDoNotTrack', e.target.checked)}
+                    checked={privacySettings.clearDataOnExit}
+                    onChange={(e) => handleSettingChange('privacy.clear_data_on_exit', e.target.checked, 'privacy')}
                     className="w-4 h-4 text-arc-accent bg-arc-surface border-arc-border rounded focus:ring-arc-accent"
                   />
                 </div>
