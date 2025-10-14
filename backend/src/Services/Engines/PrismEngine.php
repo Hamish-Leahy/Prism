@@ -3203,6 +3203,33 @@ class PrismEngine implements EngineInterface
         return $this->pluginManager && $this->pluginManager->isInitialized();
     }
 
+    /**
+     * Runtime Plugin Token Forwarders
+     */
+    public function setPluginApiToken(string $pluginName, string $tokenKey, string $tokenValue): void
+    {
+        if (!$this->pluginManager) {
+            throw new \RuntimeException('Plugin Manager not initialized');
+        }
+        $this->pluginManager->setApiToken($pluginName, $tokenKey, $tokenValue);
+    }
+
+    public function getPluginApiToken(string $pluginName, ?string $tokenKey = null): mixed
+    {
+        if (!$this->pluginManager) {
+            return $tokenKey === null ? [] : null;
+        }
+        return $this->pluginManager->getApiToken($pluginName, $tokenKey);
+    }
+
+    public function removePluginApiToken(string $pluginName, string $tokenKey): bool
+    {
+        if (!$this->pluginManager) {
+            return false;
+        }
+        return $this->pluginManager->removeApiToken($pluginName, $tokenKey);
+    }
+
 
 
     /**
