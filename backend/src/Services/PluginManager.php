@@ -15,6 +15,7 @@ class PluginManager
     private array $plugins = [];
     private array $pluginPaths = [];
     private array $loadedPlugins = [];
+    private array $apiTokens = [];
     private bool $initialized = false;
 
     public function __construct(array $config, Logger $logger)
@@ -25,6 +26,14 @@ class PluginManager
             __DIR__ . '/Plugins/',
             __DIR__ . '/../plugins/'
         ];
+        // Load API tokens from config if provided
+        // Expected structure:
+        // [
+        //   'api_tokens' => [
+        //       'AdBlockerPlugin' => [ 'token_name' => 'token_value' ]
+        //   ]
+        // ]
+        $this->apiTokens = $config['api_tokens'] ?? [];
     }
 
     public function initialize(): bool
@@ -297,7 +306,12 @@ class PluginManager
                 $reflection = new \ReflectionClass($namespace);
                 
                 if ($reflection->implementsInterface(PluginInterface::class)) {
-                    $plugin = new $namespace($this->config, $this->logger);
+                    // Build per-plugin config by merging global plugin config and per-plugin tokens
+                    $perPluginConfig = $this->config['plugin_config'][$className] ?? [];
+                    if (!empty($this->apiTokens[$className])) {
+                        $perPluginConfig['api_tokens'] = $this->apiTokens[$className];
+                    }
+                    $plugin = new $namespace($perPluginConfig, $this->logger);
                     $this->registerPlugin($className, $plugin);
                 }
             }
@@ -326,6 +340,7 @@ class PluginManager
 
         $this->plugins = [];
         $this->loadedPlugins = [];
+        $this->apiTokens = [];
         $this->initialized = false;
         $this->logger->info("Plugin Manager cleaned up");
     }
@@ -333,5 +348,51 @@ class PluginManager
     public function isInitialized(): bool
     {
         return $this->initialized;
+    }
+
+    /**
+     * API Token Management
+     */
+    public function setApiToken(string $pluginName, string $tokenKey, string $tokenValue): void
+    {
+        if (!isset($this->apiTokens[$pluginName])) {
+            $this->apiTokens[$pluginName] = [];
+        }
+        $this->apiTokens[$pluginName][$tokenKey] = $tokenValue;
+        $this->logger->info("Set API token", ['plugin' => $pluginName, 'token_key' => $tokenKey]);
+    }
+
+    public function getApiToken(string $pluginName, ?string $tokenKey = null): mixed
+    {
+        if (!isset($this->apiTokens[$pluginName])) {
+            return $tokenKey === null ? [] : null;
+        }
+
+        if ($tokenKey === null) {
+            return $this->apiTokens[$pluginName];
+        }
+
+        return $this->apiTokens[$pluginName][$tokenKey] ?? null;
+    }
+
+    public function removeApiToken(string $pluginName, string $tokenKey): bool
+    {
+        if (!isset($this->apiTokens[$pluginName])) {
+            return false;
+        }
+
+        if (array_key_exists($tokenKey, $this->apiTokens[$pluginName])) {
+            unset($this->apiTokens[$pluginName][$tokenKey]);
+            // Reindex not necessary; keep associative
+            $this->logger->info("Removed API token", ['plugin' => $pluginName, 'token_key' => $tokenKey]);
+            return true;
+        }
+
+        return false;
+    }
+
+    public function getAllApiTokens(): array
+    {
+        return $this->apiTokens;
     }
 }
