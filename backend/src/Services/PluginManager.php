@@ -360,6 +360,27 @@ class PluginManager
         }
         $this->apiTokens[$pluginName][$tokenKey] = $tokenValue;
         $this->logger->info("Set API token", ['plugin' => $pluginName, 'token_key' => $tokenKey]);
+
+        // If plugin is already loaded, update its config live
+        if (isset($this->loadedPlugins[$pluginName])) {
+            try {
+                /** @var PluginInterface $plugin */
+                $plugin = $this->loadedPlugins[$pluginName];
+                $existing = $plugin->getConfig();
+                $existing['api_tokens'] = $existing['api_tokens'] ?? [];
+                $existing['api_tokens'][$tokenKey] = $tokenValue;
+                $plugin->setConfig($existing);
+                $this->logger->info("Updated loaded plugin config with new API token", [
+                    'plugin' => $pluginName,
+                    'token_key' => $tokenKey
+                ]);
+            } catch (\Exception $e) {
+                $this->logger->error("Failed to update loaded plugin with API token", [
+                    'plugin' => $pluginName,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
     }
 
     public function getApiToken(string $pluginName, ?string $tokenKey = null): mixed
