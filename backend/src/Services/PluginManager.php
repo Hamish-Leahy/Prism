@@ -8,6 +8,8 @@ use Monolog\Logger;
 
 class PluginManager
 {
+    // Update priv variable array to include API Tokens 
+    
     private array $config;
     private Logger $logger;
     private array $plugins = [];
