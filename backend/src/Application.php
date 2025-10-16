@@ -63,6 +63,19 @@ class Application
     {
         $container = $this->app->getContainer();
         
+        // Authentication routes (public)
+        $this->app->group('/api/auth', function ($group) use ($container) {
+            $group->post('/register', [AuthenticationController::class, 'register']);
+            $group->post('/login', [AuthenticationController::class, 'login']);
+            $group->post('/refresh', [AuthenticationController::class, 'refresh']);
+            $group->post('/logout', [AuthenticationController::class, 'logout']);
+            $group->post('/request-password-reset', [AuthenticationController::class, 'requestPasswordReset']);
+            $group->post('/reset-password', [AuthenticationController::class, 'resetPassword']);
+            $group->get('/verify', [AuthenticationController::class, 'verify']);
+            $group->get('/profile', [AuthenticationController::class, 'profile']);
+            $group->post('/change-password', [AuthenticationController::class, 'changePassword']);
+        });
+        
         // Engine routes
         $this->app->group('/api/engines', function ($group) use ($container) {
             $group->get('', [EngineController::class, 'list']);
