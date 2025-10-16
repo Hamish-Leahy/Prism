@@ -50,6 +50,32 @@ export interface Bookmark {
   updated_at: string
 }
 
+export interface User {
+  id: string
+  username: string
+  email: string
+}
+
+export interface AuthTokens {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+}
+
+export interface LoginResponse {
+  success: boolean
+  user?: User
+  tokens?: AuthTokens
+  error?: string
+}
+
+export interface RegisterResponse {
+  success: boolean
+  user_id?: string
+  verification_token?: string
+  error?: string
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
