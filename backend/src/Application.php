@@ -13,8 +13,11 @@ use Prism\Backend\Controllers\BookmarkController;
 use Prism\Backend\Controllers\HistoryController;
 use Prism\Backend\Controllers\SettingsController;
 use Prism\Backend\Controllers\DownloadController;
+use Prism\Backend\Controllers\AuthenticationController;
 use Prism\Backend\Services\EngineManager;
 use Prism\Backend\Services\DatabaseService;
+use Prism\Backend\Services\AuthenticationService;
+use Prism\Backend\Middleware\JwtMiddleware;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 
