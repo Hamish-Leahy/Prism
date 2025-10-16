@@ -88,5 +88,12 @@ return [
         'session_lifetime' => 3600, // 1 hour
         'csrf_protection' => true,
         'xss_protection' => true
+    ],
+    
+    'jwt' => [
+        'secret' => $_ENV['JWT_SECRET'] ?? 'your-jwt-secret-key-change-this-in-production',
+        'expiration' => $_ENV['JWT_EXPIRATION'] ?? 3600, // 1 hour
+        'refresh_expiration' => $_ENV['JWT_REFRESH_EXPIRATION'] ?? 604800, // 7 days
+        'algorithm' => 'HS256'
     ]
 ];
