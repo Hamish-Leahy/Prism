@@ -3231,7 +3231,6 @@ class PrismEngine implements EngineInterface
     }
 
 
-
     /**
      * Update close method to include JavaScript engine cleanup
      */
