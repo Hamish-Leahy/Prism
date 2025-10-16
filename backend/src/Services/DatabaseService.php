@@ -138,20 +138,66 @@ class DatabaseService
         ";
         $this->pdo->exec($sql);
 
-        // Users table for future authentication
+        // Users table for authentication
         $sql = "
             CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR(36) PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
+                is_verified BOOLEAN DEFAULT FALSE,
+                is_active BOOLEAN DEFAULT TRUE,
+                verification_token VARCHAR(64),
+                last_login DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ";
         $this->pdo->exec($sql);
 
-        // Sessions table
+        // Refresh tokens table
+        $sql = "
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                token VARCHAR(64) UNIQUE NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ";
+        $this->pdo->exec($sql);
+
+        // Password resets table
+        $sql = "
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                token VARCHAR(64) UNIQUE NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ";
+        $this->pdo->exec($sql);
+
+        // User settings table
+        $sql = "
+            CREATE TABLE IF NOT EXISTS user_settings (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                setting_key VARCHAR(255) NOT NULL,
+                setting_value TEXT,
+                category VARCHAR(100) DEFAULT 'general',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE KEY unique_user_setting (user_id, setting_key)
+            )
+        ";
+        $this->pdo->exec($sql);
+
+        // Sessions table (for session management)
         $sql = "
             CREATE TABLE IF NOT EXISTS sessions (
                 id VARCHAR(36) PRIMARY KEY,
