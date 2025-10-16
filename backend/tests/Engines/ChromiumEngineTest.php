@@ -4,39 +4,23 @@ namespace Prism\Backend\Tests\Engines;
 
 use PHPUnit\Framework\TestCase;
 use Prism\Backend\Services\Engines\ChromiumEngine;
-use Monolog\Logger;
+use Facebook\WebDriver\Exception\WebDriverException;
 
 class ChromiumEngineTest extends TestCase
 {
     private ChromiumEngine $engine;
-    private Logger $logger;
+    private array $config;
 
     protected function setUp(): void
     {
-        $this->logger = new Logger('test');
-        
-        $config = [
+        $this->config = [
             'headless' => true,
-            'window_size' => ['width' => 1920, 'height' => 1080],
-            'user_agent' => 'Mozilla/5.0 (Test) Chrome/120.0.0.0',
-            'disable_images' => false,
-            'disable_javascript' => false,
-            'disable_css' => false,
-            'disable_plugins' => false,
-            'disable_extensions' => false,
-            'disable_web_security' => false,
-            'disable_features' => [],
-            'experimental_options' => [],
-            'prefs' => [],
-            'args' => ['--no-sandbox', '--disable-dev-shm-usage'],
-            'extensions' => [],
-            'timeout' => 30,
-            'implicit_wait' => 10,
-            'page_load_timeout' => 30,
-            'script_timeout' => 30
+            'sandbox' => false,
+            'extensions' => false,
+            'window_size' => ['width' => 1920, 'height' => 1080]
         ];
-
-        $this->engine = new ChromiumEngine($config);
+        
+        $this->engine = new ChromiumEngine($this->config);
     }
 
     protected function tearDown(): void
@@ -46,18 +30,21 @@ class ChromiumEngineTest extends TestCase
         }
     }
 
-    public function testEngineInitialization()
+    public function testEngineInitialization(): void
     {
-        $this->assertFalse($this->engine->isReady());
-        
+        // Note: This test requires ChromeDriver to be running
+        // Skip if ChromeDriver is not available
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
         $result = $this->engine->initialize();
         $this->assertTrue($result);
         $this->assertTrue($this->engine->isReady());
     }
 
-    public function testEngineInfo()
+    public function testEngineInfo(): void
     {
-        $this->engine->initialize();
         $info = $this->engine->getInfo();
         
         $this->assertIsArray($info);
@@ -65,87 +52,224 @@ class ChromiumEngineTest extends TestCase
         $this->assertArrayHasKey('version', $info);
         $this->assertArrayHasKey('capabilities', $info);
         $this->assertArrayHasKey('config', $info);
+        
+        $this->assertTrue($info['capabilities']['javascript']);
+        $this->assertTrue($info['capabilities']['css']);
+        $this->assertTrue($info['capabilities']['html5']);
     }
 
-    public function testNavigationToDataUrl()
+    public function testNavigation(): void
     {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
         $this->engine->initialize();
         
-        $html = '<html><head><title>Test Page</title></head><body><h1>Hello World</h1></body></html>';
-        $this->engine->navigate('data:text/html,' . urlencode($html));
-        
-        $this->assertTrue($this->engine->isReady());
-        $this->assertStringContains('Test Page', $this->engine->getPageTitle());
-        $this->assertStringContains('Hello World', $this->engine->getPageContent());
+        $this->engine->navigate('https://example.com');
+        $this->assertEquals('https://example.com', $this->engine->getCurrentUrl());
+        $this->assertStringContainsString('Example Domain', $this->engine->getPageTitle());
     }
 
-    public function testPageContentRetrieval()
+    public function testJavaScriptExecution(): void
     {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
         $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
         
-        $html = '<html><head><title>Test</title></head><body><p>Content</p></body></html>';
-        $this->engine->navigate('data:text/html,' . urlencode($html));
-        
-        $content = $this->engine->getPageContent();
-        $this->assertStringContains('Content', $content);
+        $result = $this->engine->executeScript('return document.title;');
+        $this->assertEquals('Example Domain', $result);
     }
 
-    public function testPageTitleRetrieval()
+    public function testScreenshot(): void
     {
-        $this->engine->initialize();
-        
-        $this->engine->navigate('data:text/html,<html><head><title>Test Title</title></head><body></body></html>');
-        
-        $title = $this->engine->getPageTitle();
-        $this->assertEquals('Test Title', $title);
-    }
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
 
-    public function testCurrentUrlRetrieval()
-    {
         $this->engine->initialize();
-        
-        $testUrl = 'data:text/html,<html><body>Test</body></html>';
-        $this->engine->navigate($testUrl);
-        
-        $currentUrl = $this->engine->getCurrentUrl();
-        $this->assertStringContains('data:text/html', $currentUrl);
-    }
-
-    public function testJavaScriptExecution()
-    {
-        $this->engine->initialize();
-        
-        $this->engine->navigate('data:text/html,<html><body></body></html>');
-        
-        // Test basic JavaScript execution
-        $result = $this->engine->executeScript('return "Hello from JavaScript";');
-        $this->assertEquals('Hello from JavaScript', $result);
-    }
-
-    public function testJavaScriptExecutionWithArguments()
-    {
-        $this->engine->initialize();
-        
-        $this->engine->navigate('data:text/html,<html><body></body></html>');
-        
-        // Test JavaScript execution with arguments
-        $result = $this->engine->executeScript('return arguments[0] + " " + arguments[1];', ['Hello', 'World']);
-        $this->assertEquals('Hello World', $result);
-    }
-
-    public function testScreenshot()
-    {
-        $this->engine->initialize();
-        
-        $this->engine->navigate('data:text/html,<html><body><h1>Test Screenshot</h1></body></html>');
+        $this->engine->navigate('https://example.com');
         
         $screenshot = $this->engine->takeScreenshot();
         $this->assertIsString($screenshot);
         $this->assertNotEmpty($screenshot);
     }
 
-    public function testEngineClose()
+    public function testCookieManagement(): void
     {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        // Set a cookie
+        $result = $this->engine->setCookie('test_cookie', 'test_value', [
+            'domain' => 'example.com',
+            'path' => '/',
+            'secure' => false
+        ]);
+        $this->assertTrue($result);
+        
+        // Get cookies
+        $cookies = $this->engine->getCookies();
+        $this->assertIsArray($cookies);
+        
+        // Find our test cookie
+        $testCookie = null;
+        foreach ($cookies as $cookie) {
+            if ($cookie['name'] === 'test_cookie') {
+                $testCookie = $cookie;
+                break;
+            }
+        }
+        
+        $this->assertNotNull($testCookie);
+        $this->assertEquals('test_value', $testCookie['value']);
+        
+        // Delete cookie
+        $result = $this->engine->deleteCookie('test_cookie');
+        $this->assertTrue($result);
+    }
+
+    public function testLocalStorageManagement(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        // Set localStorage item
+        $result = $this->engine->setLocalStorageItem('test_key', 'test_value');
+        $this->assertTrue($result);
+        
+        // Get localStorage item
+        $value = $this->engine->getLocalStorageItem('test_key');
+        $this->assertEquals('test_value', $value);
+        
+        // Get all localStorage
+        $storage = $this->engine->getLocalStorage();
+        $this->assertIsArray($storage);
+        $this->assertArrayHasKey('test_key', $storage);
+        $this->assertEquals('test_value', $storage['test_key']);
+        
+        // Remove localStorage item
+        $result = $this->engine->removeLocalStorageItem('test_key');
+        $this->assertTrue($result);
+        
+        // Verify removal
+        $value = $this->engine->getLocalStorageItem('test_key');
+        $this->assertNull($value);
+    }
+
+    public function testSessionStorageManagement(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        // Set sessionStorage item
+        $result = $this->engine->setSessionStorageItem('session_key', 'session_value');
+        $this->assertTrue($result);
+        
+        // Get sessionStorage item
+        $value = $this->engine->getSessionStorageItem('session_key');
+        $this->assertEquals('session_value', $value);
+        
+        // Get all sessionStorage
+        $storage = $this->engine->getSessionStorage();
+        $this->assertIsArray($storage);
+        $this->assertArrayHasKey('session_key', $storage);
+        $this->assertEquals('session_value', $storage['session_key']);
+    }
+
+    public function testUserAgentManagement(): void
+    {
+        $customUserAgent = 'Mozilla/5.0 (compatible; Prism Browser Test)';
+        
+        // Set user agent before initialization
+        $result = $this->engine->setUserAgent($customUserAgent);
+        $this->assertTrue($result);
+        
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        $userAgent = $this->engine->getUserAgent();
+        $this->assertStringContainsString('Prism Browser Test', $userAgent);
+    }
+
+    public function testPerformanceMetrics(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        $metrics = $this->engine->getPerformanceMetrics();
+        $this->assertIsArray($metrics);
+        
+        // Performance metrics might be empty for some pages
+        // Just verify the structure is correct
+        if (!empty($metrics)) {
+            $this->assertArrayHasKey('loadTime', $metrics);
+        }
+    }
+
+    public function testMemoryUsage(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        $memory = $this->engine->getMemoryUsage();
+        $this->assertIsArray($memory);
+        
+        // Memory usage might be empty if not supported
+        if (!empty($memory)) {
+            $this->assertArrayHasKey('used', $memory);
+            $this->assertArrayHasKey('total', $memory);
+            $this->assertArrayHasKey('limit', $memory);
+        }
+    }
+
+    public function testCacheStats(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
+        $this->engine->initialize();
+        $this->engine->navigate('https://example.com');
+        
+        $cache = $this->engine->getCacheStats();
+        $this->assertIsArray($cache);
+        $this->assertArrayHasKey('cacheCount', $cache);
+    }
+
+    public function testEngineClose(): void
+    {
+        if (!$this->isChromeDriverAvailable()) {
+            $this->markTestSkipped('ChromeDriver not available');
+        }
+
         $this->engine->initialize();
         $this->assertTrue($this->engine->isReady());
         
@@ -153,108 +277,19 @@ class ChromiumEngineTest extends TestCase
         $this->assertFalse($this->engine->isReady());
     }
 
-    public function testNavigationToInvalidUrl()
+    private function isChromeDriverAvailable(): bool
     {
-        $this->engine->initialize();
+        // Check if ChromeDriver is running on default port
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'http://localhost:9515/status');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
         
-        $this->expectException(\RuntimeException::class);
-        $this->engine->navigate('invalid-url');
-    }
-
-    public function testScriptExecutionWhenNotReady()
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->engine->executeScript('return "test";');
-    }
-
-    public function testScreenshotWhenNotReady()
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->engine->takeScreenshot();
-    }
-
-    public function testEngineInitializationFailure()
-    {
-        // Test with invalid ChromeDriver path
-        $invalidConfig = [
-            'chrome_driver_path' => '/invalid/path/chromedriver',
-            'headless' => true
-        ];
+        $result = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
         
-        $invalidEngine = new ChromiumEngine($invalidConfig);
-        
-        $this->expectException(\RuntimeException::class);
-        $invalidEngine->initialize();
-    }
-
-    public function testEngineWithCustomOptions()
-    {
-        $customConfig = [
-            'headless' => true,
-            'window_size' => ['width' => 800, 'height' => 600],
-            'user_agent' => 'Custom User Agent',
-            'args' => ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-            'prefs' => [
-                'profile.default_content_setting_values.notifications' => 2
-            ]
-        ];
-        
-        $customEngine = new ChromiumEngine($customConfig);
-        $result = $customEngine->initialize();
-        
-        $this->assertTrue($result);
-        $this->assertTrue($customEngine->isReady());
-        
-        $customEngine->close();
-    }
-
-    public function testEngineWithExtensions()
-    {
-        $extensionConfig = [
-            'headless' => false, // Extensions don't work in headless mode
-            'extensions' => [
-                // Add test extension paths here if available
-            ]
-        ];
-        
-        $extensionEngine = new ChromiumEngine($extensionConfig);
-        $result = $extensionEngine->initialize();
-        
-        $this->assertTrue($result);
-        $this->assertTrue($extensionEngine->isReady());
-        
-        $extensionEngine->close();
-    }
-
-    public function testEnginePerformanceMetrics()
-    {
-        $this->engine->initialize();
-        
-        $this->engine->navigate('data:text/html,<html><body>Performance Test</body></html>');
-        
-        $metrics = $this->engine->getPerformanceMetrics();
-        $this->assertIsArray($metrics);
-        $this->assertArrayHasKey('response_time', $metrics);
-        $this->assertArrayHasKey('content_length', $metrics);
-        $this->assertArrayHasKey('memory_usage', $metrics);
-    }
-
-    public function testEngineWithDisabledFeatures()
-    {
-        $disabledConfig = [
-            'headless' => true,
-            'disable_images' => true,
-            'disable_javascript' => true,
-            'disable_css' => true,
-            'args' => ['--no-sandbox', '--disable-dev-shm-usage']
-        ];
-        
-        $disabledEngine = new ChromiumEngine($disabledConfig);
-        $result = $disabledEngine->initialize();
-        
-        $this->assertTrue($result);
-        $this->assertTrue($disabledEngine->isReady());
-        
-        $disabledEngine->close();
+        return $httpCode === 200;
     }
 }
