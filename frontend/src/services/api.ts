@@ -416,6 +416,80 @@ class ApiService {
     })
   }
 
+  // Authentication API
+  async register(username: string, email: string, password: string): Promise<ApiResponse<RegisterResponse>> {
+    return this.request<RegisterResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password }),
+    })
+  }
+
+  async login(usernameOrEmail: string, password: string): Promise<ApiResponse<LoginResponse>> {
+    const response = await this.request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: usernameOrEmail, password }),
+    })
+
+    // Save tokens if login was successful
+    if (response.success && response.data?.tokens) {
+      this.saveTokens(response.data.tokens)
+    }
+
+    return response
+  }
+
+  async logout(): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const response = await this.request<{ success: boolean; message: string }>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: this.refreshToken }),
+    })
+
+    // Clear tokens regardless of response
+    this.clearTokens()
+
+    return response
+  }
+
+  async verifyToken(): Promise<ApiResponse<{ success: boolean; user?: User; error?: string }>> {
+    return this.request<{ success: boolean; user?: User; error?: string }>('/auth/verify')
+  }
+
+  async getProfile(): Promise<ApiResponse<{ success: boolean; user?: User; error?: string }>> {
+    return this.request<{ success: boolean; user?: User; error?: string }>('/auth/profile')
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<{ success: boolean; error?: string }>> {
+    return this.request<{ success: boolean; error?: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    })
+  }
+
+  async requestPasswordReset(email: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    return this.request<{ success: boolean; message: string; error?: string }>('/auth/request-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<ApiResponse<{ success: boolean; error?: string }>> {
+    return this.request<{ success: boolean; error?: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    })
+  }
+
+  // Utility methods
+  isAuthenticated(): boolean {
+    return this.accessToken !== null
+  }
+
+  getCurrentUser(): User | null {
+    // This would typically be stored in state or retrieved from the server
+    // For now, we'll return null and let the app handle user state
+    return null
+  }
+
   // Health check
   async healthCheck(): Promise<ApiResponse<{ status: string; timestamp: number }>> {
     return this.request<{ status: string; timestamp: number }>('/health')
