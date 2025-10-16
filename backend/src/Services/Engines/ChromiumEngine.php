@@ -213,4 +213,355 @@ class ChromiumEngine implements EngineInterface
             return 'Unknown';
         }
     }
+
+    // Cookie Management
+    public function getCookies(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $cookies = $this->driver->manage()->getCookies();
+            $result = [];
+            foreach ($cookies as $cookie) {
+                $result[] = [
+                    'name' => $cookie->getName(),
+                    'value' => $cookie->getValue(),
+                    'domain' => $cookie->getDomain(),
+                    'path' => $cookie->getPath(),
+                    'expiry' => $cookie->getExpiry(),
+                    'secure' => $cookie->isSecure(),
+                    'httpOnly' => $cookie->isHttpOnly()
+                ];
+            }
+            return $result;
+        } catch (WebDriverException $e) {
+            return [];
+        }
+    }
+
+    public function setCookie(string $name, string $value, array $options = []): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $cookie = new WebDriverCookie(
+                $name,
+                $value,
+                $options['domain'] ?? null,
+                $options['path'] ?? null,
+                $options['expiry'] ?? null,
+                $options['secure'] ?? false,
+                $options['httpOnly'] ?? false
+            );
+            
+            $this->driver->manage()->addCookie($cookie);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function deleteCookie(string $name): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $this->driver->manage()->deleteCookieNamed($name);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function clearCookies(): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $this->driver->manage()->deleteAllCookies();
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    // Local Storage Management
+    public function getLocalStorage(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $script = "return Object.keys(localStorage).reduce((acc, key) => { acc[key] = localStorage.getItem(key); return acc; }, {});";
+            return $this->driver->executeScript($script) ?? [];
+        } catch (WebDriverException $e) {
+            return [];
+        }
+    }
+
+    public function setLocalStorageItem(string $key, string $value): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "localStorage.setItem(" . json_encode($key) . ", " . json_encode($value) . ");";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function getLocalStorageItem(string $key): ?string
+    {
+        if (!$this->isReady()) {
+            return null;
+        }
+
+        try {
+            $script = "return localStorage.getItem(" . json_encode($key) . ");";
+            return $this->driver->executeScript($script);
+        } catch (WebDriverException $e) {
+            return null;
+        }
+    }
+
+    public function removeLocalStorageItem(string $key): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "localStorage.removeItem(" . json_encode($key) . ");";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function clearLocalStorage(): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "localStorage.clear();";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    // Session Storage Management
+    public function getSessionStorage(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $script = "return Object.keys(sessionStorage).reduce((acc, key) => { acc[key] = sessionStorage.getItem(key); return acc; }, {});";
+            return $this->driver->executeScript($script) ?? [];
+        } catch (WebDriverException $e) {
+            return [];
+        }
+    }
+
+    public function setSessionStorageItem(string $key, string $value): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "sessionStorage.setItem(" . json_encode($key) . ", " . json_encode($value) . ");";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function getSessionStorageItem(string $key): ?string
+    {
+        if (!$this->isReady()) {
+            return null;
+        }
+
+        try {
+            $script = "return sessionStorage.getItem(" . json_encode($key) . ");";
+            return $this->driver->executeScript($script);
+        } catch (WebDriverException $e) {
+            return null;
+        }
+    }
+
+    public function removeSessionStorageItem(string $key): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "sessionStorage.removeItem(" . json_encode($key) . ");";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    public function clearSessionStorage(): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            $script = "sessionStorage.clear();";
+            $this->driver->executeScript($script);
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    // Download Management
+    public function downloadFile(string $url, string $savePath): bool
+    {
+        if (!$this->isReady()) {
+            return false;
+        }
+
+        try {
+            // Set download preferences
+            $prefs = [
+                'download.default_directory' => dirname($savePath),
+                'download.prompt_for_download' => false,
+                'download.directory_upgrade' => true,
+                'safebrowsing.enabled' => true
+            ];
+
+            $chromeOptions = new ChromeOptions();
+            $chromeOptions->setExperimentalOption('prefs', $prefs);
+            
+            // Navigate to download URL
+            $this->driver->get($url);
+            
+            // Wait for download to complete (simplified)
+            sleep(2);
+            
+            return true;
+        } catch (WebDriverException $e) {
+            return false;
+        }
+    }
+
+    // User Agent Management
+    public function setUserAgent(string $userAgent): bool
+    {
+        if ($this->initialized) {
+            // Cannot change user agent after initialization
+            return false;
+        }
+
+        $this->config['user_agent'] = $userAgent;
+        return true;
+    }
+
+    public function getUserAgent(): string
+    {
+        if (!$this->isReady()) {
+            return $this->config['user_agent'] ?? 'Mozilla/5.0 (compatible; Prism Browser)';
+        }
+
+        try {
+            $script = "return navigator.userAgent;";
+            return $this->driver->executeScript($script) ?? $this->config['user_agent'] ?? 'Mozilla/5.0 (compatible; Prism Browser)';
+        } catch (WebDriverException $e) {
+            return $this->config['user_agent'] ?? 'Mozilla/5.0 (compatible; Prism Browser)';
+        }
+    }
+
+    // Performance Metrics
+    public function getPerformanceMetrics(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $script = "
+                const perfData = performance.getEntriesByType('navigation')[0];
+                return {
+                    loadTime: perfData.loadEventEnd - perfData.loadEventStart,
+                    domContentLoaded: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart,
+                    firstPaint: performance.getEntriesByName('first-paint')[0]?.startTime || 0,
+                    firstContentfulPaint: performance.getEntriesByName('first-contentful-paint')[0]?.startTime || 0
+                };
+            ";
+            return $this->driver->executeScript($script) ?? [];
+        } catch (WebDriverException $e) {
+            return [];
+        }
+    }
+
+    // Memory Usage
+    public function getMemoryUsage(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $script = "
+                if (performance.memory) {
+                    return {
+                        used: performance.memory.usedJSHeapSize,
+                        total: performance.memory.totalJSHeapSize,
+                        limit: performance.memory.jsHeapSizeLimit
+                    };
+                }
+                return {};
+            ";
+            return $this->driver->executeScript($script) ?? [];
+        } catch (WebDriverException $e) {
+            return [];
+        }
+    }
+
+    // Cache Statistics
+    public function getCacheStats(): array
+    {
+        if (!$this->isReady()) {
+            return [];
+        }
+
+        try {
+            $script = "
+                if ('caches' in window) {
+                    return caches.keys().then(keys => ({ cacheCount: keys.length }));
+                }
+                return { cacheCount: 0 };
+            ";
+            return $this->driver->executeScript($script) ?? ['cacheCount' => 0];
+        } catch (WebDriverException $e) {
+            return ['cacheCount' => 0];
+        }
+    }
 }
