@@ -9,12 +9,20 @@ class DatabaseService
 {
     private PDO $pdo;
     private array $config;
+    private ?SupabaseService $supabase = null;
 
     public function __construct(array $config)
     {
         $this->config = $config;
-        $this->connect();
-        $this->initializeTables();
+        
+        // Use Supabase if configured, otherwise fall back to local database
+        if (isset($config['supabase']) && $config['supabase']['enabled']) {
+            $this->supabase = new SupabaseService($config['supabase']);
+            $this->pdo = $this->supabase->getPdo();
+        } else {
+            $this->connect();
+            $this->initializeTables();
+        }
     }
 
     private function connect(): void
@@ -197,6 +205,10 @@ class DatabaseService
 
     public function query(string $sql, array $params = []): array
     {
+        if ($this->supabase) {
+            return $this->supabase->query($sql, $params);
+        }
+        
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -204,12 +216,42 @@ class DatabaseService
 
     public function execute(string $sql, array $params = []): bool
     {
+        if ($this->supabase) {
+            return $this->supabase->execute($sql, $params);
+        }
+        
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute($params);
     }
 
     public function lastInsertId(): string
     {
+        if ($this->supabase) {
+            return $this->supabase->lastInsertId();
+        }
+        
         return $this->pdo->lastInsertId();
+    }
+
+    public function runMigration(string $migrationSql): bool
+    {
+        if ($this->supabase) {
+            return $this->supabase->runMigration($migrationSql);
+        }
+        
+        return $this->pdo->exec($migrationSql) !== false;
+    }
+
+    public function tableExists(string $tableName): bool
+    {
+        if ($this->supabase) {
+            return $this->supabase->tableExists($tableName);
+        }
+        
+        $result = $this->query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            [$tableName]
+        );
+        return !empty($result);
     }
 }

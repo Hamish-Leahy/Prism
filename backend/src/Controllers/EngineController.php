@@ -145,4 +145,265 @@ class EngineController
         $response->getBody()->write(json_encode($stats));
         return $response->withHeader('Content-Type', 'application/json');
     }
+
+    /**
+     * Advanced Engine Features
+     */
+    public function getAdvancedStats(Request $request, Response $response): Response
+    {
+        try {
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $stats = $engine->getAdvancedStats();
+            
+            $response->getBody()->write(json_encode($stats));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    public function enableAdvancedFeatures(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $features = $data['features'] ?? [];
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $success = $engine->enableAdvancedFeatures($features);
+            
+            $response->getBody()->write(json_encode(['success' => $success]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    /**
+     * WebRTC Endpoints
+     */
+    public function createWebRTCConnection(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $connectionId = $data['connection_id'] ?? uniqid('webrtc_');
+            $options = $data['options'] ?? [];
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $connection = $engine->createWebRTCPeerConnection($connectionId, $options);
+            
+            $response->getBody()->write(json_encode($connection));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    public function sendWebRTCData(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $connectionId = $data['connection_id'] ?? '';
+            $channelName = $data['channel_name'] ?? '';
+            $message = $data['message'] ?? '';
+
+            if (empty($connectionId) || empty($channelName)) {
+                throw new \InvalidArgumentException('Connection ID and channel name are required');
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $success = $engine->sendWebRTCData($connectionId, $channelName, $message);
+            
+            $response->getBody()->write(json_encode(['success' => $success]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    /**
+     * WebAssembly Endpoints
+     */
+    public function compileWebAssemblyModule(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $wasmBinary = $data['wasm_binary'] ?? '';
+
+            if (empty($wasmBinary)) {
+                throw new \InvalidArgumentException('WASM binary is required');
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $moduleId = $engine->compileWebAssemblyModule($wasmBinary);
+            
+            if ($moduleId) {
+                $response->getBody()->write(json_encode(['module_id' => $moduleId]));
+            } else {
+                $response->getBody()->write(json_encode(['error' => 'Failed to compile module']));
+                return $response->withStatus(500);
+            }
+            
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    public function callWebAssemblyFunction(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $instanceId = $data['instance_id'] ?? '';
+            $functionName = $data['function_name'] ?? '';
+            $args = $data['args'] ?? [];
+
+            if (empty($instanceId) || empty($functionName)) {
+                throw new \InvalidArgumentException('Instance ID and function name are required');
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $result = $engine->callWebAssemblyFunction($instanceId, $functionName, $args);
+            
+            $response->getBody()->write(json_encode(['result' => $result]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    /**
+     * Service Worker Endpoints
+     */
+    public function registerServiceWorker(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $scope = $data['scope'] ?? '/';
+            $scriptUrl = $data['script_url'] ?? '';
+            $options = $data['options'] ?? [];
+
+            if (empty($scriptUrl)) {
+                throw new \InvalidArgumentException('Script URL is required');
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $registrationId = $engine->registerServiceWorker($scope, $scriptUrl, $options);
+            
+            $response->getBody()->write(json_encode(['registration_id' => $registrationId]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    /**
+     * Push Notification Endpoints
+     */
+    public function subscribeToPushNotifications(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $subscriptionId = $data['subscription_id'] ?? uniqid('push_');
+            $subscriptionData = $data['subscription_data'] ?? [];
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $success = $engine->subscribeToPushNotifications($subscriptionId, $subscriptionData);
+            
+            $response->getBody()->write(json_encode(['success' => $success, 'subscription_id' => $subscriptionId]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    /**
+     * Offline Support Endpoints
+     */
+    public function setOnlineStatus(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $isOnline = $data['is_online'] ?? true;
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $engine->setOnlineStatus($isOnline);
+            
+            $response->getBody()->write(json_encode(['success' => true, 'is_online' => $isOnline]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    public function createOfflineManifest(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $manifestId = $data['manifest_id'] ?? uniqid('manifest_');
+            $resources = $data['resources'] ?? [];
+            $options = $data['options'] ?? [];
+
+            if (empty($resources)) {
+                throw new \InvalidArgumentException('Resources are required');
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            $success = $engine->createOfflineManifest($manifestId, $resources, $options);
+            
+            $response->getBody()->write(json_encode(['success' => $success, 'manifest_id' => $manifestId]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
 }
