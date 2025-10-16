@@ -155,6 +155,21 @@ class Application
         $container->set('engineManager', function () {
             return new EngineManager($this->config['engines']);
         });
+        
+        // Authentication service
+        $container->set('authService', function () {
+            return new AuthenticationService(
+                $this->app->getContainer()->get('database')->getPdo(),
+                $this->config['jwt']['secret'] ?? 'your-secret-key',
+                $this->config['jwt']['expiration'] ?? 3600,
+                $this->config['jwt']['refresh_expiration'] ?? 604800
+            );
+        });
+        
+        // JWT middleware
+        $container->set('jwtMiddleware', function () {
+            return new JwtMiddleware($this->app->getContainer()->get('authService'));
+        });
     }
 
     public function run(): void
