@@ -77,17 +77,115 @@ export interface RegisterResponse {
 }
 
 class ApiService {
+  private accessToken: string | null = null
+  private refreshToken: string | null = null
+
+  constructor() {
+    // Load tokens from localStorage on initialization
+    this.loadTokens()
+  }
+
+  private loadTokens(): void {
+    this.accessToken = localStorage.getItem('access_token')
+    this.refreshToken = localStorage.getItem('refresh_token')
+  }
+
+  private saveTokens(tokens: AuthTokens): void {
+    this.accessToken = tokens.access_token
+    this.refreshToken = tokens.refresh_token
+    localStorage.setItem('access_token', tokens.access_token)
+    localStorage.setItem('refresh_token', tokens.refresh_token)
+  }
+
+  private clearTokens(): void {
+    this.accessToken = null
+    this.refreshToken = null
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      }
+
+      // Add authorization header if we have an access token
+      if (this.accessToken) {
+        headers['Authorization'] = `Bearer ${this.accessToken}`
+      }
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      })
+
+      // If we get a 401 and have a refresh token, try to refresh
+      if (response.status === 401 && this.refreshToken && !endpoint.includes('/auth/')) {
+        const refreshResult = await this.refreshAccessToken()
+        if (refreshResult.success) {
+          // Retry the original request with new token
+          headers['Authorization'] = `Bearer ${this.accessToken}`
+          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+          })
+          return this.handleResponse<T>(retryResponse)
+        } else {
+          // Refresh failed, clear tokens and redirect to login
+          this.clearTokens()
+          window.location.href = '/login'
+          return {
+            success: false,
+            error: 'Session expired. Please log in again.',
+          }
+        }
+      }
+
+      return this.handleResponse<T>(response)
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      }
+    }
+  }
+
+  private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+    const data = await response.json()
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}: ${response.statusText}`,
+      }
+    }
+
+    return {
+      success: true,
+      data,
+    }
+  }
+
+  private async refreshAccessToken(): Promise<ApiResponse<AuthTokens>> {
+    if (!this.refreshToken) {
+      return {
+        success: false,
+        error: 'No refresh token available',
+      }
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers,
         },
-        ...options,
+        body: JSON.stringify({ refresh_token: this.refreshToken }),
       })
 
       const data = await response.json()
@@ -95,18 +193,19 @@ class ApiService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.error || `HTTP ${response.status}: ${response.statusText}`,
+          error: data.error || 'Token refresh failed',
         }
       }
 
+      this.saveTokens(data.tokens)
       return {
         success: true,
-        data,
+        data: data.tokens,
       }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error: error instanceof Error ? error.message : 'Token refresh failed',
       }
     }
   }
