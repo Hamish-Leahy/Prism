@@ -8,12 +8,16 @@ use Facebook\WebDriver\Chrome\ChromeOptions;
 use Facebook\WebDriver\WebDriverBy;
 use Facebook\WebDriver\WebDriverExpectedCondition;
 use Facebook\WebDriver\Exception\WebDriverException;
+use Facebook\WebDriver\WebDriverCookie;
 
 class ChromiumEngine implements EngineInterface
 {
     private array $config;
     private ?RemoteWebDriver $driver = null;
     private bool $initialized = false;
+    private array $cookies = [];
+    private array $localStorage = [];
+    private array $sessionStorage = [];
 
     public function __construct(array $config)
     {
