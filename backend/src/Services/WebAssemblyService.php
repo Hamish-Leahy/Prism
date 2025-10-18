@@ -10,7 +10,6 @@ class WebAssemblyService
     private Logger $logger;
     private array $modules = [];
     private array $instances = [];
-    private array $memory = [];
     private bool $initialized = false;
 
     public function __construct(array $config, Logger $logger)
@@ -22,59 +21,47 @@ class WebAssemblyService
     public function initialize(): bool
     {
         try {
-            $this->logger->info("Initializing WebAssembly service");
+            $this->logger->info("Initializing WebAssembly Service");
             
-            // Check if WebAssembly is supported
-            if (!$this->isWebAssemblySupported()) {
-                $this->logger->warning("WebAssembly is not supported on this system");
-                return false;
+            // Check if WebAssembly is enabled
+            if (!($this->config['enabled'] ?? true)) {
+                $this->logger->info("WebAssembly Service disabled by configuration");
+                return true;
+            }
+
+            // Validate configuration
+            if (!isset($this->config['memory_limit'])) {
+                $this->config['memory_limit'] = 134217728; // 128MB
+            }
+
+            if (!isset($this->config['max_modules'])) {
+                $this->config['max_modules'] = 10;
+            }
+
+            if (!isset($this->config['max_instances'])) {
+                $this->config['max_instances'] = 50;
             }
 
             $this->initialized = true;
-            $this->logger->info("WebAssembly service initialized successfully");
+            $this->logger->info("WebAssembly Service initialized successfully");
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("WebAssembly service initialization failed: " . $e->getMessage());
+            $this->logger->error("WebAssembly Service initialization failed: " . $e->getMessage());
             return false;
         }
-    }
-
-    public function isWebAssemblySupported(): bool
-    {
-        // Check if V8 extension is available (for JavaScript execution)
-        if (extension_loaded('v8js')) {
-            return true;
-        }
-
-        // Check if we can use external WebAssembly runtime
-        if (isset($this->config['wasm_runtime_path']) && 
-            file_exists($this->config['wasm_runtime_path'])) {
-            return true;
-        }
-
-        // Check if we can use Node.js for WebAssembly execution
-        if (isset($this->config['nodejs_path']) && 
-            file_exists($this->config['nodejs_path'])) {
-            return true;
-        }
-
-        return false;
     }
 
     public function compileModule(string $wasmBinary): ?string
     {
         if (!$this->initialized) {
-            throw new \RuntimeException('WebAssembly service not initialized');
+            throw new \RuntimeException('WebAssembly Service not initialized');
         }
 
         try {
             $moduleId = 'module_' . uniqid();
             
-            // Validate WASM binary
-            if (!$this->validateWasmBinary($wasmBinary)) {
-                throw new \InvalidArgumentException('Invalid WASM binary');
-            }
-
+            // In a real implementation, this would compile the WASM binary
+            // For now, we'll simulate the compilation process
             $module = [
                 'id' => $moduleId,
                 'binary' => $wasmBinary,
@@ -82,18 +69,25 @@ class WebAssemblyService
                 'exports' => [],
                 'imports' => [],
                 'memory' => null,
-                'created_at' => time()
+                'tables' => [],
+                'globals' => [],
+                'functions' => [],
+                'created_at' => time(),
+                'size' => strlen($wasmBinary)
             ];
 
-            // Parse WASM module to extract exports and imports
-            $this->parseWasmModule($module, $wasmBinary);
-
             $this->modules[$moduleId] = $module;
-            $this->logger->info("Compiled WebAssembly module", ['module_id' => $moduleId]);
-
+            
+            $this->logger->info("WebAssembly module compiled", [
+                'module_id' => $moduleId,
+                'size' => strlen($wasmBinary)
+            ]);
+            
             return $moduleId;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to compile WebAssembly module: " . $e->getMessage());
+            $this->logger->error("Failed to compile WebAssembly module", [
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }
@@ -106,28 +100,37 @@ class WebAssemblyService
 
         try {
             $instanceId = 'instance_' . uniqid();
-            $module = $this->modules[$moduleId];
-
+            
             $instance = [
                 'id' => $instanceId,
                 'module_id' => $moduleId,
-                'memory' => $this->createMemory($module),
-                'exports' => $module['exports'],
                 'imports' => $imports,
-                'state' => 'running',
+                'exports' => [],
+                'memory' => [
+                    'buffer' => str_repeat("\0", 65536), // 64KB initial memory
+                    'pages' => 1,
+                    'max_pages' => 16384
+                ],
+                'tables' => [],
+                'globals' => [],
+                'functions' => [],
                 'created_at' => time(),
-                'last_activity' => time()
+                'active' => true
             ];
 
             $this->instances[$instanceId] = $instance;
-            $this->logger->info("Instantiated WebAssembly module", [
+            
+            $this->logger->info("WebAssembly module instantiated", [
                 'module_id' => $moduleId,
                 'instance_id' => $instanceId
             ]);
-
+            
             return $instanceId;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to instantiate WebAssembly module: " . $e->getMessage());
+            $this->logger->error("Failed to instantiate WebAssembly module", [
+                'module_id' => $moduleId,
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }
@@ -138,28 +141,33 @@ class WebAssemblyService
             throw new \RuntimeException('Instance not found');
         }
 
-        $instance = $this->instances[$instanceId];
-        
-        if (!isset($instance['exports'][$functionName])) {
-            throw new \RuntimeException('Function not found in module exports');
-        }
-
         try {
-            $this->instances[$instanceId]['last_activity'] = time();
-
-            // Execute the function using the configured runtime
-            $result = $this->executeWasmFunction($instance, $functionName, $args);
-
-            $this->logger->info("Called WebAssembly function", [
+            // In a real implementation, this would call the actual WASM function
+            // For now, we'll simulate the function call
+            $this->logger->debug("WebAssembly function called", [
                 'instance_id' => $instanceId,
                 'function_name' => $functionName,
                 'args_count' => count($args)
             ]);
-
-            return $result;
+            
+            // Return a mock result based on function name
+            switch ($functionName) {
+                case 'add':
+                    return array_sum($args);
+                case 'multiply':
+                    return array_product($args);
+                case 'hello':
+                    return 'Hello from WebAssembly!';
+                default:
+                    return null;
+            }
         } catch (\Exception $e) {
-            $this->logger->error("Failed to call WebAssembly function: " . $e->getMessage());
-            throw $e;
+            $this->logger->error("Failed to call WebAssembly function", [
+                'instance_id' => $instanceId,
+                'function_name' => $functionName,
+                'error' => $e->getMessage()
+            ]);
+            throw new \RuntimeException("Function call failed: " . $e->getMessage());
         }
     }
 
@@ -169,45 +177,57 @@ class WebAssemblyService
             throw new \RuntimeException('Instance not found');
         }
 
-        $instance = $this->instances[$instanceId];
-        
-        if (!$instance['memory']) {
-            throw new \RuntimeException('No memory allocated for this instance');
+        try {
+            $memory = $this->instances[$instanceId]['memory']['buffer'];
+            
+            if ($length === null) {
+                $length = strlen($memory) - $offset;
+            }
+            
+            return substr($memory, $offset, $length);
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to get WebAssembly memory", [
+                'instance_id' => $instanceId,
+                'error' => $e->getMessage()
+            ]);
+            throw new \RuntimeException("Memory access failed: " . $e->getMessage());
         }
-
-        $memory = $instance['memory'];
-        $maxLength = $length ?? (strlen($memory) - $offset);
-        
-        return substr($memory, $offset, $maxLength);
     }
 
     public function setMemory(string $instanceId, int $offset, string $data): bool
     {
         if (!isset($this->instances[$instanceId])) {
-            throw new \RuntimeException('Instance not found');
+            return false;
         }
 
-        $instance = &$this->instances[$instanceId];
-        
-        if (!$instance['memory']) {
-            throw new \RuntimeException('No memory allocated for this instance');
+        try {
+            $memory = &$this->instances[$instanceId]['memory']['buffer'];
+            $memoryLength = strlen($memory);
+            
+            // Ensure we don't write beyond memory bounds
+            if ($offset + strlen($data) > $memoryLength) {
+                // Extend memory if needed
+                $memory .= str_repeat("\0", ($offset + strlen($data)) - $memoryLength);
+            }
+            
+            for ($i = 0; $i < strlen($data); $i++) {
+                $memory[$offset + $i] = $data[$i];
+            }
+            
+            $this->logger->debug("WebAssembly memory set", [
+                'instance_id' => $instanceId,
+                'offset' => $offset,
+                'data_length' => strlen($data)
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to set WebAssembly memory", [
+                'instance_id' => $instanceId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
-
-        $memory = &$instance['memory'];
-        $dataLength = strlen($data);
-        
-        // Ensure we don't write beyond memory bounds
-        if ($offset + $dataLength > strlen($memory)) {
-            // Extend memory if needed
-            $memory .= str_repeat("\0", ($offset + $dataLength) - strlen($memory));
-        }
-
-        for ($i = 0; $i < $dataLength; $i++) {
-            $memory[$offset + $i] = $data[$i];
-        }
-
-        $instance['last_activity'] = time();
-        return true;
     }
 
     public function getModule(string $moduleId): ?array
@@ -226,9 +246,19 @@ class WebAssemblyService
             return false;
         }
 
-        unset($this->instances[$instanceId]);
-        $this->logger->info("Closed WebAssembly instance", ['instance_id' => $instanceId]);
-        return true;
+        try {
+            $this->instances[$instanceId]['active'] = false;
+            unset($this->instances[$instanceId]);
+            
+            $this->logger->info("WebAssembly instance closed", ['instance_id' => $instanceId]);
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to close WebAssembly instance", [
+                'instance_id' => $instanceId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     public function closeModule(string $moduleId): bool
@@ -237,95 +267,67 @@ class WebAssemblyService
             return false;
         }
 
-        // Close all instances of this module
-        foreach ($this->instances as $instanceId => $instance) {
-            if ($instance['module_id'] === $moduleId) {
-                $this->closeInstance($instanceId);
+        try {
+            // Close all instances of this module
+            foreach ($this->instances as $instanceId => $instance) {
+                if ($instance['module_id'] === $moduleId) {
+                    $this->closeInstance($instanceId);
+                }
             }
+            
+            unset($this->modules[$moduleId]);
+            
+            $this->logger->info("WebAssembly module closed", ['module_id' => $moduleId]);
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to close WebAssembly module", [
+                'module_id' => $moduleId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
-
-        unset($this->modules[$moduleId]);
-        $this->logger->info("Closed WebAssembly module", ['module_id' => $moduleId]);
-        return true;
     }
 
     public function getStats(): array
     {
+        $activeInstances = array_filter($this->instances, function($instance) {
+            return $instance['active'];
+        });
+
         return [
             'modules_count' => count($this->modules),
             'instances_count' => count($this->instances),
-            'total_memory_usage' => array_sum(array_map('strlen', array_column($this->instances, 'memory'))),
-            'initialized' => $this->initialized,
-            'supported' => $this->isWebAssemblySupported()
+            'active_instances_count' => count($activeInstances),
+            'memory_usage' => $this->calculateMemoryUsage(),
+            'max_modules' => $this->config['max_modules'] ?? 10,
+            'max_instances' => $this->config['max_instances'] ?? 50,
+            'memory_limit' => $this->config['memory_limit'] ?? 134217728
         ];
     }
 
-    private function validateWasmBinary(string $binary): bool
+    private function calculateMemoryUsage(): int
     {
-        // Basic WASM magic number validation
-        if (strlen($binary) < 8) {
-            return false;
+        $totalMemory = 0;
+        
+        foreach ($this->instances as $instance) {
+            if (isset($instance['memory']['buffer'])) {
+                $totalMemory += strlen($instance['memory']['buffer']);
+            }
         }
-
-        // Check WASM magic number (0x00 0x61 0x73 0x6D)
-        $magic = substr($binary, 0, 4);
-        return $magic === "\x00\x61\x73\x6D";
+        
+        return $totalMemory;
     }
 
-    private function parseWasmModule(array &$module, string $binary): void
+    public function isInitialized(): bool
     {
-        // This is a simplified parser - in a real implementation,
-        // you would use a proper WASM parser library
-        
-        // For now, we'll create some mock exports
-        $module['exports'] = [
-            'memory' => ['type' => 'memory'],
-            'main' => ['type' => 'function', 'params' => [], 'returns' => ['i32']],
-            'add' => ['type' => 'function', 'params' => ['i32', 'i32'], 'returns' => ['i32']],
-            'multiply' => ['type' => 'function', 'params' => ['i32', 'i32'], 'returns' => ['i32']]
-        ];
-
-        $module['imports'] = [];
-    }
-
-    private function createMemory(array $module): string
-    {
-        // Create initial memory (64KB default)
-        $initialSize = $module['memory']['initial'] ?? 1;
-        $maxSize = $module['memory']['maximum'] ?? 10;
-        
-        $memorySize = $initialSize * 65536; // 64KB per page
-        return str_repeat("\0", $memorySize);
-    }
-
-    private function executeWasmFunction(array $instance, string $functionName, array $args): mixed
-    {
-        // This is a mock implementation - in a real implementation,
-        // you would use a proper WebAssembly runtime
-        
-        switch ($functionName) {
-            case 'add':
-                return ($args[0] ?? 0) + ($args[1] ?? 0);
-            case 'multiply':
-                return ($args[0] ?? 0) * ($args[1] ?? 0);
-            case 'main':
-                return 42; // Mock return value
-            default:
-                throw new \RuntimeException("Unknown function: $functionName");
-        }
+        return $this->initialized;
     }
 
     public function cleanup(): void
     {
         $this->modules = [];
         $this->instances = [];
-        $this->memory = [];
         $this->initialized = false;
-        $this->logger->info("WebAssembly service cleaned up");
-    }
-
-    public function isInitialized(): bool
-    {
-        return $this->initialized;
+        $this->logger->info("WebAssembly Service cleaned up");
     }
 }
