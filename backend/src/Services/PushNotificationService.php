@@ -10,7 +10,6 @@ class PushNotificationService
     private Logger $logger;
     private array $subscriptions = [];
     private array $notifications = [];
-    private array $endpoints = [];
     private bool $initialized = false;
 
     public function __construct(array $config, Logger $logger)
@@ -22,20 +21,24 @@ class PushNotificationService
     public function initialize(): bool
     {
         try {
-            $this->logger->info("Initializing Push Notification service");
+            $this->logger->info("Initializing Push Notification Service");
             
-            // Initialize push notification endpoints
-            $this->endpoints = $this->config['endpoints'] ?? [
-                'fcm' => 'https://fcm.googleapis.com/fcm/send',
-                'apns' => 'https://api.push.apple.com/3/device/',
-                'web_push' => 'https://web.push.apple.com/3/device/'
-            ];
+            // Check if Push Notifications are enabled
+            if (!($this->config['enabled'] ?? true)) {
+                $this->logger->info("Push Notification Service disabled by configuration");
+                return true;
+            }
+
+            // Validate VAPID keys if provided
+            if (empty($this->config['vapid_public_key']) || empty($this->config['vapid_private_key'])) {
+                $this->logger->warning("VAPID keys not configured, push notifications may not work properly");
+            }
 
             $this->initialized = true;
-            $this->logger->info("Push Notification service initialized successfully");
+            $this->logger->info("Push Notification Service initialized successfully");
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Push Notification service initialization failed: " . $e->getMessage());
+            $this->logger->error("Push Notification Service initialization failed: " . $e->getMessage());
             return false;
         }
     }
@@ -43,7 +46,7 @@ class PushNotificationService
     public function subscribe(string $subscriptionId, array $subscriptionData): bool
     {
         if (!$this->initialized) {
-            throw new \RuntimeException('Push Notification service not initialized');
+            throw new \RuntimeException('Push Notification Service not initialized');
         }
 
         try {
@@ -51,25 +54,26 @@ class PushNotificationService
                 'id' => $subscriptionId,
                 'endpoint' => $subscriptionData['endpoint'] ?? '',
                 'keys' => $subscriptionData['keys'] ?? [],
+                'user_id' => $subscriptionData['user_id'] ?? null,
                 'user_agent' => $subscriptionData['user_agent'] ?? '',
-                'expiration_time' => $subscriptionData['expiration_time'] ?? null,
-                'user_visible_only' => $subscriptionData['user_visible_only'] ?? true,
-                'application_server_key' => $subscriptionData['application_server_key'] ?? '',
                 'created_at' => time(),
-                'last_used' => time(),
+                'updated_at' => time(),
                 'active' => true
             ];
 
             $this->subscriptions[$subscriptionId] = $subscription;
-
-            $this->logger->info("Created push subscription", [
+            
+            $this->logger->info("Push notification subscription created", [
                 'subscription_id' => $subscriptionId,
                 'endpoint' => $subscription['endpoint']
             ]);
-
+            
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to create push subscription: " . $e->getMessage());
+            $this->logger->error("Failed to create push notification subscription", [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
@@ -80,26 +84,32 @@ class PushNotificationService
             return false;
         }
 
-        unset($this->subscriptions[$subscriptionId]);
-
-        $this->logger->info("Removed push subscription", ['subscription_id' => $subscriptionId]);
-        return true;
+        try {
+            $this->subscriptions[$subscriptionId]['active'] = false;
+            unset($this->subscriptions[$subscriptionId]);
+            
+            $this->logger->info("Push notification subscription removed", [
+                'subscription_id' => $subscriptionId
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to remove push notification subscription", [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     public function sendNotification(string $subscriptionId, array $payload, array $options = []): bool
     {
         if (!isset($this->subscriptions[$subscriptionId])) {
-            throw new \RuntimeException('Subscription not found');
-        }
-
-        $subscription = $this->subscriptions[$subscriptionId];
-        
-        if (!$subscription['active']) {
-            throw new \RuntimeException('Subscription is not active');
+            return false;
         }
 
         try {
-            $notificationId = 'notif_' . uniqid();
+            $notificationId = 'notification_' . uniqid();
             
             $notification = [
                 'id' => $notificationId,
@@ -107,41 +117,31 @@ class PushNotificationService
                 'payload' => $payload,
                 'options' => $options,
                 'status' => 'pending',
+                'retry_count' => 0,
+                'max_retries' => $this->config['retry_attempts'] ?? 3,
+                'created_at' => time(),
                 'sent_at' => null,
                 'delivered_at' => null,
-                'failed_at' => null,
-                'retry_count' => 0,
-                'max_retries' => $options['max_retries'] ?? 3,
-                'created_at' => time()
+                'failed_at' => null
             ];
 
             $this->notifications[$notificationId] = $notification;
-
-            // Send the notification
-            $success = $this->deliverNotification($subscription, $notification);
-
-            if ($success) {
-                $notification['status'] = 'sent';
-                $notification['sent_at'] = time();
-                $this->logger->info("Push notification sent", [
-                    'notification_id' => $notificationId,
-                    'subscription_id' => $subscriptionId
-                ]);
-            } else {
-                $notification['status'] = 'failed';
-                $notification['failed_at'] = time();
-                $this->logger->error("Failed to send push notification", [
-                    'notification_id' => $notificationId,
-                    'subscription_id' => $subscriptionId
-                ]);
-            }
-
-            $this->notifications[$notificationId] = $notification;
-            $this->subscriptions[$subscriptionId]['last_used'] = time();
-
-            return $success;
+            
+            // In a real implementation, this would send the actual push notification
+            // For now, we'll simulate the sending process
+            $this->simulateNotificationSending($notificationId);
+            
+            $this->logger->info("Push notification sent", [
+                'notification_id' => $notificationId,
+                'subscription_id' => $subscriptionId
+            ]);
+            
+            return true;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to send push notification: " . $e->getMessage());
+            $this->logger->error("Failed to send push notification", [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
@@ -151,18 +151,9 @@ class PushNotificationService
         $results = [];
         
         foreach ($subscriptionIds as $subscriptionId) {
-            try {
-                $success = $this->sendNotification($subscriptionId, $payload, $options);
-                $results[$subscriptionId] = $success;
-            } catch (\Exception $e) {
-                $results[$subscriptionId] = false;
-                $this->logger->error("Failed to send bulk notification", [
-                    'subscription_id' => $subscriptionId,
-                    'error' => $e->getMessage()
-                ]);
-            }
+            $results[$subscriptionId] = $this->sendNotification($subscriptionId, $payload, $options);
         }
-
+        
         return $results;
     }
 
@@ -179,7 +170,7 @@ class PushNotificationService
     public function getSubscriptionsByUser(string $userId): array
     {
         return array_filter($this->subscriptions, function($subscription) use ($userId) {
-            return ($subscription['user_id'] ?? '') === $userId;
+            return $subscription['user_id'] === $userId && $subscription['active'];
         });
     }
 
@@ -196,10 +187,25 @@ class PushNotificationService
             return false;
         }
 
-        $this->subscriptions[$subscriptionId] = array_merge($this->subscriptions[$subscriptionId], $updates);
-        $this->subscriptions[$subscriptionId]['last_used'] = time();
-
-        return true;
+        try {
+            $this->subscriptions[$subscriptionId] = array_merge(
+                $this->subscriptions[$subscriptionId],
+                $updates,
+                ['updated_at' => time()]
+            );
+            
+            $this->logger->info("Push notification subscription updated", [
+                'subscription_id' => $subscriptionId
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to update push notification subscription", [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     public function retryFailedNotification(string $notificationId): bool
@@ -214,148 +220,95 @@ class PushNotificationService
             return false;
         }
 
-        if ($notification['retry_count'] >= $notification['max_retries']) {
+        try {
+            $notification['status'] = 'pending';
+            $notification['retry_count']++;
+            $notification['updated_at'] = time();
+            
+            $this->simulateNotificationSending($notificationId);
+            
+            $this->logger->info("Failed push notification retried", [
+                'notification_id' => $notificationId,
+                'retry_count' => $notification['retry_count']
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to retry push notification", [
+                'notification_id' => $notificationId,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
-
-        $subscription = $this->subscriptions[$notification['subscription_id']] ?? null;
-        if (!$subscription) {
-            return false;
-        }
-
-        $notification['retry_count']++;
-        $notification['status'] = 'pending';
-
-        $success = $this->deliverNotification($subscription, $notification);
-        
-        if ($success) {
-            $notification['status'] = 'sent';
-            $notification['sent_at'] = time();
-        } else {
-            $notification['status'] = 'failed';
-            $notification['failed_at'] = time();
-        }
-
-        return $success;
     }
 
     public function getStats(): array
     {
-        $totalNotifications = count($this->notifications);
-        $sentNotifications = count(array_filter($this->notifications, fn($n) => $n['status'] === 'sent'));
-        $failedNotifications = count(array_filter($this->notifications, fn($n) => $n['status'] === 'failed'));
-        $pendingNotifications = count(array_filter($this->notifications, fn($n) => $n['status'] === 'pending'));
+        $activeSubscriptions = array_filter($this->subscriptions, function($subscription) {
+            return $subscription['active'];
+        });
+
+        $pendingNotifications = array_filter($this->notifications, function($notification) {
+            return $notification['status'] === 'pending';
+        });
+
+        $deliveredNotifications = array_filter($this->notifications, function($notification) {
+            return $notification['status'] === 'delivered';
+        });
+
+        $failedNotifications = array_filter($this->notifications, function($notification) {
+            return $notification['status'] === 'failed';
+        });
 
         return [
             'subscriptions_count' => count($this->subscriptions),
-            'active_subscriptions' => count(array_filter($this->subscriptions, fn($s) => $s['active'])),
-            'total_notifications' => $totalNotifications,
-            'sent_notifications' => $sentNotifications,
-            'failed_notifications' => $failedNotifications,
-            'pending_notifications' => $pendingNotifications,
-            'success_rate' => $totalNotifications > 0 ? ($sentNotifications / $totalNotifications) * 100 : 0,
-            'initialized' => $this->initialized
+            'active_subscriptions_count' => count($activeSubscriptions),
+            'notifications_count' => count($this->notifications),
+            'pending_notifications_count' => count($pendingNotifications),
+            'delivered_notifications_count' => count($deliveredNotifications),
+            'failed_notifications_count' => count($failedNotifications),
+            'max_subscriptions' => $this->config['max_subscriptions'] ?? 1000,
+            'max_notifications' => $this->config['max_notifications'] ?? 10000,
+            'retry_attempts' => $this->config['retry_attempts'] ?? 3,
+            'retry_delay' => $this->config['retry_delay'] ?? 60
         ];
     }
 
-    private function deliverNotification(array $subscription, array $notification): bool
+    private function simulateNotificationSending(string $notificationId): void
     {
-        try {
-            $endpoint = $subscription['endpoint'];
-            $payload = $notification['payload'];
-            $options = $notification['options'];
-
-            // Determine the push service type based on endpoint
-            $serviceType = $this->detectPushService($endpoint);
-            
-            switch ($serviceType) {
-                case 'fcm':
-                    return $this->sendFCMNotification($subscription, $payload, $options);
-                case 'apns':
-                    return $this->sendAPNSNotification($subscription, $payload, $options);
-                case 'web_push':
-                    return $this->sendWebPushNotification($subscription, $payload, $options);
-                default:
-                    return $this->sendGenericNotification($subscription, $payload, $options);
-            }
-        } catch (\Exception $e) {
-            $this->logger->error("Failed to deliver notification: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    private function detectPushService(string $endpoint): string
-    {
-        if (strpos($endpoint, 'fcm.googleapis.com') !== false) {
-            return 'fcm';
-        } elseif (strpos($endpoint, 'push.apple.com') !== false) {
-            return 'apns';
-        } elseif (strpos($endpoint, 'web.push.apple.com') !== false) {
-            return 'web_push';
+        $notification = &$this->notifications[$notificationId];
+        
+        // Simulate sending delay
+        usleep(100000); // 100ms
+        
+        // Simulate success/failure based on retry count
+        if ($notification['retry_count'] > 2) {
+            $notification['status'] = 'delivered';
+            $notification['delivered_at'] = time();
         } else {
-            return 'generic';
+            // Simulate occasional failures
+            if (rand(1, 10) <= 2) { // 20% failure rate
+                $notification['status'] = 'failed';
+                $notification['failed_at'] = time();
+            } else {
+                $notification['status'] = 'delivered';
+                $notification['delivered_at'] = time();
+            }
         }
+        
+        $notification['sent_at'] = time();
     }
 
-    private function sendFCMNotification(array $subscription, array $payload, array $options): bool
+    public function isInitialized(): bool
     {
-        // Mock FCM implementation
-        $this->logger->info("Sending FCM notification", [
-            'endpoint' => $subscription['endpoint'],
-            'payload' => $payload
-        ]);
-        
-        // In a real implementation, this would make an HTTP request to FCM
-        return true;
-    }
-
-    private function sendAPNSNotification(array $subscription, array $payload, array $options): bool
-    {
-        // Mock APNS implementation
-        $this->logger->info("Sending APNS notification", [
-            'endpoint' => $subscription['endpoint'],
-            'payload' => $payload
-        ]);
-        
-        // In a real implementation, this would make an HTTP request to APNS
-        return true;
-    }
-
-    private function sendWebPushNotification(array $subscription, array $payload, array $options): bool
-    {
-        // Mock Web Push implementation
-        $this->logger->info("Sending Web Push notification", [
-            'endpoint' => $subscription['endpoint'],
-            'payload' => $payload
-        ]);
-        
-        // In a real implementation, this would make an HTTP request using Web Push protocol
-        return true;
-    }
-
-    private function sendGenericNotification(array $subscription, array $payload, array $options): bool
-    {
-        // Mock generic implementation
-        $this->logger->info("Sending generic push notification", [
-            'endpoint' => $subscription['endpoint'],
-            'payload' => $payload
-        ]);
-        
-        // In a real implementation, this would make an HTTP request to the endpoint
-        return true;
+        return $this->initialized;
     }
 
     public function cleanup(): void
     {
         $this->subscriptions = [];
         $this->notifications = [];
-        $this->endpoints = [];
         $this->initialized = false;
-        $this->logger->info("Push Notification service cleaned up");
-    }
-
-    public function isInitialized(): bool
-    {
-        return $this->initialized;
+        $this->logger->info("Push Notification Service cleaned up");
     }
 }
