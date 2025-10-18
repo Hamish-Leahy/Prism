@@ -1,96 +1,64 @@
-# 🌈 Prism Browser
+# Prism Browser
 
-<div align="center">
+A modern, privacy-focused web browser built with a custom engine and multi-engine architecture.
 
-![Prism Browser Logo](https://img.shields.io/badge/Prism-Browser-00D4AA?style=for-the-badge&logo=prism&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)
-
-*A modern, open-source browser successor to Arc, built with multi-engine support and privacy-first principles.*
-
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing) • [License](#-license)
-
-</div>
-
----
-
-## 🚀 Overview
-
-Prism Browser is a next-generation web browser that combines the best of modern web technologies with a focus on privacy, performance, and extensibility. Built with a modular architecture, Prism supports multiple rendering engines and provides a clean, Arc-inspired user interface.
-
-### Why Prism?
-
-- **🔧 Multi-Engine Support**: Choose between Chromium, Firefox, or our custom Prism engine
-- **🔒 Privacy-First**: Built with user privacy as a core principle
-- **⚡ High Performance**: Optimized for speed and resource efficiency
-- **🎨 Modern UI**: Clean, intuitive interface inspired by Arc browser
-- **🔌 Extensible**: Comprehensive plugin and extension system
-- **🌐 Cross-Platform**: Native desktop apps for macOS, Windows, and Linux
-
-## ✨ Features
+## 🚀 Features
 
 ### Core Browser Features
-- **Multi-Engine Architecture**: Switch between Chromium, Firefox, or custom Prism engine
-- **Advanced Tab Management**: Tab grouping, pinning, and organization
-- **Smart Address Bar**: URL autocomplete, search suggestions, and quick actions
-- **Bookmark Management**: Organize bookmarks with folders, tags, and search
-- **Download Manager**: Advanced download handling with pause/resume support
-- **History Tracking**: Comprehensive browsing history with search and filtering
+- **Multi-Engine Architecture**: Switch between Prism Engine, Chromium, and Firefox
+- **Tab Management**: Create, close, group, pin, and duplicate tabs
+- **Bookmark Management**: Save, organize, and manage bookmarks
+- **History Tracking**: Browse history with search and management
+- **Download Manager**: Download files with pause/resume functionality
+- **Settings Management**: Comprehensive browser settings
 
 ### Privacy & Security
-- **Enhanced Tracking Protection**: Block trackers, fingerprinting, and cryptomining
-- **Ad Blocking**: Built-in ad blocker with customizable filter lists
-- **HTTPS Enforcement**: Automatic HTTPS redirects and security warnings
-- **Cookie Management**: Granular cookie control and privacy settings
-- **Private Browsing**: Enhanced private mode with additional protections
-
-### Developer Tools
-- **Built-in DevTools**: DOM inspector, console, network monitor, and more
-- **Extension System**: Support for Chrome and Firefox extensions
-- **Plugin Architecture**: Custom plugins for advanced functionality
-- **API Integration**: REST and GraphQL APIs for third-party integrations
+- **Ad Blocking**: Built-in ad blocker with customizable rules
+- **Tracker Protection**: Block tracking scripts and cookies
+- **Privacy Mode**: Enhanced privacy settings
+- **Secure Authentication**: JWT-based authentication system
+- **Data Encryption**: End-to-end encryption for sensitive data
 
 ### Advanced Features
 - **WebRTC Support**: Real-time communication capabilities
-- **WebAssembly Compatibility**: Full WASM support for high-performance web apps
-- **Service Worker Support**: Offline functionality and background processing
-- **Push Notifications**: Native notification support
-- **Cloud Sync**: Cross-device synchronization (coming soon)
+- **WebAssembly**: Run WASM modules natively
+- **Service Workers**: Background processing and caching
+- **Push Notifications**: Real-time notifications
+- **Offline Support**: Offline browsing with caching
+- **Plugin System**: Extensible plugin architecture
+
+### Developer Tools
+- **Custom Engine**: Built-in HTML5, CSS, and JavaScript engine
+- **Performance Monitoring**: Real-time performance metrics
+- **Debug Tools**: Comprehensive debugging capabilities
+- **API Documentation**: Complete API documentation
 
 ## 🏗️ Architecture
 
-```
-Prism Browser
-├── 🖥️  Frontend (Electron + React + TypeScript)
-│   ├── Components (UI Components)
-│   ├── Hooks (React Hooks)
-│   ├── Services (API Integration)
-│   └── Types (TypeScript Definitions)
-├── ⚙️  Backend (PHP + Slim Framework)
-│   ├── Controllers (API Endpoints)
-│   ├── Services (Business Logic)
-│   ├── Models (Data Models)
-│   └── Middleware (Request Processing)
-├── 🔧 Engines (Rendering Engines)
-│   ├── Chromium Engine (Chrome/Blink)
-│   ├── Firefox Engine (Gecko)
-│   └── Prism Engine (Custom Implementation)
-└── 📚 Documentation
-    ├── API Documentation
-    ├── Development Guides
-    └── User Manuals
-```
+### Backend (PHP)
+- **Slim Framework**: Lightweight PHP framework
+- **Multi-Engine Support**: Prism, Chromium, Firefox engines
+- **RESTful API**: Complete REST API for all features
+- **Database Support**: SQLite and PostgreSQL (Supabase)
+- **Authentication**: JWT-based authentication
+- **Plugin System**: Extensible plugin architecture
 
-## 🚀 Quick Start
+### Frontend (React + Electron)
+- **React**: Modern UI framework
+- **TypeScript**: Type-safe development
+- **Electron**: Desktop application wrapper
+- **Tailwind CSS**: Utility-first CSS framework
+- **Vite**: Fast build tool and dev server
+
+## 📦 Installation
 
 ### Prerequisites
+- PHP 8.1 or higher
+- Composer
+- Node.js 18 or higher
+- npm or yarn
 
-- **Node.js** 18+ and npm
-- **PHP** 8.1+ and Composer
-- **Git** for version control
-
-### Installation
+### Quick Start
 
 1. **Clone the repository**
    ```bash
@@ -98,230 +66,342 @@ Prism Browser
    cd prism-browser
    ```
 
-2. **Install backend dependencies**
+2. **Run the setup script**
    ```bash
-   cd backend
-   composer install
-   cp env.example .env
+   chmod +x scripts/setup-dev.sh
+   ./scripts/setup-dev.sh
    ```
 
-3. **Install frontend dependencies**
+3. **Start development servers**
    ```bash
-   cd ../frontend
-   npm install
+   ./start-dev.sh
    ```
 
-4. **Configure environment**
-   ```bash
-   # Edit backend/.env with your settings
-   DATABASE_URL="sqlite:./data/prism.db"
-   CACHE_DRIVER="file"
-   LOG_LEVEL="info"
-   ```
+4. **Access the application**
+   - Backend API: http://localhost:8000
+   - Frontend: http://localhost:5173
 
-5. **Start the development servers**
-   ```bash
-   # Terminal 1: Start backend
-   cd backend
-   php -S localhost:8000
+### Manual Setup
 
-   # Terminal 2: Start frontend
-   cd frontend
-   npm run electron:dev
-   ```
-
-### Using the Setup Scripts
-
-We provide convenient setup scripts:
-
+#### Backend Setup
 ```bash
-# Full setup (backend + frontend)
-./scripts/setup.sh
-
-# Development environment
-./scripts/start-dev.sh
-
-# Build for production
-./scripts/build.sh
+cd backend
+composer install
+cp env.example .env
+# Edit .env with your configuration
+php -r "require_once 'vendor/autoload.php'; require_once 'src/Services/DatabaseService.php'; use Prism\Backend\Services\DatabaseService; use Monolog\Logger; \$logger = new Logger('setup'); \$db = new DatabaseService(['driver' => 'sqlite', 'database' => 'prism_browser.sqlite'], \$logger); \$db->initialize();"
+php -S localhost:8000 -t public
 ```
 
-## 📖 Documentation
+#### Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-### User Documentation
-- [Getting Started Guide](docs/guides/getting-started.md)
-- [User Manual](docs/guides/user-manual.md)
-- [Privacy Settings](docs/guides/privacy-settings.md)
-- [Keyboard Shortcuts](docs/guides/keyboard-shortcuts.md)
+## 🔧 Configuration
 
-### Developer Documentation
-- [Development Setup](docs/guides/development-setup.md)
-- [Architecture Overview](docs/guides/architecture.md)
-- [API Reference](docs/api/)
-- [Plugin Development](docs/guides/plugin-development.md)
+### Backend Configuration
+Edit `backend/.env` to configure:
+- Database settings
+- JWT secrets
+- Engine configurations
+- Plugin settings
+- Feature flags
 
-### Examples
-- [Advanced HTTP Client](docs/examples/advanced-http-client.md)
-- [CSS Parsing & Rendering](docs/examples/css-parsing-rendering.md)
-- [HTML5 Parsing](docs/examples/html5-parsing.md)
+### Frontend Configuration
+Edit `frontend/package.json` and `frontend/vite.config.js` to configure:
+- Build settings
+- Electron configuration
+- Development server settings
+
+## 🚀 Usage
+
+### Starting the Browser
+```bash
+# Development mode
+./start-dev.sh
+
+# Production mode
+cd backend && php -S localhost:8000 -t public
+cd frontend && npm run build && npm run electron:build
+```
+
+### API Usage
+```bash
+# Get available engines
+curl http://localhost:8000/api/engines
+
+# Create a new tab
+curl -X POST http://localhost:8000/api/tabs \
+  -H "Content-Type: application/json" \
+  -d '{"title": "New Tab", "url": "https://example.com"}'
+
+# Get bookmarks
+curl http://localhost:8000/api/bookmarks
+```
+
+## 🧪 Testing
+
+### Run All Tests
+```bash
+./run-tests.sh
+```
+
+### Backend Tests
+```bash
+cd backend
+composer test
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm test
+```
+
+## 📚 API Documentation
+
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `POST /api/auth/refresh` - Refresh access token
+- `POST /api/auth/logout` - Logout user
+
+### Engines
+- `GET /api/engines` - List available engines
+- `POST /api/engines/switch` - Switch active engine
+- `GET /api/engines/status` - Get engine status
+- `GET /api/engines/{engine}/stats` - Get engine statistics
+
+### Tabs
+- `GET /api/tabs` - List tabs
+- `POST /api/tabs` - Create new tab
+- `GET /api/tabs/{id}` - Get tab details
+- `PUT /api/tabs/{id}` - Update tab
+- `DELETE /api/tabs/{id}` - Close tab
+- `POST /api/tabs/{id}/navigate` - Navigate tab
+
+### Bookmarks
+- `GET /api/bookmarks` - List bookmarks
+- `POST /api/bookmarks` - Create bookmark
+- `GET /api/bookmarks/{id}` - Get bookmark
+- `PUT /api/bookmarks/{id}` - Update bookmark
+- `DELETE /api/bookmarks/{id}` - Delete bookmark
+
+### History
+- `GET /api/history` - List history
+- `POST /api/history` - Add history entry
+- `DELETE /api/history/{id}` - Delete history entry
+- `DELETE /api/history` - Clear all history
+
+### Downloads
+- `GET /api/downloads` - List downloads
+- `POST /api/downloads` - Start download
+- `GET /api/downloads/{id}` - Get download status
+- `POST /api/downloads/{id}/pause` - Pause download
+- `POST /api/downloads/{id}/resume` - Resume download
+- `POST /api/downloads/{id}/cancel` - Cancel download
+- `DELETE /api/downloads/{id}` - Delete download
+
+### Settings
+- `GET /api/settings` - List settings
+- `GET /api/settings/{key}` - Get setting
+- `PUT /api/settings/{key}` - Update setting
+- `PUT /api/settings` - Update multiple settings
+- `DELETE /api/settings/{key}` - Delete setting
+- `POST /api/settings/reset` - Reset to defaults
+
+## 🔌 Plugin Development
+
+### Creating a Plugin
+```php
+<?php
+
+namespace Prism\Backend\Services\Plugins;
+
+use Prism\Backend\Services\Plugins\BasePlugin;
+
+class MyPlugin extends BasePlugin
+{
+    public function getName(): string
+    {
+        return 'My Plugin';
+    }
+
+    public function getVersion(): string
+    {
+        return '1.0.0';
+    }
+
+    public function initialize(): bool
+    {
+        // Plugin initialization logic
+        return true;
+    }
+
+    public function handleEvent(string $event, array $data): void
+    {
+        // Handle events
+    }
+}
+```
+
+### Plugin Events
+- `page.load` - Page loaded
+- `request.before` - Before HTTP request
+- `request.after` - After HTTP response
+- `tab.created` - Tab created
+- `tab.closed` - Tab closed
+- `bookmark.added` - Bookmark added
 
 ## 🛠️ Development
 
 ### Project Structure
-
 ```
 prism-browser/
-├── backend/                 # PHP backend services
+├── backend/                 # PHP backend
 │   ├── src/
 │   │   ├── Controllers/     # API controllers
 │   │   ├── Services/        # Business logic
 │   │   ├── Models/          # Data models
-│   │   └── Middleware/      # Request middleware
+│   │   └── Plugins/         # Plugin system
 │   ├── config/              # Configuration files
-│   ├── tests/               # Backend tests
-│   └── composer.json        # PHP dependencies
-├── frontend/                # Electron desktop app
+│   ├── public/              # Web root
+│   └── vendor/              # Composer dependencies
+├── frontend/                # React frontend
 │   ├── src/
 │   │   ├── components/      # React components
-│   │   ├── hooks/           # Custom React hooks
+│   │   ├── hooks/           # Custom hooks
 │   │   ├── services/        # API services
-│   │   └── types/           # TypeScript types
-│   ├── electron/            # Electron main process
-│   └── package.json         # Node.js dependencies
-├── engines/                 # Rendering engines
-│   ├── chromium/            # Chromium engine
-│   ├── firefox/             # Firefox engine
-│   └── prism/               # Custom Prism engine
+│   │   └── utils/           # Utility functions
+│   ├── public/              # Static assets
+│   └── dist/                # Built files
+├── scripts/                 # Development scripts
 ├── docs/                    # Documentation
-├── scripts/                 # Build and setup scripts
-└── shared/                  # Shared utilities
+└── tests/                   # Test files
 ```
 
-### Available Scripts
+### Adding New Features
 
-#### Backend (PHP)
+1. **Backend API**
+   - Create controller in `backend/src/Controllers/`
+   - Add routes in `backend/src/Application.php`
+   - Create model in `backend/src/Models/`
+   - Add service in `backend/src/Services/`
+
+2. **Frontend UI**
+   - Create component in `frontend/src/components/`
+   - Add hook in `frontend/src/hooks/`
+   - Update API service in `frontend/src/services/`
+   - Add to main app in `frontend/src/App.js`
+
+3. **Database Changes**
+   - Update schema in `schema.sql`
+   - Create migration script
+   - Update models and services
+
+### Code Style
+- **PHP**: PSR-12 coding standard
+- **JavaScript**: ESLint with React rules
+- **CSS**: Tailwind CSS utility classes
+- **Documentation**: PHPDoc for PHP, JSDoc for JavaScript
+
+## 🚀 Deployment
+
+### Production Build
 ```bash
-composer test              # Run PHPUnit tests
-composer lint              # Run PHP CodeSniffer
-composer analyze           # Run PHPStan analysis
-composer test:engines      # Test rendering engines
+# Backend
+cd backend
+composer install --no-dev --optimize-autoloader
+
+# Frontend
+cd frontend
+npm run build
+npm run electron:build
 ```
 
-#### Frontend (Node.js)
+### Docker Deployment
 ```bash
-npm run dev                # Start development server
-npm run build              # Build for production
-npm run electron:dev       # Start Electron in dev mode
-npm run electron:build     # Build Electron app
-npm run test               # Run Vitest tests
-npm run lint               # Run ESLint
-npm run type-check         # TypeScript type checking
-```
+# Build Docker image
+docker build -t prism-browser .
 
-### Testing
-
-We maintain comprehensive test coverage:
-
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: API and service integration
-- **End-to-End Tests**: Complete user workflows
-- **Performance Tests**: Load and stress testing
-- **Security Tests**: Vulnerability scanning
-
-Run all tests:
-```bash
-# Backend tests
-cd backend && composer test
-
-# Frontend tests
-cd frontend && npm test
-
-# E2E tests
-npm run test:e2e
+# Run container
+docker run -p 8000:8000 prism-browser
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Quick Contribution Steps
-
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
 ### Development Guidelines
-
-- Follow our [Code of Conduct](CODE_OF_CONDUCT.md)
-- Write tests for new features
-- Update documentation as needed
 - Follow the existing code style
+- Add tests for new features
+- Update documentation
 - Ensure all tests pass
-
-## 📊 Roadmap
-
-### Phase 1: Core MVP (Weeks 1-4)
-- [x] Multi-engine architecture
-- [x] Basic tab management
-- [x] Address bar functionality
-- [x] Settings panel
-- [ ] End-to-end testing
-- [ ] Performance optimization
-
-### Phase 2: Feature Development (Weeks 5-8)
-- [ ] Bookmark management
-- [ ] History tracking
-- [ ] Download manager
-- [ ] Privacy features
-- [ ] Advanced UI features
-
-### Phase 3: Advanced Features (Weeks 9-12)
-- [ ] WebRTC support
-- [ ] WebAssembly compatibility
-- [ ] Service Worker support
-- [ ] Developer tools
-- [ ] Extension system
-
-### Phase 4: Launch Preparation (Weeks 13-16)
-- [ ] Comprehensive testing
-- [ ] Performance benchmarking
-- [ ] Security auditing
-- [ ] Documentation completion
-- [ ] Release preparation
-
-## 🐛 Bug Reports & Feature Requests
-
-- **Bug Reports**: Use the [GitHub Issues](https://github.com/yourusername/prism-browser/issues) with the `bug` label
-- **Feature Requests**: Use the [GitHub Issues](https://github.com/yourusername/prism-browser/issues) with the `enhancement` label
-- **Security Issues**: Please see our [Security Policy](SECURITY.md)
+- Follow semantic versioning
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **Arc Browser** for UI/UX inspiration
-- **Chromium Project** for the rendering engine
-- **Mozilla Firefox** for privacy-focused features
-- **Electron** for the desktop app framework
-- **Slim Framework** for the PHP backend
-- **React** for the frontend framework
+- [Slim Framework](https://www.slimframework.com/) - PHP micro-framework
+- [React](https://reactjs.org/) - JavaScript library
+- [Electron](https://www.electronjs.org/) - Desktop app framework
+- [Tailwind CSS](https://tailwindcss.com/) - CSS framework
+- [Vite](https://vitejs.dev/) - Build tool
 
 ## 📞 Support
 
 - **Documentation**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/yourusername/prism-browser/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/prism-browser/discussions)
-- **Discord**: [Join our Discord](https://discord.gg/prism-browser)
 - **Email**: support@prism-browser.com
+
+## 🗺️ Roadmap
+
+### Phase 1: Foundation (Q4 2024) ✅
+- [x] Core browser features
+- [x] Multi-engine architecture
+- [x] Basic UI/UX
+- [x] Authentication system
+- [x] Database integration
+
+### Phase 2: Features (Q1 2025)
+- [ ] Enhanced privacy features
+- [ ] Advanced UI/UX
+- [ ] Performance optimizations
+- [ ] Mobile responsive design
+- [ ] Accessibility improvements
+
+### Phase 3: Advanced (Q2 2025)
+- [ ] WebRTC implementation
+- [ ] WebAssembly support
+- [ ] Service Worker integration
+- [ ] Push Notifications
+- [ ] Offline functionality
+
+### Phase 4: Ecosystem (Q3 2025)
+- [ ] Extension system
+- [ ] Plugin marketplace
+- [ ] Cloud sync
+- [ ] Cross-device support
+- [ ] Advanced developer tools
+
+### Phase 5: Future (Q4 2025+)
+- [ ] AI integration
+- [ ] Mobile companion app
+- [ ] Enterprise features
+- [ ] Advanced analytics
+- [ ] Machine learning features
 
 ---
 
-<div align="center">
-
-**Made with ❤️ by the Prism Team**
-
-[Website](https://prism-browser.com) • [Twitter](https://twitter.com/prism_browser) • [GitHub](https://github.com/yourusername/prism-browser)
-
-</div>
+**Made with ❤️ by the Prism Browser Team**
