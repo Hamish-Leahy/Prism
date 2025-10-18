@@ -1,172 +1,135 @@
 <?php
 
 return [
-    'default' => [
-        'timeout' => 30,
-        'connect_timeout' => 10,
-        'read_timeout' => 30,
-        'verify_ssl' => true,
-        'max_redirects' => 10,
-        'strict_redirects' => false,
-        'follow_referer' => true,
-        'allowed_protocols' => ['http', 'https'],
-        'enable_cookies' => true,
-        'cache_ttl' => 300, // 5 minutes
-        'max_retries' => 3,
-        'user_agent' => 'Prism/1.0 (Custom Engine)',
+    'enabled' => true,
+    'debug' => false,
+    'timeout' => 30,
+    'connect_timeout' => 10,
+    'read_timeout' => 30,
+    'verify_ssl' => true,
+    'max_redirects' => 10,
+    'strict_redirects' => false,
+    'follow_referer' => true,
+    'allowed_protocols' => ['http', 'https'],
+    'enable_cookies' => true,
+    'cache_ttl' => 300,
+    'max_retries' => 3,
+    'user_agent' => 'Prism/1.0 (Custom Engine)',
+    'default_headers' => [
+        'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language' => 'en-US,en;q=0.9',
+        'Accept-Encoding' => 'gzip, deflate, br',
+        'Connection' => 'keep-alive',
+        'Upgrade-Insecure-Requests' => '1',
+        'Sec-Fetch-Dest' => 'document',
+        'Sec-Fetch-Mode' => 'navigate',
+        'Sec-Fetch-Site' => 'none',
+        'Cache-Control' => 'max-age=0',
     ],
-    
-    'prism_engine' => [
-        'timeout' => 30,
-        'connect_timeout' => 10,
-        'read_timeout' => 30,
-        'verify_ssl' => true,
-        'max_redirects' => 10,
-        'strict_redirects' => false,
-        'follow_referer' => true,
-        'allowed_protocols' => ['http', 'https'],
-        'enable_cookies' => true,
-        'cache_ttl' => 600, // 10 minutes for Prism engine
-        'max_retries' => 3,
-        'user_agent' => 'Prism/1.0 (Custom Engine)',
+    'curl_options' => [
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_ENCODING => 'gzip,deflate,br',
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_2_0,
+        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_DNS_CACHE_TIMEOUT => 300,
+        CURLOPT_TCP_KEEPALIVE => 1,
+        CURLOPT_TCP_KEEPIDLE => 60,
+        CURLOPT_TCP_KEEPINTVL => 10,
     ],
-    
-    'chromium_engine' => [
-        'timeout' => 60,
-        'connect_timeout' => 15,
-        'read_timeout' => 60,
-        'verify_ssl' => true,
-        'max_redirects' => 20,
-        'strict_redirects' => false,
-        'follow_referer' => true,
-        'allowed_protocols' => ['http', 'https'],
-        'enable_cookies' => true,
-        'cache_ttl' => 1800, // 30 minutes for Chromium
-        'max_retries' => 2,
-        'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    ],
-    
-    'firefox_engine' => [
-        'timeout' => 60,
-        'connect_timeout' => 15,
-        'read_timeout' => 60,
-        'verify_ssl' => true,
-        'max_redirects' => 20,
-        'strict_redirects' => false,
-        'follow_referer' => true,
-        'allowed_protocols' => ['http', 'https'],
-        'enable_cookies' => true,
-        'cache_ttl' => 1800, // 30 minutes for Firefox
-        'max_retries' => 2,
-        'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
-    ],
-    
     'user_agents' => [
-        'chrome' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'firefox' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
-        'safari' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
-        'edge' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-        'opera' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0',
-        'prism' => 'Prism/1.0 (Custom Engine)',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0',
     ],
-    
-    'retry_strategies' => [
-        'exponential_backoff' => [
-            'base_delay' => 1000, // 1 second
-            'max_delay' => 30000, // 30 seconds
-            'multiplier' => 2,
-            'jitter' => true,
-        ],
-        'linear_backoff' => [
-            'base_delay' => 2000, // 2 seconds
-            'max_delay' => 10000, // 10 seconds
-            'increment' => 1000, // 1 second
-            'jitter' => false,
-        ],
-        'fixed_delay' => [
-            'delay' => 5000, // 5 seconds
-            'jitter' => true,
-        ],
+    'retry' => [
+        'enabled' => true,
+        'max_attempts' => 3,
+        'delay' => 1000, // milliseconds
+        'backoff_multiplier' => 2,
+        'max_delay' => 10000, // milliseconds
+        'retry_on' => [
+            'connection_exceptions' => true,
+            'server_errors' => true, // 5xx
+            'timeout_exceptions' => true,
+            'too_many_redirects' => true,
+        ]
     ],
-    
-    'cache_strategies' => [
-        'memory_only' => [
-            'type' => 'memory',
-            'max_size' => 100,
-            'ttl' => 300,
-        ],
-        'file_based' => [
-            'type' => 'file',
-            'path' => 'cache/http/',
-            'max_size' => 1000,
-            'ttl' => 1800,
-        ],
-        'redis' => [
-            'type' => 'redis',
-            'host' => 'localhost',
-            'port' => 6379,
-            'database' => 0,
-            'ttl' => 3600,
-        ],
+    'cache' => [
+        'enabled' => true,
+        'ttl' => 300, // seconds
+        'max_size' => 100, // number of responses
+        'storage' => 'memory', // memory, file, redis
+        'path' => __DIR__ . '/../cache/http',
+        'compress' => true,
+        'serialize' => true,
     ],
-    
-    'proxy_settings' => [
+    'proxy' => [
         'enabled' => false,
-        'type' => 'http', // http, https, socks4, socks5
-        'host' => 'localhost',
-        'port' => 8080,
-        'username' => null,
-        'password' => null,
-        'bypass' => ['localhost', '127.0.0.1'],
+        'url' => null,
+        'auth' => null, // username:password
+        'type' => 'http', // http, socks4, socks5
     ],
-    
+    'logging' => [
+        'enabled' => true,
+        'level' => 'info',
+        'log_requests' => true,
+        'log_responses' => true,
+        'log_errors' => true,
+        'log_retries' => true,
+        'include_headers' => false,
+        'include_body' => false,
+        'max_body_length' => 1024,
+    ],
+    'performance' => [
+        'connection_pooling' => true,
+        'max_connections' => 10,
+        'max_connections_per_host' => 5,
+        'keep_alive' => true,
+        'keep_alive_timeout' => 30,
+        'pipeline' => false,
+        'compression' => true,
+        'gzip' => true,
+        'deflate' => true,
+        'brotli' => true,
+    ],
     'security' => [
         'verify_ssl' => true,
         'allow_self_signed' => false,
-        'check_hostname' => true,
-        'ciphers' => 'HIGH:!SSLv2:!SSLv3',
-        'protocols' => ['TLSv1.2', 'TLSv1.3'],
+        'ca_bundle' => null,
+        'client_cert' => null,
+        'client_key' => null,
+        'passphrase' => null,
+        'ciphers' => null,
+        'min_tls_version' => '1.2',
+        'max_tls_version' => '1.3',
     ],
-    
-    'performance' => [
-        'connection_pooling' => true,
-        'keep_alive' => true,
-        'tcp_keepalive' => true,
-        'tcp_keepidle' => 60,
-        'tcp_keepintvl' => 10,
-        'tcp_keepcnt' => 3,
-        'dns_cache_ttl' => 300,
-        'max_connections' => 10,
+    'limits' => [
+        'max_redirects' => 10,
+        'max_retries' => 3,
+        'max_response_size' => 10485760, // 10MB
+        'max_request_size' => 1048576, // 1MB
+        'max_header_size' => 8192, // 8KB
+        'max_cookies' => 50,
+        'max_cookie_size' => 4096, // 4KB
     ],
-    
-    'logging' => [
-        'enabled' => true,
-        'level' => 'info', // debug, info, warning, error
-        'log_requests' => true,
-        'log_responses' => true,
-        'log_headers' => false,
-        'log_body' => false,
-        'max_body_size' => 1024, // bytes
-    ],
-    
-    'rate_limiting' => [
-        'enabled' => false,
-        'requests_per_minute' => 60,
-        'burst_limit' => 10,
-        'per_domain' => true,
-    ],
-    
-    'compression' => [
-        'enabled' => true,
-        'algorithms' => ['gzip', 'deflate', 'br'],
-        'min_size' => 1024, // bytes
-    ],
-    
-    'timeouts' => [
-        'default' => 30,
-        'connect' => 10,
-        'read' => 30,
-        'write' => 30,
-        'total' => 60,
-    ],
+    'features' => [
+        'cookies' => true,
+        'redirects' => true,
+        'compression' => true,
+        'chunked_transfer' => true,
+        'http2' => true,
+        'websockets' => false,
+        'multipart' => true,
+        'json' => true,
+        'xml' => true,
+        'form_data' => true,
+        'url_encoded' => true,
+    ]
 ];
