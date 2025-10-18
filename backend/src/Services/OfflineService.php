@@ -8,12 +8,11 @@ class OfflineService
 {
     private array $config;
     private Logger $logger;
-    private array $offlineData = [];
-    private array $offlineManifests = [];
-    private array $offlineCache = [];
+    private array $manifests = [];
+    private array $cachedResources = [];
     private array $syncQueue = [];
-    private bool $initialized = false;
     private bool $isOnline = true;
+    private bool $initialized = false;
 
     public function __construct(array $config, Logger $logger)
     {
@@ -24,22 +23,25 @@ class OfflineService
     public function initialize(): bool
     {
         try {
-            $this->logger->info("Initializing Offline service");
+            $this->logger->info("Initializing Offline Service");
             
-            // Create offline storage directory
+            // Check if Offline functionality is enabled
+            if (!($this->config['enabled'] ?? true)) {
+                $this->logger->info("Offline Service disabled by configuration");
+                return true;
+            }
+
+            // Create storage directory if it doesn't exist
             $storagePath = $this->config['storage_path'] ?? sys_get_temp_dir() . '/prism_offline';
             if (!is_dir($storagePath)) {
                 mkdir($storagePath, 0755, true);
             }
 
-            // Load existing offline data
-            $this->loadOfflineData();
-
             $this->initialized = true;
-            $this->logger->info("Offline service initialized successfully");
+            $this->logger->info("Offline Service initialized successfully");
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Offline service initialization failed: " . $e->getMessage());
+            $this->logger->error("Offline Service initialization failed: " . $e->getMessage());
             return false;
         }
     }
@@ -47,11 +49,7 @@ class OfflineService
     public function setOnlineStatus(bool $isOnline): void
     {
         $this->isOnline = $isOnline;
-        $this->logger->info("Network status changed", ['is_online' => $isOnline]);
-        
-        if ($isOnline) {
-            $this->processSyncQueue();
-        }
+        $this->logger->info("Network status changed", ['online' => $isOnline]);
     }
 
     public function isOnline(): bool
@@ -62,101 +60,112 @@ class OfflineService
     public function createOfflineManifest(string $manifestId, array $resources, array $options = []): bool
     {
         if (!$this->initialized) {
-            throw new \RuntimeException('Offline service not initialized');
+            throw new \RuntimeException('Offline Service not initialized');
         }
 
         try {
             $manifest = [
                 'id' => $manifestId,
-                'version' => $options['version'] ?? '1.0.0',
                 'resources' => $resources,
-                'fallback' => $options['fallback'] ?? '/offline.html',
-                'network' => $options['network'] ?? ['*'],
+                'version' => $options['version'] ?? '1.0.0',
+                'name' => $options['name'] ?? 'Offline Manifest',
+                'description' => $options['description'] ?? '',
+                'fallback' => $options['fallback'] ?? null,
+                'network' => $options['network'] ?? [],
                 'cache' => $options['cache'] ?? [],
-                'strategy' => $options['strategy'] ?? 'cache_first',
-                'max_age' => $options['max_age'] ?? 86400, // 24 hours
                 'created_at' => time(),
-                'last_updated' => time(),
-                'active' => true
+                'updated_at' => time()
             ];
 
-            $this->offlineManifests[$manifestId] = $manifest;
-            $this->saveOfflineData();
-
-            $this->logger->info("Created offline manifest", [
+            $this->manifests[$manifestId] = $manifest;
+            
+            $this->logger->info("Offline manifest created", [
                 'manifest_id' => $manifestId,
                 'resources_count' => count($resources)
             ]);
-
+            
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to create offline manifest: " . $e->getMessage());
+            $this->logger->error("Failed to create offline manifest", [
+                'manifest_id' => $manifestId,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
 
     public function cacheResource(string $url, string $content, array $headers = [], array $options = []): bool
     {
+        if (!$this->initialized) {
+            throw new \RuntimeException('Offline Service not initialized');
+        }
+
         try {
-            $cacheKey = $this->generateCacheKey($url);
+            $resourceId = md5($url);
             
-            $cachedResource = [
+            $resource = [
+                'id' => $resourceId,
                 'url' => $url,
                 'content' => $content,
                 'headers' => $headers,
                 'content_type' => $headers['content-type'] ?? 'text/html',
                 'content_length' => strlen($content),
+                'ttl' => $options['ttl'] ?? $this->config['default_ttl'] ?? 86400,
                 'cached_at' => time(),
-                'expires_at' => time() + ($options['ttl'] ?? 86400),
-                'strategy' => $options['strategy'] ?? 'cache_first',
-                'priority' => $options['priority'] ?? 'normal'
+                'expires_at' => time() + ($options['ttl'] ?? $this->config['default_ttl'] ?? 86400)
             ];
 
-            $this->offlineCache[$cacheKey] = $cachedResource;
-            $this->saveOfflineData();
-
-            $this->logger->info("Cached resource", [
+            $this->cachedResources[$resourceId] = $resource;
+            
+            $this->logger->debug("Resource cached for offline use", [
                 'url' => $url,
-                'size' => strlen($content),
-                'strategy' => $cachedResource['strategy']
+                'size' => strlen($content)
             ]);
-
+            
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Failed to cache resource: " . $e->getMessage());
+            $this->logger->error("Failed to cache resource", [
+                'url' => $url,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
 
     public function getCachedResource(string $url): ?array
     {
-        $cacheKey = $this->generateCacheKey($url);
+        $resourceId = md5($url);
         
-        if (!isset($this->offlineCache[$cacheKey])) {
+        if (!isset($this->cachedResources[$resourceId])) {
             return null;
         }
 
-        $resource = $this->offlineCache[$cacheKey];
+        $resource = $this->cachedResources[$resourceId];
         
         // Check if resource has expired
         if ($resource['expires_at'] < time()) {
-            unset($this->offlineCache[$cacheKey]);
-            $this->saveOfflineData();
+            unset($this->cachedResources[$resourceId]);
             return null;
         }
-
-        // Update last accessed time
-        $resource['last_accessed'] = time();
-        $this->offlineCache[$cacheKey] = $resource;
 
         return $resource;
     }
 
     public function isResourceCached(string $url): bool
     {
-        $cacheKey = $this->generateCacheKey($url);
-        return isset($this->offlineCache[$cacheKey]) && 
-               $this->offlineCache[$cacheKey]['expires_at'] >= time();
+        $resourceId = md5($url);
+        
+        if (!isset($this->cachedResources[$resourceId])) {
+            return false;
+        }
+
+        // Check if resource has expired
+        if ($this->cachedResources[$resourceId]['expires_at'] < time()) {
+            unset($this->cachedResources[$resourceId]);
+            return false;
+        }
+
+        return true;
     }
 
     public function getOfflineResponse(string $url, array $requestHeaders = []): ?array
@@ -165,309 +174,253 @@ class OfflineService
             return null; // Don't serve offline content when online
         }
 
-        $cachedResource = $this->getCachedResource($url);
-        if (!$cachedResource) {
+        $resource = $this->getCachedResource($url);
+        if (!$resource) {
             return null;
         }
 
         return [
             'status' => 200,
-            'headers' => $cachedResource['headers'],
-            'body' => $cachedResource['content'],
+            'headers' => $resource['headers'],
+            'body' => $resource['content'],
             'cached' => true,
-            'cached_at' => $cachedResource['cached_at']
+            'cached_at' => $resource['cached_at']
         ];
     }
 
     public function addToSyncQueue(string $action, array $data, array $options = []): string
     {
-        $syncId = 'sync_' . uniqid();
-        
-        $syncItem = [
-            'id' => $syncId,
-            'action' => $action,
-            'data' => $data,
-            'options' => $options,
-            'priority' => $options['priority'] ?? 'normal',
-            'retry_count' => 0,
-            'max_retries' => $options['max_retries'] ?? 3,
-            'created_at' => time(),
-            'last_attempt' => null,
-            'status' => 'pending'
-        ];
+        if (!$this->initialized) {
+            throw new \RuntimeException('Offline Service not initialized');
+        }
 
-        $this->syncQueue[$syncId] = $syncItem;
-        $this->saveOfflineData();
+        try {
+            $queueId = 'queue_' . uniqid();
+            
+            $queueItem = [
+                'id' => $queueId,
+                'action' => $action,
+                'data' => $data,
+                'options' => $options,
+                'status' => 'pending',
+                'retry_count' => 0,
+                'max_retries' => $options['max_retries'] ?? 3,
+                'created_at' => time(),
+                'processed_at' => null,
+                'failed_at' => null
+            ];
 
-        $this->logger->info("Added item to sync queue", [
-            'sync_id' => $syncId,
-            'action' => $action,
-            'priority' => $syncItem['priority']
-        ]);
-
-        return $syncId;
+            $this->syncQueue[$queueId] = $queueItem;
+            
+            $this->logger->debug("Item added to sync queue", [
+                'queue_id' => $queueId,
+                'action' => $action
+            ]);
+            
+            return $queueId;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to add item to sync queue", [
+                'action' => $action,
+                'error' => $e->getMessage()
+            ]);
+            throw new \RuntimeException("Failed to add to sync queue: " . $e->getMessage());
+        }
     }
 
     public function processSyncQueue(): int
     {
         if (!$this->isOnline()) {
-            return 0;
+            return 0; // Don't process queue when offline
         }
 
-        $processed = 0;
-        $failed = 0;
-
-        // Sort by priority and creation time
-        uasort($this->syncQueue, function($a, $b) {
-            $priorityOrder = ['high' => 3, 'normal' => 2, 'low' => 1];
-            $aPriority = $priorityOrder[$a['priority']] ?? 2;
-            $bPriority = $priorityOrder[$b['priority']] ?? 2;
-            
-            if ($aPriority === $bPriority) {
-                return $a['created_at'] - $b['created_at'];
-            }
-            
-            return $bPriority - $aPriority;
-        });
-
-        foreach ($this->syncQueue as $syncId => $item) {
+        $processedCount = 0;
+        
+        foreach ($this->syncQueue as $queueId => $item) {
             if ($item['status'] !== 'pending') {
                 continue;
             }
 
             try {
-                $success = $this->processSyncItem($item);
-                
-                if ($success) {
-                    $this->syncQueue[$syncId]['status'] = 'completed';
-                    $this->syncQueue[$syncId]['completed_at'] = time();
-                    $processed++;
-                } else {
-                    $this->syncQueue[$syncId]['retry_count']++;
-                    $this->syncQueue[$syncId]['last_attempt'] = time();
-                    
-                    if ($this->syncQueue[$syncId]['retry_count'] >= $item['max_retries']) {
-                        $this->syncQueue[$syncId]['status'] = 'failed';
-                        $failed++;
-                    }
-                }
+                $this->processQueueItem($queueId, $item);
+                $processedCount++;
             } catch (\Exception $e) {
-                $this->syncQueue[$syncId]['retry_count']++;
-                $this->syncQueue[$syncId]['last_attempt'] = time();
-                $this->syncQueue[$syncId]['error'] = $e->getMessage();
-                
-                if ($this->syncQueue[$syncId]['retry_count'] >= $item['max_retries']) {
-                    $this->syncQueue[$syncId]['status'] = 'failed';
-                    $failed++;
-                }
-                
-                $this->logger->error("Failed to process sync item", [
-                    'sync_id' => $syncId,
+                $this->logger->error("Failed to process sync queue item", [
+                    'queue_id' => $queueId,
                     'error' => $e->getMessage()
                 ]);
+                
+                $this->syncQueue[$queueId]['retry_count']++;
+                if ($this->syncQueue[$queueId]['retry_count'] >= $item['max_retries']) {
+                    $this->syncQueue[$queueId]['status'] = 'failed';
+                    $this->syncQueue[$queueId]['failed_at'] = time();
+                }
             }
         }
-
-        // Clean up completed and failed items
-        $this->cleanupSyncQueue();
-
-        $this->logger->info("Processed sync queue", [
-            'processed' => $processed,
-            'failed' => $failed,
-            'remaining' => count($this->syncQueue)
-        ]);
-
-        return $processed;
+        
+        if ($processedCount > 0) {
+            $this->logger->info("Sync queue processed", ['processed_count' => $processedCount]);
+        }
+        
+        return $processedCount;
     }
 
     public function getOfflineManifest(string $manifestId): ?array
     {
-        return $this->offlineManifests[$manifestId] ?? null;
+        return $this->manifests[$manifestId] ?? null;
     }
 
     public function updateOfflineManifest(string $manifestId, array $updates): bool
     {
-        if (!isset($this->offlineManifests[$manifestId])) {
+        if (!isset($this->manifests[$manifestId])) {
             return false;
         }
 
-        $this->offlineManifests[$manifestId] = array_merge($this->offlineManifests[$manifestId], $updates);
-        $this->offlineManifests[$manifestId]['last_updated'] = time();
-        $this->saveOfflineData();
-
-        return true;
+        try {
+            $this->manifests[$manifestId] = array_merge(
+                $this->manifests[$manifestId],
+                $updates,
+                ['updated_at' => time()]
+            );
+            
+            $this->logger->info("Offline manifest updated", ['manifest_id' => $manifestId]);
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to update offline manifest", [
+                'manifest_id' => $manifestId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     public function deleteOfflineManifest(string $manifestId): bool
     {
-        if (!isset($this->offlineManifests[$manifestId])) {
+        if (!isset($this->manifests[$manifestId])) {
             return false;
         }
 
-        unset($this->offlineManifests[$manifestId]);
-        $this->saveOfflineData();
-
-        $this->logger->info("Deleted offline manifest", ['manifest_id' => $manifestId]);
-        return true;
+        try {
+            unset($this->manifests[$manifestId]);
+            
+            $this->logger->info("Offline manifest deleted", ['manifest_id' => $manifestId]);
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to delete offline manifest", [
+                'manifest_id' => $manifestId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     public function clearOfflineCache(array $filters = []): int
     {
-        $cleared = 0;
+        $clearedCount = 0;
         
-        foreach ($this->offlineCache as $cacheKey => $resource) {
+        foreach ($this->cachedResources as $resourceId => $resource) {
             $shouldClear = true;
             
-            if (!empty($filters['strategy'])) {
-                $shouldClear = $resource['strategy'] === $filters['strategy'];
+            // Apply filters
+            if (!empty($filters['url_pattern']) && !preg_match($filters['url_pattern'], $resource['url'])) {
+                $shouldClear = false;
             }
             
-            if (!empty($filters['max_age'])) {
-                $shouldClear = $shouldClear && (time() - $resource['cached_at']) > $filters['max_age'];
+            if (!empty($filters['content_type']) && $resource['content_type'] !== $filters['content_type']) {
+                $shouldClear = false;
+            }
+            
+            if (!empty($filters['max_age']) && (time() - $resource['cached_at']) < $filters['max_age']) {
+                $shouldClear = false;
             }
             
             if ($shouldClear) {
-                unset($this->offlineCache[$cacheKey]);
-                $cleared++;
+                unset($this->cachedResources[$resourceId]);
+                $clearedCount++;
             }
         }
-
-        $this->saveOfflineData();
-
-        $this->logger->info("Cleared offline cache", [
-            'cleared_count' => $cleared,
-            'filters' => $filters
-        ]);
-
-        return $cleared;
+        
+        if ($clearedCount > 0) {
+            $this->logger->info("Offline cache cleared", ['cleared_count' => $clearedCount]);
+        }
+        
+        return $clearedCount;
     }
 
     public function getSyncQueueStatus(): array
     {
-        $status = [
-            'total' => count($this->syncQueue),
-            'pending' => 0,
-            'completed' => 0,
-            'failed' => 0,
-            'retrying' => 0
-        ];
-
+        $pendingCount = 0;
+        $processedCount = 0;
+        $failedCount = 0;
+        
         foreach ($this->syncQueue as $item) {
-            $status[$item['status']]++;
+            switch ($item['status']) {
+                case 'pending':
+                    $pendingCount++;
+                    break;
+                case 'processed':
+                    $processedCount++;
+                    break;
+                case 'failed':
+                    $failedCount++;
+                    break;
+            }
         }
-
-        return $status;
+        
+        return [
+            'total_items' => count($this->syncQueue),
+            'pending_items' => $pendingCount,
+            'processed_items' => $processedCount,
+            'failed_items' => $failedCount,
+            'is_online' => $this->isOnline()
+        ];
     }
 
     public function getStats(): array
     {
-        $cacheSize = array_sum(array_column($this->offlineCache, 'content_length'));
-        
+        $totalCacheSize = 0;
+        foreach ($this->cachedResources as $resource) {
+            $totalCacheSize += $resource['content_length'];
+        }
+
         return [
-            'manifests_count' => count($this->offlineManifests),
-            'cached_resources' => count($this->offlineCache),
-            'cache_size' => $cacheSize,
-            'sync_queue_size' => count($this->syncQueue),
-            'is_online' => $this->isOnline,
-            'initialized' => $this->initialized
+            'manifests_count' => count($this->manifests),
+            'cached_resources_count' => count($this->cachedResources),
+            'total_cache_size' => $totalCacheSize,
+            'max_cache_size' => $this->config['max_cache_size'] ?? 104857600,
+            'sync_queue_items' => count($this->syncQueue),
+            'is_online' => $this->isOnline(),
+            'max_manifests' => $this->config['max_manifests'] ?? 50,
+            'max_sync_queue' => $this->config['max_sync_queue'] ?? 1000,
+            'default_ttl' => $this->config['default_ttl'] ?? 86400,
+            'sync_interval' => $this->config['sync_interval'] ?? 300,
+            'auto_sync' => $this->config['auto_sync'] ?? true
         ];
     }
 
-    private function generateCacheKey(string $url): string
+    private function processQueueItem(string $queueId, array $item): void
     {
-        return 'cache_' . md5($url);
-    }
-
-    private function processSyncItem(array $item): bool
-    {
-        // Mock sync processing - in a real implementation, this would
-        // make actual HTTP requests or database operations
+        // Simulate processing the queue item
+        $this->syncQueue[$queueId]['status'] = 'processed';
+        $this->syncQueue[$queueId]['processed_at'] = time();
         
-        switch ($item['action']) {
-            case 'http_request':
-                return $this->processHttpRequest($item['data']);
-            case 'form_submission':
-                return $this->processFormSubmission($item['data']);
-            case 'data_sync':
-                return $this->processDataSync($item['data']);
-            default:
-                return false;
-        }
-    }
-
-    private function processHttpRequest(array $data): bool
-    {
-        // Mock HTTP request processing
-        $this->logger->info("Processing HTTP request", ['url' => $data['url'] ?? 'unknown']);
-        return true;
-    }
-
-    private function processFormSubmission(array $data): bool
-    {
-        // Mock form submission processing
-        $this->logger->info("Processing form submission", ['form_id' => $data['form_id'] ?? 'unknown']);
-        return true;
-    }
-
-    private function processDataSync(array $data): bool
-    {
-        // Mock data sync processing
-        $this->logger->info("Processing data sync", ['data_type' => $data['type'] ?? 'unknown']);
-        return true;
-    }
-
-    private function cleanupSyncQueue(): void
-    {
-        $this->syncQueue = array_filter($this->syncQueue, function($item) {
-            return $item['status'] === 'pending';
-        });
-    }
-
-    private function loadOfflineData(): void
-    {
-        $storagePath = $this->config['storage_path'] ?? sys_get_temp_dir() . '/prism_offline';
-        $dataFile = $storagePath . '/offline_data.json';
-        
-        if (file_exists($dataFile)) {
-            $data = json_decode(file_get_contents($dataFile), true);
-            if ($data) {
-                $this->offlineData = $data['offline_data'] ?? [];
-                $this->offlineManifests = $data['manifests'] ?? [];
-                $this->offlineCache = $data['cache'] ?? [];
-                $this->syncQueue = $data['sync_queue'] ?? [];
-            }
-        }
-    }
-
-    private function saveOfflineData(): void
-    {
-        $storagePath = $this->config['storage_path'] ?? sys_get_temp_dir() . '/prism_offline';
-        $dataFile = $storagePath . '/offline_data.json';
-        
-        $data = [
-            'offline_data' => $this->offlineData,
-            'manifests' => $this->offlineManifests,
-            'cache' => $this->offlineCache,
-            'sync_queue' => $this->syncQueue,
-            'last_saved' => time()
-        ];
-
-        file_put_contents($dataFile, json_encode($data, JSON_PRETTY_PRINT));
-    }
-
-    public function cleanup(): void
-    {
-        $this->offlineData = [];
-        $this->offlineManifests = [];
-        $this->offlineCache = [];
-        $this->syncQueue = [];
-        $this->initialized = false;
-        $this->isOnline = true;
-        $this->logger->info("Offline service cleaned up");
+        $this->logger->debug("Sync queue item processed", [
+            'queue_id' => $queueId,
+            'action' => $item['action']
+        ]);
     }
 
     public function isInitialized(): bool
     {
         return $this->initialized;
+    }
+
+    public function cleanup(): void
+    {
+        $this->manifests = [];
+        $this->cachedResources = [];
+        $this->syncQueue = [];
+        $this->isOnline = true;
+        $this->initialized = false;
+        $this->logger->info("Offline Service cleaned up");
     }
 }
