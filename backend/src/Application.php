@@ -14,6 +14,7 @@ use Prism\Backend\Controllers\HistoryController;
 use Prism\Backend\Controllers\SettingsController;
 use Prism\Backend\Controllers\DownloadController;
 use Prism\Backend\Controllers\AuthenticationController;
+use Prism\Backend\Controllers\HealthController;
 use Prism\Backend\Services\EngineManager;
 use Prism\Backend\Services\DatabaseService;
 use Prism\Backend\Services\AuthenticationService;
