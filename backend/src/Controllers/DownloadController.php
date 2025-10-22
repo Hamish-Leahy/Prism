@@ -6,27 +6,46 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Prism\Backend\Services\DatabaseService;
 use Prism\Backend\Services\HttpClientService;
+use Prism\Backend\Services\WebSocketService;
 use Ramsey\Uuid\Uuid;
 use Monolog\Logger;
+use React\EventLoop\LoopInterface;
+use React\ChildProcess\Process;
 
 class DownloadController
 {
     private DatabaseService $database;
     private HttpClientService $httpClient;
+    private WebSocketService $webSocket;
     private Logger $logger;
+    private LoopInterface $loop;
     private string $downloadPath;
+    private array $activeDownloads = [];
+    private array $downloadQueue = [];
+    private int $maxConcurrentDownloads = 3;
+    private array $downloadProcesses = [];
 
-    public function __construct(DatabaseService $database, HttpClientService $httpClient, Logger $logger)
-    {
+    public function __construct(
+        DatabaseService $database, 
+        HttpClientService $httpClient, 
+        WebSocketService $webSocket,
+        Logger $logger,
+        LoopInterface $loop
+    ) {
         $this->database = $database;
         $this->httpClient = $httpClient;
+        $this->webSocket = $webSocket;
         $this->logger = $logger;
+        $this->loop = $loop;
         $this->downloadPath = $_ENV['DOWNLOAD_PATH'] ?? sys_get_temp_dir() . '/prism_downloads';
         
         // Create download directory if it doesn't exist
         if (!is_dir($this->downloadPath)) {
             mkdir($this->downloadPath, 0755, true);
         }
+
+        // Start download queue processor
+        $this->startQueueProcessor();
     }
 
     public function list(Request $request, Response $response): Response
@@ -296,15 +315,326 @@ class DownloadController
 
     private function startDownload(string $id, string $url, string $filePath): void
     {
-        // This would typically be handled by a background job queue
-        // For now, we'll simulate the download process
-        $this->database->execute(
-            'UPDATE downloads SET status = ? WHERE id = ?',
-            ['downloading', $id]
-        );
+        // Add to download queue
+        $this->downloadQueue[] = [
+            'id' => $id,
+            'url' => $url,
+            'file_path' => $filePath,
+            'priority' => 'normal',
+            'created_at' => microtime(true)
+        ];
 
-        // In a real implementation, this would be handled by a background process
-        // that downloads the file and updates the progress
-        $this->logger->info('Starting download', ['id' => $id, 'url' => $url, 'file_path' => $filePath]);
+        $this->logger->info('Download queued', ['id' => $id, 'url' => $url, 'file_path' => $filePath]);
+        
+        // Broadcast queue update
+        $this->webSocket->broadcastDownloadUpdate($id, [
+            'status' => 'queued',
+            'queue_position' => count($this->downloadQueue)
+        ]);
+    }
+
+    private function startQueueProcessor(): void
+    {
+        // Process queue every second
+        $this->loop->addPeriodicTimer(1.0, function() {
+            $this->processDownloadQueue();
+        });
+
+        // Update progress every 2 seconds
+        $this->loop->addPeriodicTimer(2.0, function() {
+            $this->updateDownloadProgress();
+        });
+    }
+
+    private function processDownloadQueue(): void
+    {
+        // Check if we can start more downloads
+        if (count($this->activeDownloads) >= $this->maxConcurrentDownloads) {
+            return;
+        }
+
+        if (empty($this->downloadQueue)) {
+            return;
+        }
+
+        // Get next download from queue
+        $download = array_shift($this->downloadQueue);
+        
+        // Start the download
+        $this->startConcurrentDownload($download);
+    }
+
+    private function startConcurrentDownload(array $download): void
+    {
+        $id = $download['id'];
+        $url = $download['url'];
+        $filePath = $download['file_path'];
+
+        try {
+            // Update database status
+            $this->database->execute(
+                'UPDATE downloads SET status = ?, started_at = ? WHERE id = ?',
+                ['downloading', date('Y-m-d H:i:s'), $id]
+            );
+
+            // Add to active downloads
+            $this->activeDownloads[$id] = [
+                'id' => $id,
+                'url' => $url,
+                'file_path' => $filePath,
+                'started_at' => microtime(true),
+                'downloaded_bytes' => 0,
+                'total_bytes' => 0,
+                'speed' => 0,
+                'eta' => 0
+            ];
+
+            // Start download process
+            $this->downloadProcesses[$id] = $this->createDownloadProcess($id, $url, $filePath);
+
+            $this->logger->info('Download started', ['id' => $id, 'url' => $url]);
+            
+            // Broadcast download start
+            $this->webSocket->broadcastDownloadUpdate($id, [
+                'status' => 'downloading',
+                'started_at' => date('c')
+            ]);
+
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to start download', [
+                'id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            $this->database->execute(
+                'UPDATE downloads SET status = ?, error_message = ? WHERE id = ?',
+                ['failed', $e->getMessage(), $id]
+            );
+
+            $this->webSocket->broadcastDownloadUpdate($id, [
+                'status' => 'failed',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    private function createDownloadProcess(string $id, string $url, string $filePath): Process
+    {
+        // Create a PHP script to handle the download
+        $script = $this->createDownloadScript($id, $url, $filePath);
+        
+        $process = new Process("php {$script}");
+        
+        $process->on('exit', function($exitCode) use ($id) {
+            $this->handleDownloadComplete($id, $exitCode);
+        });
+
+        $process->on('data', function($data) use ($id) {
+            $this->handleDownloadProgress($id, $data);
+        });
+
+        $process->start($this->loop);
+        
+        return $process;
+    }
+
+    private function createDownloadScript(string $id, string $url, string $filePath): string
+    {
+        $scriptPath = sys_get_temp_dir() . "/download_{$id}.php";
+        
+        $script = "<?php
+require_once '{$_SERVER['DOCUMENT_ROOT']}/../vendor/autoload.php';
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+
+\$id = '{$id}';
+\$url = '{$url}';
+\$filePath = '{$filePath}';
+
+try {
+    \$client = new Client([
+        'timeout' => 300,
+        'connect_timeout' => 30,
+        'stream' => true
+    ]);
+
+    \$response = \$client->get(\$url);
+    \$totalBytes = \$response->getHeader('Content-Length')[0] ?? 0;
+    \$downloadedBytes = 0;
+
+    \$fileHandle = fopen(\$filePath, 'w');
+    \$stream = \$response->getBody();
+
+    while (!\$stream->eof()) {
+        \$chunk = \$stream->read(8192);
+        \$downloadedBytes += strlen(\$chunk);
+        fwrite(\$fileHandle, \$chunk);
+        
+        // Output progress
+        echo json_encode([
+            'id' => \$id,
+            'downloaded_bytes' => \$downloadedBytes,
+            'total_bytes' => \$totalBytes,
+            'progress' => \$totalBytes > 0 ? (\$downloadedBytes / \$totalBytes) * 100 : 0
+        ]) . PHP_EOL;
+    }
+
+    fclose(\$fileHandle);
+    echo json_encode(['id' => \$id, 'status' => 'completed']) . PHP_EOL;
+
+} catch (Exception \$e) {
+    echo json_encode(['id' => \$id, 'status' => 'error', 'message' => \$e->getMessage()]) . PHP_EOL;
+    exit(1);
+}
+";
+
+        file_put_contents($scriptPath, $script);
+        return $scriptPath;
+    }
+
+    private function handleDownloadProgress(string $id, string $data): void
+    {
+        $lines = explode("\n", trim($data));
+        
+        foreach ($lines as $line) {
+            if (empty($line)) continue;
+            
+            $progress = json_decode($line, true);
+            if (!$progress || !isset($progress['id'])) continue;
+            
+            if ($progress['id'] === $id && isset($this->activeDownloads[$id])) {
+                $this->activeDownloads[$id]['downloaded_bytes'] = $progress['downloaded_bytes'];
+                $this->activeDownloads[$id]['total_bytes'] = $progress['total_bytes'];
+                
+                // Calculate speed and ETA
+                $elapsed = microtime(true) - $this->activeDownloads[$id]['started_at'];
+                if ($elapsed > 0) {
+                    $this->activeDownloads[$id]['speed'] = $progress['downloaded_bytes'] / $elapsed;
+                    
+                    if ($this->activeDownloads[$id]['speed'] > 0 && $progress['total_bytes'] > 0) {
+                        $remainingBytes = $progress['total_bytes'] - $progress['downloaded_bytes'];
+                        $this->activeDownloads[$id]['eta'] = $remainingBytes / $this->activeDownloads[$id]['speed'];
+                    }
+                }
+
+                // Update database
+                $this->database->execute(
+                    'UPDATE downloads SET downloaded_size = ? WHERE id = ?',
+                    [$progress['downloaded_bytes'], $id]
+                );
+
+                // Broadcast progress update
+                $this->webSocket->broadcastDownloadUpdate($id, [
+                    'status' => 'downloading',
+                    'progress' => $progress['progress'],
+                    'downloaded_bytes' => $progress['downloaded_bytes'],
+                    'total_bytes' => $progress['total_bytes'],
+                    'speed' => $this->activeDownloads[$id]['speed'],
+                    'eta' => $this->activeDownloads[$id]['eta']
+                ]);
+            }
+        }
+    }
+
+    private function handleDownloadComplete(string $id, int $exitCode): void
+    {
+        if (!isset($this->activeDownloads[$id])) {
+            return;
+        }
+
+        $download = $this->activeDownloads[$id];
+        
+        if ($exitCode === 0) {
+            // Download completed successfully
+            $this->database->execute(
+                'UPDATE downloads SET status = ?, completed_at = ? WHERE id = ?',
+                ['completed', date('Y-m-d H:i:s'), $id]
+            );
+
+            $this->webSocket->broadcastDownloadUpdate($id, [
+                'status' => 'completed',
+                'completed_at' => date('c'),
+                'file_path' => $download['file_path']
+            ]);
+
+            $this->logger->info('Download completed', ['id' => $id]);
+        } else {
+            // Download failed
+            $this->database->execute(
+                'UPDATE downloads SET status = ?, error_message = ? WHERE id = ?',
+                ['failed', 'Download process exited with error', $id]
+            );
+
+            $this->webSocket->broadcastDownloadUpdate($id, [
+                'status' => 'failed',
+                'error' => 'Download process failed'
+            ]);
+
+            $this->logger->error('Download failed', ['id' => $id, 'exit_code' => $exitCode]);
+        }
+
+        // Clean up
+        unset($this->activeDownloads[$id]);
+        unset($this->downloadProcesses[$id]);
+        
+        // Clean up temporary script
+        $scriptPath = sys_get_temp_dir() . "/download_{$id}.php";
+        if (file_exists($scriptPath)) {
+            unlink($scriptPath);
+        }
+    }
+
+    private function updateDownloadProgress(): void
+    {
+        foreach ($this->activeDownloads as $id => $download) {
+            // This method can be used for additional progress tracking
+            // For now, the progress is handled by the download processes
+        }
+    }
+
+    public function getDownloadStats(): array
+    {
+        return [
+            'active_downloads' => count($this->activeDownloads),
+            'queued_downloads' => count($this->downloadQueue),
+            'max_concurrent' => $this->maxConcurrentDownloads,
+            'downloads' => array_values($this->activeDownloads)
+        ];
+    }
+
+    public function setMaxConcurrentDownloads(int $max): void
+    {
+        $this->maxConcurrentDownloads = max(1, min($max, 10)); // Limit between 1 and 10
+        $this->logger->info('Max concurrent downloads updated', ['max' => $this->maxConcurrentDownloads]);
+    }
+
+    public function clearCompletedDownloads(): int
+    {
+        $cleared = 0;
+        
+        try {
+            $completed = $this->database->query(
+                'SELECT id, file_path FROM downloads WHERE status = ? AND completed_at < ?',
+                ['completed', date('Y-m-d H:i:s', time() - 86400)] // Older than 24 hours
+            );
+
+            foreach ($completed as $download) {
+                // Delete file if it exists
+                if (file_exists($download['file_path'])) {
+                    unlink($download['file_path']);
+                }
+
+                // Delete database record
+                $this->database->execute('DELETE FROM downloads WHERE id = ?', [$download['id']]);
+                $cleared++;
+            }
+
+            $this->logger->info('Cleared completed downloads', ['count' => $cleared]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to clear completed downloads', ['error' => $e->getMessage()]);
+        }
+
+        return $cleared;
     }
 }
