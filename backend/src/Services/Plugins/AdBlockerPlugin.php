@@ -8,382 +8,348 @@ class AdBlockerPlugin extends BasePlugin
 {
     private array $blockedDomains = [];
     private array $blockedSelectors = [];
-    private array $blockedScripts = [];
-    private bool $enabled = false;
-    private array $stats = [
-        'ads_blocked' => 0,
-        'scripts_blocked' => 0,
-        'domains_blocked' => 0,
-        'requests_blocked' => 0
-    ];
+    private array $blockedPatterns = [];
+    private bool $isEnabled = false;
+    private int $blockedCount = 0;
+    private array $whitelist = [];
 
-    public function __construct(array $config, Logger $logger)
+    public function __construct(array $config = [], Logger $logger = null)
     {
         parent::__construct($config, $logger);
-        
-        // Load ad blocking rules
-        $this->loadAdBlockingRules();
+        $this->loadDefaultBlockLists();
     }
 
     public function initialize(): bool
     {
         try {
-            $this->logger->info("Initializing Ad Blocker Plugin");
-            
-            // Load configuration
-            $this->blockedDomains = $this->config['blocked_domains'] ?? [];
-            $this->blockedSelectors = $this->config['blocked_selectors'] ?? [];
-            $this->blockedScripts = $this->config['blocked_scripts'] ?? [];
-            
-            // Load additional rules from files
-            $this->loadFilterLists();
-            
-            $this->logger->info("Ad Blocker Plugin initialized", [
-                'blocked_domains' => count($this->blockedDomains),
-                'blocked_selectors' => count($this->blockedSelectors),
-                'blocked_scripts' => count($this->blockedScripts)
-            ]);
-            
+            $this->loadConfiguration();
+            $this->logger->info('AdBlocker plugin initialized');
             return true;
         } catch (\Exception $e) {
-            $this->logger->error("Ad Blocker Plugin initialization failed: " . $e->getMessage());
+            $this->logger->error('Failed to initialize AdBlocker plugin: ' . $e->getMessage());
             return false;
         }
     }
 
     public function enable(): bool
     {
-        $this->enabled = true;
-        $this->logger->info("Ad Blocker Plugin enabled");
+        $this->isEnabled = true;
+        $this->logger->info('AdBlocker plugin enabled');
         return true;
     }
 
     public function disable(): bool
     {
-        $this->enabled = false;
-        $this->logger->info("Ad Blocker Plugin disabled");
+        $this->isEnabled = false;
+        $this->logger->info('AdBlocker plugin disabled');
         return true;
     }
 
     public function isEnabled(): bool
     {
-        return $this->enabled;
+        return $this->isEnabled;
     }
 
     public function getInfo(): array
     {
         return [
-            'name' => 'Ad Blocker Plugin',
+            'name' => 'AdBlocker',
             'version' => '1.0.0',
             'description' => 'Blocks advertisements and tracking scripts',
             'author' => 'Prism Team',
-            'enabled' => $this->enabled,
-            'stats' => $this->stats
+            'enabled' => $this->isEnabled,
+            'blocked_count' => $this->blockedCount
         ];
     }
 
     public function onEvent(string $eventName, array $data = []): mixed
     {
-        if (!$this->enabled) {
-            return null;
-        }
-
         switch ($eventName) {
-            case 'before_request':
-                return $this->blockRequest($data);
-            case 'after_parse':
-                return $this->blockElements($data);
-            case 'before_execute_script':
-                return $this->blockScript($data);
+            case 'page_load':
+                return $this->handlePageLoad($data);
+            case 'request_made':
+                return $this->handleRequest($data);
+            case 'dom_ready':
+                return $this->handleDOMReady($data);
             default:
                 return null;
         }
     }
 
-    public function blockRequest(array $requestData): ?array
+    public function blockAd(string $url, string $reason = 'ad_domain'): bool
     {
-        $url = $requestData['url'] ?? '';
-        $domain = parse_url($url, PHP_URL_HOST);
-        
-        if ($this->isDomainBlocked($domain)) {
-            $this->stats['requests_blocked']++;
-            $this->logger->info("Blocked request", ['url' => $url, 'domain' => $domain]);
-            
-            return [
-                'blocked' => true,
-                'reason' => 'ad_domain',
-                'url' => $url
-            ];
+        if (!$this->isEnabled) {
+            return false;
         }
-        
-        return null;
+
+        $this->blockedCount++;
+        $this->logger->debug('Ad blocked', [
+            'url' => $url,
+            'reason' => $reason,
+            'total_blocked' => $this->blockedCount
+        ]);
+
+        return true;
     }
 
-    public function blockElements(array $parseData): array
+    public function isAdDomain(string $domain): bool
     {
-        $blockedElements = [];
-        $dom = $parseData['dom'] ?? null;
-        
-        if (!$dom) {
-            return $blockedElements;
+        if (!$this->isEnabled) {
+            return false;
         }
-        
-        // Block elements by CSS selectors
-        foreach ($this->blockedSelectors as $selector) {
-            $elements = $dom->querySelectorAll($selector);
-            foreach ($elements as $element) {
-                $element->remove();
-                $blockedElements[] = $selector;
-                $this->stats['ads_blocked']++;
-            }
-        }
-        
-        // Block script tags with ad content
-        $scripts = $dom->getElementsByTagName('script');
-        foreach ($scripts as $script) {
-            $src = $script->getAttribute('src');
-            $content = $script->textContent;
-            
-            if ($this->isScriptBlocked($src, $content)) {
-                $script->remove();
-                $blockedElements[] = 'script';
-                $this->stats['scripts_blocked']++;
-            }
-        }
-        
-        if (!empty($blockedElements)) {
-            $this->logger->info("Blocked elements", [
-                'count' => count($blockedElements),
-                'types' => array_unique($blockedElements)
-            ]);
-        }
-        
-        return $blockedElements;
-    }
 
-    public function blockScript(array $scriptData): ?array
-    {
-        $script = $scriptData['script'] ?? '';
-        $src = $scriptData['src'] ?? '';
-        
-        if ($this->isScriptBlocked($src, $script)) {
-            $this->stats['scripts_blocked']++;
-            $this->logger->info("Blocked script", ['src' => $src]);
-            
-            return [
-                'blocked' => true,
-                'reason' => 'ad_script',
-                'src' => $src
-            ];
+        // Check whitelist first
+        if (in_array($domain, $this->whitelist)) {
+            return false;
         }
-        
-        return null;
-    }
 
-    public function addBlockedDomain(string $domain): bool
-    {
-        if (!in_array($domain, $this->blockedDomains)) {
-            $this->blockedDomains[] = $domain;
-            $this->stats['domains_blocked']++;
-            $this->logger->info("Added blocked domain", ['domain' => $domain]);
-            return true;
-        }
-        
-        return false;
-    }
-
-    public function removeBlockedDomain(string $domain): bool
-    {
-        $key = array_search($domain, $this->blockedDomains);
-        if ($key !== false) {
-            unset($this->blockedDomains[$key]);
-            $this->blockedDomains = array_values($this->blockedDomains);
-            $this->logger->info("Removed blocked domain", ['domain' => $domain]);
-            return true;
-        }
-        
-        return false;
-    }
-
-    public function addBlockedSelector(string $selector): bool
-    {
-        if (!in_array($selector, $this->blockedSelectors)) {
-            $this->blockedSelectors[] = $selector;
-            $this->logger->info("Added blocked selector", ['selector' => $selector]);
-            return true;
-        }
-        
-        return false;
-    }
-
-    public function removeBlockedSelector(string $selector): bool
-    {
-        $key = array_search($selector, $this->blockedSelectors);
-        if ($key !== false) {
-            unset($this->blockedSelectors[$key]);
-            $this->blockedSelectors = array_values($this->blockedSelectors);
-            $this->logger->info("Removed blocked selector", ['selector' => $selector]);
-            return true;
-        }
-        
-        return false;
-    }
-
-    public function getStats(): array
-    {
-        return $this->stats;
-    }
-
-    public function resetStats(): void
-    {
-        $this->stats = [
-            'ads_blocked' => 0,
-            'scripts_blocked' => 0,
-            'domains_blocked' => count($this->blockedDomains),
-            'requests_blocked' => 0
-        ];
-    }
-
-    private function isDomainBlocked(string $domain): bool
-    {
+        // Check blocked domains
         foreach ($this->blockedDomains as $blockedDomain) {
             if (strpos($domain, $blockedDomain) !== false) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
-    private function isScriptBlocked(string $src, string $content): bool
+    public function isAdUrl(string $url): bool
     {
-        // Check if script source is blocked
-        if ($src) {
-            $domain = parse_url($src, PHP_URL_HOST);
-            if ($this->isDomainBlocked($domain)) {
+        if (!$this->isEnabled) {
+            return false;
+        }
+
+        $parsedUrl = parse_url($url);
+        if (!$parsedUrl || !isset($parsedUrl['host'])) {
+            return false;
+        }
+
+        // Check if domain is blocked
+        if ($this->isAdDomain($parsedUrl['host'])) {
+            return true;
+        }
+
+        // Check URL patterns
+        foreach ($this->blockedPatterns as $pattern) {
+            if (preg_match($pattern, $url)) {
                 return true;
             }
         }
-        
-        // Check if script content contains ad patterns
-        $adPatterns = [
-            'google-analytics',
-            'googletagmanager',
-            'facebook.com/tr',
-            'doubleclick',
-            'googlesyndication',
-            'adsystem',
-            'amazon-adsystem'
-        ];
-        
-        foreach ($adPatterns as $pattern) {
-            if (strpos($content, $pattern) !== false) {
-                return true;
-            }
-        }
-        
+
         return false;
     }
 
-    private function loadAdBlockingRules(): void
+    public function getBlockedCount(): int
     {
-        // Load default ad blocking rules
-        $this->blockedDomains = [
-            'google-analytics.com',
-            'googletagmanager.com',
-            'doubleclick.net',
-            'googlesyndication.com',
-            'amazon-adsystem.com',
-            'facebook.com',
-            'twitter.com',
-            'linkedin.com',
-            'pinterest.com',
-            'adsystem.amazon.com'
-        ];
+        return $this->blockedCount;
+    }
+
+    public function addBlockedDomain(string $domain): void
+    {
+        if (!in_array($domain, $this->blockedDomains)) {
+            $this->blockedDomains[] = $domain;
+            $this->logger->info('Domain added to block list', ['domain' => $domain]);
+        }
+    }
+
+    public function removeBlockedDomain(string $domain): void
+    {
+        $key = array_search($domain, $this->blockedDomains);
+        if ($key !== false) {
+            unset($this->blockedDomains[$key]);
+            $this->blockedDomains = array_values($this->blockedDomains);
+            $this->logger->info('Domain removed from block list', ['domain' => $domain]);
+        }
+    }
+
+    public function addWhitelistDomain(string $domain): void
+    {
+        if (!in_array($domain, $this->whitelist)) {
+            $this->whitelist[] = $domain;
+            $this->logger->info('Domain added to whitelist', ['domain' => $domain]);
+        }
+    }
+
+    public function getBlockedDomains(): array
+    {
+        return $this->blockedDomains;
+    }
+
+    public function getWhitelist(): array
+    {
+        return $this->whitelist;
+    }
+
+    public function resetBlockedCount(): void
+    {
+        $this->blockedCount = 0;
+        $this->logger->info('Blocked count reset');
+    }
+
+    private function handlePageLoad(array $data): array
+    {
+        $url = $data['url'] ?? '';
         
-        $this->blockedSelectors = [
-            '[id*="ad"]',
-            '[class*="ad"]',
-            '[id*="banner"]',
-            '[class*="banner"]',
-            '[id*="popup"]',
-            '[class*="popup"]',
-            '[id*="overlay"]',
-            '[class*="overlay"]',
+        if ($this->isAdUrl($url)) {
+            $this->blockAd($url, 'ad_url');
+            return ['blocked' => true, 'reason' => 'ad_url'];
+        }
+
+        return ['blocked' => false];
+    }
+
+    private function handleRequest(array $data): array
+    {
+        $url = $data['url'] ?? '';
+        $method = $data['method'] ?? 'GET';
+        
+        if ($this->isAdUrl($url)) {
+            $this->blockAd($url, 'ad_request');
+            return [
+                'blocked' => true,
+                'reason' => 'ad_request',
+                'response' => [
+                    'status' => 204,
+                    'headers' => ['X-AdBlocked' => 'true'],
+                    'body' => ''
+                ]
+            ];
+        }
+
+        return ['blocked' => false];
+    }
+
+    private function handleDOMReady(array $data): array
+    {
+        $html = $data['html'] ?? '';
+        
+        if (empty($html)) {
+            return ['processed' => false];
+        }
+
+        // Remove ad elements
+        $processedHtml = $this->removeAdElements($html);
+        
+        return [
+            'processed' => true,
+            'original_length' => strlen($html),
+            'processed_length' => strlen($processedHtml),
+            'elements_removed' => $this->countRemovedElements($html, $processedHtml)
+        ];
+    }
+
+    private function removeAdElements(string $html): string
+    {
+        // Remove elements with ad-related classes
+        $adSelectors = [
+            'div[class*="ad-"]',
+            'div[class*="advertisement"]',
+            'div[class*="banner"]',
+            'div[id*="ad-"]',
+            'div[id*="advertisement"]',
             'iframe[src*="ads"]',
-            'iframe[src*="doubleclick"]',
-            'iframe[src*="googlesyndication"]'
+            'script[src*="ads"]'
         ];
+
+        foreach ($adSelectors as $selector) {
+            $html = preg_replace('/<' . preg_quote($selector, '/') . '[^>]*>.*?<\/' . preg_quote($selector, '/') . '>/is', '', $html);
+        }
+
+        // Remove script tags with ad content
+        $html = preg_replace('/<script[^>]*>.*?ad.*?<\/script>/is', '', $html);
+
+        return $html;
+    }
+
+    private function countRemovedElements(string $original, string $processed): int
+    {
+        // Simple heuristic to count removed elements
+        $originalDivs = substr_count($original, '<div');
+        $processedDivs = substr_count($processed, '<div');
         
-        $this->blockedScripts = [
-            'google-analytics',
-            'googletagmanager',
+        return max(0, $originalDivs - $processedDivs);
+    }
+
+    private function loadDefaultBlockLists(): void
+    {
+        // Common ad domains
+        $this->blockedDomains = [
+            'googleadservices.com',
+            'googlesyndication.com',
+            'doubleclick.net',
+            'googletagmanager.com',
             'facebook.com/tr',
-            'doubleclick',
-            'googlesyndication',
-            'adsystem'
+            'amazon-adsystem.com',
+            'adsystem.amazon.com',
+            'outbrain.com',
+            'taboola.com',
+            'ads.yahoo.com',
+            'adsystem.yahoo.com',
+            'adsystem.amazon.com',
+            'amazon-adsystem.com',
+            'adsystem.amazon.com',
+            'amazon-adsystem.com'
+        ];
+
+        // Common ad URL patterns
+        $this->blockedPatterns = [
+            '/\/ads?\//',
+            '/\/advertisement/',
+            '/\/banner/',
+            '/\/popup/',
+            '/\/popunder/',
+            '/googleads/',
+            '/doubleclick/',
+            '/googlesyndication/',
+            '/amazon-adsystem/',
+            '/outbrain/',
+            '/taboola/'
+        ];
+
+        // Common ad CSS selectors
+        $this->blockedSelectors = [
+            '.ad',
+            '.advertisement',
+            '.banner',
+            '.popup',
+            '.popunder',
+            '[id*="ad-"]',
+            '[class*="ad-"]',
+            '[id*="advertisement"]',
+            '[class*="advertisement"]'
         ];
     }
 
-    private function loadFilterLists(): void
+    private function loadConfiguration(): void
     {
-        // In a real implementation, this would load from external filter lists
-        // like EasyList, EasyPrivacy, etc.
+        $config = $this->getConfig();
         
-        $filterListPath = $this->config['filter_list_path'] ?? null;
-        if ($filterListPath && file_exists($filterListPath)) {
-            $this->loadFilterListFromFile($filterListPath);
+        if (isset($config['blocked_domains'])) {
+            $this->blockedDomains = array_merge($this->blockedDomains, $config['blocked_domains']);
+        }
+
+        if (isset($config['whitelist'])) {
+            $this->whitelist = $config['whitelist'];
+        }
+
+        if (isset($config['blocked_patterns'])) {
+            $this->blockedPatterns = array_merge($this->blockedPatterns, $config['blocked_patterns']);
+        }
+
+        if (isset($config['blocked_selectors'])) {
+            $this->blockedSelectors = array_merge($this->blockedSelectors, $config['blocked_selectors']);
         }
     }
 
-    private function loadFilterListFromFile(string $filePath): void
+    public function getStatistics(): array
     {
-        try {
-            $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            
-            foreach ($lines as $line) {
-                $line = trim($line);
-                
-                // Skip comments and empty lines
-                if (empty($line) || strpos($line, '!') === 0) {
-                    continue;
-                }
-                
-                // Parse filter list rules
-                if (strpos($line, '||') === 0) {
-                    // Domain filter
-                    $domain = substr($line, 2);
-                    $domain = str_replace('^', '', $domain);
-                    $this->addBlockedDomain($domain);
-                } elseif (strpos($line, '##') === 0) {
-                    // Element filter
-                    $selector = substr($line, 2);
-                    $this->addBlockedSelector($selector);
-                }
-            }
-            
-            $this->logger->info("Loaded filter list", ['file' => $filePath]);
-        } catch (\Exception $e) {
-            $this->logger->error("Failed to load filter list", [
-                'file' => $filePath,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    public function cleanup(): void
-    {
-        $this->enabled = false;
-        $this->blockedDomains = [];
-        $this->blockedSelectors = [];
-        $this->blockedScripts = [];
-        $this->stats = [
-            'ads_blocked' => 0,
-            'scripts_blocked' => 0,
-            'domains_blocked' => 0,
-            'requests_blocked' => 0
+        return [
+            'enabled' => $this->isEnabled,
+            'blocked_count' => $this->blockedCount,
+            'blocked_domains_count' => count($this->blockedDomains),
+            'whitelist_count' => count($this->whitelist),
+            'blocked_patterns_count' => count($this->blockedPatterns),
+            'blocked_selectors_count' => count($this->blockedSelectors)
         ];
-        
-        $this->logger->info("Ad Blocker Plugin cleaned up");
     }
 }
