@@ -434,8 +434,452 @@ class OfflineService
         $this->manifests = [];
         $this->cachedResources = [];
         $this->syncQueue = [];
+        $this->offlinePages = [];
+        $this->backgroundSync = [];
         $this->isOnline = true;
         $this->initialized = false;
         $this->logger->info("Offline Service cleaned up");
+    }
+
+    // Enhanced offline features
+    public function enableOfflineMode(): void
+    {
+        $this->isOnline = false;
+        $this->logger->info("Offline mode enabled");
+        
+        // Start background sync if available
+        if ($this->loop && $this->config['auto_sync'] ?? true) {
+            $this->startBackgroundSync();
+        }
+    }
+
+    public function disableOfflineMode(): void
+    {
+        $this->isOnline = true;
+        $this->logger->info("Offline mode disabled");
+        
+        // Process any pending sync queue items
+        $this->processSyncQueue();
+    }
+
+    public function cachePageForOffline(string $url, string $html, array $resources = [], array $options = []): bool
+    {
+        try {
+            $pageId = md5($url);
+            
+            $offlinePage = [
+                'id' => $pageId,
+                'url' => $url,
+                'html' => $html,
+                'resources' => $resources,
+                'title' => $options['title'] ?? $this->extractTitle($html),
+                'description' => $options['description'] ?? $this->extractDescription($html),
+                'keywords' => $options['keywords'] ?? $this->extractKeywords($html),
+                'cached_at' => time(),
+                'last_accessed' => time(),
+                'access_count' => 0,
+                'priority' => $options['priority'] ?? 'normal',
+                'strategy' => $options['strategy'] ?? 'cache_first'
+            ];
+
+            $this->offlinePages[$pageId] = $offlinePage;
+            
+            // Cache associated resources
+            foreach ($resources as $resourceUrl) {
+                $this->cacheResourceFromUrl($resourceUrl);
+            }
+
+            $this->logger->info("Page cached for offline use", [
+                'url' => $url,
+                'resources_count' => count($resources)
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to cache page for offline use", [
+                'url' => $url,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    public function getOfflinePage(string $url): ?array
+    {
+        $pageId = md5($url);
+        
+        if (!isset($this->offlinePages[$pageId])) {
+            return null;
+        }
+
+        $page = $this->offlinePages[$pageId];
+        $page['last_accessed'] = time();
+        $page['access_count']++;
+        $this->offlinePages[$pageId] = $page;
+
+        // Track analytics
+        $this->trackOfflineAccess($url, $page);
+
+        return $page;
+    }
+
+    public function searchOfflinePages(string $query): array
+    {
+        $results = [];
+        $query = strtolower($query);
+
+        foreach ($this->offlinePages as $page) {
+            $score = 0;
+            
+            // Search in title
+            if (strpos(strtolower($page['title']), $query) !== false) {
+                $score += 10;
+            }
+            
+            // Search in description
+            if (strpos(strtolower($page['description']), $query) !== false) {
+                $score += 5;
+            }
+            
+            // Search in keywords
+            if (strpos(strtolower($page['keywords']), $query) !== false) {
+                $score += 3;
+            }
+            
+            // Search in URL
+            if (strpos(strtolower($page['url']), $query) !== false) {
+                $score += 2;
+            }
+
+            if ($score > 0) {
+                $results[] = [
+                    'page' => $page,
+                    'score' => $score
+                ];
+            }
+        }
+
+        // Sort by score (highest first)
+        usort($results, function($a, $b) {
+            return $b['score'] - $a['score'];
+        });
+
+        return $results;
+    }
+
+    public function getOfflinePageSuggestions(string $url): array
+    {
+        $suggestions = [];
+        $currentPage = $this->getOfflinePage($url);
+        
+        if (!$currentPage) {
+            return $suggestions;
+        }
+
+        // Find pages with similar keywords
+        $currentKeywords = explode(',', strtolower($currentPage['keywords']));
+        
+        foreach ($this->offlinePages as $page) {
+            if ($page['id'] === $currentPage['id']) {
+                continue;
+            }
+
+            $pageKeywords = explode(',', strtolower($page['keywords']));
+            $commonKeywords = array_intersect($currentKeywords, $pageKeywords);
+            
+            if (count($commonKeywords) > 0) {
+                $suggestions[] = [
+                    'page' => $page,
+                    'relevance' => count($commonKeywords) / max(count($currentKeywords), 1)
+                ];
+            }
+        }
+
+        // Sort by relevance
+        usort($suggestions, function($a, $b) {
+            return $b['relevance'] - $a['relevance'];
+        });
+
+        return array_slice($suggestions, 0, 5); // Return top 5 suggestions
+    }
+
+    public function registerBackgroundSync(string $name, callable $syncFunction, array $options = []): bool
+    {
+        $this->backgroundSync[$name] = [
+            'function' => $syncFunction,
+            'interval' => $options['interval'] ?? 300, // 5 minutes default
+            'last_run' => 0,
+            'enabled' => $options['enabled'] ?? true,
+            'options' => $options
+        ];
+
+        $this->logger->info("Background sync registered", ['name' => $name]);
+        return true;
+    }
+
+    public function startBackgroundSync(): void
+    {
+        if (!$this->loop) {
+            return;
+        }
+
+        foreach ($this->backgroundSync as $name => $sync) {
+            if (!$sync['enabled']) {
+                continue;
+            }
+
+            $this->loop->addPeriodicTimer($sync['interval'], function() use ($name, $sync) {
+                $this->runBackgroundSync($name, $sync);
+            });
+        }
+
+        $this->logger->info("Background sync started");
+    }
+
+    public function runBackgroundSync(string $name, array $sync = null): void
+    {
+        if (!$sync) {
+            $sync = $this->backgroundSync[$name] ?? null;
+        }
+
+        if (!$sync || !$sync['enabled']) {
+            return;
+        }
+
+        try {
+            $sync['function']($this);
+            $this->backgroundSync[$name]['last_run'] = time();
+            
+            $this->logger->debug("Background sync completed", ['name' => $name]);
+        } catch (\Exception $e) {
+            $this->logger->error("Background sync failed", [
+                'name' => $name,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function setCacheStrategy(string $urlPattern, string $strategy): void
+    {
+        $this->cacheStrategies[$urlPattern] = $strategy;
+        $this->logger->info("Cache strategy set", [
+            'pattern' => $urlPattern,
+            'strategy' => $strategy
+        ]);
+    }
+
+    public function getCacheStrategy(string $url): string
+    {
+        foreach ($this->cacheStrategies as $pattern => $strategy) {
+            if (preg_match($pattern, $url)) {
+                return $strategy;
+            }
+        }
+
+        return $this->config['default_strategy'] ?? 'cache_first';
+    }
+
+    public function preloadResources(array $urls, array $options = []): array
+    {
+        $results = [];
+        $concurrency = $options['concurrency'] ?? 5;
+        $urlChunks = array_chunk($urls, $concurrency);
+
+        foreach ($urlChunks as $chunk) {
+            $promises = [];
+            
+            foreach ($chunk as $url) {
+                $promises[] = $this->cacheResourceFromUrl($url, $options);
+            }
+
+            // Wait for all promises to complete
+            foreach ($promises as $promise) {
+                $results[] = $promise;
+            }
+        }
+
+        $this->logger->info("Resources preloaded", [
+            'total_urls' => count($urls),
+            'successful' => count(array_filter($results))
+        ]);
+
+        return $results;
+    }
+
+    public function getOfflineAnalytics(): array
+    {
+        $totalPages = count($this->offlinePages);
+        $totalResources = count($this->cachedResources);
+        $totalCacheSize = array_sum(array_column($this->cachedResources, 'content_length'));
+        
+        $mostAccessedPages = $this->offlinePages;
+        usort($mostAccessedPages, function($a, $b) {
+            return $b['access_count'] - $a['access_count'];
+        });
+
+        return [
+            'total_offline_pages' => $totalPages,
+            'total_cached_resources' => $totalResources,
+            'total_cache_size' => $totalCacheSize,
+            'most_accessed_pages' => array_slice($mostAccessedPages, 0, 10),
+            'offline_access_stats' => $this->offlineAnalytics,
+            'cache_hit_rate' => $this->calculateCacheHitRate(),
+            'storage_usage' => $this->calculateStorageUsage()
+        ];
+    }
+
+    public function optimizeOfflineCache(): array
+    {
+        $optimizations = [];
+        
+        // Remove expired resources
+        $expiredCount = 0;
+        foreach ($this->cachedResources as $id => $resource) {
+            if ($resource['expires_at'] < time()) {
+                unset($this->cachedResources[$id]);
+                $expiredCount++;
+            }
+        }
+        
+        if ($expiredCount > 0) {
+            $optimizations[] = "Removed {$expiredCount} expired resources";
+        }
+
+        // Remove least accessed pages
+        $maxPages = $this->config['max_offline_pages'] ?? 100;
+        if (count($this->offlinePages) > $maxPages) {
+            $pages = $this->offlinePages;
+            usort($pages, function($a, $b) {
+                return $a['access_count'] - $b['access_count'];
+            });
+
+            $toRemove = count($this->offlinePages) - $maxPages;
+            for ($i = 0; $i < $toRemove; $i++) {
+                unset($this->offlinePages[$pages[$i]['id']]);
+            }
+            
+            $optimizations[] = "Removed {$toRemove} least accessed pages";
+        }
+
+        // Compress large resources
+        $compressedCount = 0;
+        foreach ($this->cachedResources as $id => $resource) {
+            if ($resource['content_length'] > 1024 * 1024) { // 1MB
+                $compressed = gzcompress($resource['content']);
+                if ($compressed !== false) {
+                    $this->cachedResources[$id]['content'] = $compressed;
+                    $this->cachedResources[$id]['compressed'] = true;
+                    $compressedCount++;
+                }
+            }
+        }
+
+        if ($compressedCount > 0) {
+            $optimizations[] = "Compressed {$compressedCount} large resources";
+        }
+
+        $this->logger->info("Offline cache optimized", ['optimizations' => $optimizations]);
+        return $optimizations;
+    }
+
+    private function cacheResourceFromUrl(string $url, array $options = []): bool
+    {
+        try {
+            $response = $this->httpClient->get($url);
+            $content = $response->getBody()->getContents();
+            $headers = $response->getHeaders();
+
+            return $this->cacheResource($url, $content, $headers, $options);
+        } catch (RequestException $e) {
+            $this->logger->warning("Failed to cache resource from URL", [
+                'url' => $url,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    private function extractTitle(string $html): string
+    {
+        if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $matches)) {
+            return trim(strip_tags($matches[1]));
+        }
+        return '';
+    }
+
+    private function extractDescription(string $html): string
+    {
+        if (preg_match('/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\'][^>]*>/i', $html, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    private function extractKeywords(string $html): string
+    {
+        if (preg_match('/<meta[^>]*name=["\']keywords["\'][^>]*content=["\']([^"\']*)["\'][^>]*>/i', $html, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    private function trackOfflineAccess(string $url, array $page): void
+    {
+        $this->offlineAnalytics[] = [
+            'url' => $url,
+            'accessed_at' => time(),
+            'access_count' => $page['access_count']
+        ];
+
+        // Keep only last 1000 entries
+        if (count($this->offlineAnalytics) > 1000) {
+            $this->offlineAnalytics = array_slice($this->offlineAnalytics, -1000);
+        }
+    }
+
+    private function calculateCacheHitRate(): float
+    {
+        $totalRequests = count($this->offlineAnalytics);
+        if ($totalRequests === 0) {
+            return 0.0;
+        }
+
+        $cacheHits = count(array_filter($this->offlineAnalytics, function($entry) {
+            return isset($entry['cached']) && $entry['cached'];
+        }));
+
+        return ($cacheHits / $totalRequests) * 100;
+    }
+
+    private function calculateStorageUsage(): array
+    {
+        $totalSize = 0;
+        $byType = [];
+
+        foreach ($this->cachedResources as $resource) {
+            $size = $resource['content_length'];
+            $totalSize += $size;
+            
+            $type = $resource['content_type'];
+            $byType[$type] = ($byType[$type] ?? 0) + $size;
+        }
+
+        return [
+            'total_size' => $totalSize,
+            'by_content_type' => $byType,
+            'max_size' => $this->config['max_cache_size'] ?? 104857600
+        ];
+    }
+
+    private function initializeCacheStrategies(): void
+    {
+        $this->cacheStrategies = [
+            '/\.(css|js)$/' => 'cache_first',
+            '/\.(png|jpg|jpeg|gif|svg|webp)$/' => 'cache_first',
+            '/\.(woff|woff2|ttf|eot)$/' => 'cache_first',
+            '/api\//' => 'network_first',
+            '/admin\//' => 'network_only',
+            '/login/' => 'network_only'
+        ];
     }
 }
