@@ -3,336 +3,611 @@
 namespace Prism\Backend\Services;
 
 use Monolog\Logger;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use React\EventLoop\LoopInterface;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class CloudSyncService
 {
     private Logger $logger;
+    private Client $httpClient;
+    private LoopInterface $loop;
     private array $config;
-    private bool $isEnabled = false;
     private array $syncQueue = [];
-    private array $lastSync = [];
-    private string $syncEndpoint;
+    private array $conflictResolution = [];
+    private array $deviceRegistry = [];
+    private array $syncHistory = [];
+    private bool $isEnabled = false;
+    private string $currentDeviceId;
+    private array $encryptionKeys = [];
 
-    public function __construct(array $config, Logger $logger)
+    public function __construct(array $config, Logger $logger, LoopInterface $loop = null)
     {
         $this->config = $config;
         $this->logger = $logger;
-        $this->syncEndpoint = $config['endpoint'] ?? 'https://sync.prism-browser.com/api';
+        $this->loop = $loop;
+        $this->httpClient = new Client([
+            'timeout' => 30,
+            'connect_timeout' => 10,
+            'base_uri' => $this->config['api_endpoint'] ?? 'https://api.prism-browser.com'
+        ]);
+        $this->currentDeviceId = $this->generateDeviceId();
+        $this->initializeEncryption();
     }
 
-    public function enable(): bool
+    public function initialize(): bool
     {
         try {
+            $this->logger->info("Initializing Cloud Sync Service");
+            
+            if (!($this->config['enabled'] ?? true)) {
+                $this->logger->info("Cloud Sync Service disabled by configuration");
+                return true;
+            }
+
             $this->isEnabled = true;
-            $this->logger->info('Cloud sync enabled');
+            $this->registerDevice();
+            $this->startSyncProcess();
+            
+            $this->logger->info("Cloud Sync Service initialized successfully");
             return true;
         } catch (\Exception $e) {
-            $this->logger->error('Failed to enable cloud sync: ' . $e->getMessage());
+            $this->logger->error("Cloud Sync Service initialization failed: " . $e->getMessage());
             return false;
         }
     }
 
-    public function disable(): bool
-    {
-        $this->isEnabled = false;
-        $this->logger->info('Cloud sync disabled');
-        return true;
-    }
-
-    public function syncData(array $data, string $dataType): array
+    public function syncData(string $dataType, array $data, array $options = []): bool
     {
         if (!$this->isEnabled) {
-            return ['success' => false, 'message' => 'Cloud sync is disabled'];
+            return false;
         }
 
         try {
-            $this->logger->info('Syncing data', ['type' => $dataType, 'count' => count($data)]);
-            
-            // Add to sync queue
-            $this->syncQueue[] = [
-                'type' => $dataType,
-                'data' => $data,
-                'timestamp' => time(),
-                'id' => uniqid()
+            $syncItem = [
+                'id' => uniqid('sync_'),
+                'device_id' => $this->currentDeviceId,
+                'data_type' => $dataType,
+                'data' => $this->encryptData($data),
+                'timestamp' => microtime(true),
+                'version' => $options['version'] ?? 1,
+                'priority' => $options['priority'] ?? 'normal',
+                'conflict_resolution' => $options['conflict_resolution'] ?? 'last_write_wins',
+                'tags' => $options['tags'] ?? [],
+                'metadata' => $options['metadata'] ?? []
             ];
 
-            // Process sync queue
-            $result = $this->processSyncQueue();
-            
-            return $result;
+            $this->syncQueue[] = $syncItem;
+            $this->processSyncQueue();
+
+            $this->logger->debug("Data queued for sync", [
+                'data_type' => $dataType,
+                'item_id' => $syncItem['id']
+            ]);
+
+            return true;
         } catch (\Exception $e) {
-            $this->logger->error('Failed to sync data: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Sync failed: ' . $e->getMessage()];
+            $this->logger->error("Failed to sync data", [
+                'data_type' => $dataType,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
     }
 
-    public function pullData(string $dataType): array
-    {
-        if (!$this->isEnabled) {
-            return ['success' => false, 'message' => 'Cloud sync is disabled'];
-        }
-
-        try {
-            $this->logger->info('Pulling data from cloud', ['type' => $dataType]);
-            
-            // In a real implementation, this would make an API call
-            $data = $this->fetchFromCloud($dataType);
-            
-            return [
-                'success' => true,
-                'data' => $data,
-                'timestamp' => time()
-            ];
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to pull data: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Pull failed: ' . $e->getMessage()];
-        }
-    }
-
-    public function getSyncStatus(): array
-    {
-        return [
-            'enabled' => $this->isEnabled,
-            'last_sync' => $this->lastSync,
-            'queue_size' => count($this->syncQueue),
-            'pending_items' => array_map(function($item) {
-                return [
-                    'type' => $item['type'],
-                    'timestamp' => $item['timestamp'],
-                    'id' => $item['id']
-                ];
-            }, $this->syncQueue)
-        ];
-    }
-
-    public function resolveConflict(string $conflictId, array $resolution): array
+    public function getSyncedData(string $dataType, array $filters = []): array
     {
         try {
-            $this->logger->info('Resolving sync conflict', ['conflict_id' => $conflictId]);
+            $response = $this->httpClient->get('/api/sync/data', [
+                'headers' => $this->getAuthHeaders(),
+                'query' => array_merge([
+                    'data_type' => $dataType,
+                    'device_id' => $this->currentDeviceId
+                ], $filters)
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
             
-            // In a real implementation, this would handle conflict resolution
-            $result = $this->applyConflictResolution($conflictId, $resolution);
-            
-            return [
-                'success' => true,
-                'message' => 'Conflict resolved',
-                'result' => $result
-            ];
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to resolve conflict: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Conflict resolution failed'];
+            // Decrypt the data
+            foreach ($data['items'] as &$item) {
+                $item['data'] = $this->decryptData($item['data']);
+            }
+
+            return $data;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to get synced data", [
+                'data_type' => $dataType,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    public function resolveConflict(string $conflictId, string $resolution): bool
+    {
+        try {
+            $response = $this->httpClient->post('/api/sync/conflicts/' . $conflictId . '/resolve', [
+                'headers' => $this->getAuthHeaders(),
+                'json' => [
+                    'resolution' => $resolution,
+                    'device_id' => $this->currentDeviceId
+                ]
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                $this->logger->info("Conflict resolved", [
+                    'conflict_id' => $conflictId,
+                    'resolution' => $resolution
+                ]);
+                return true;
+            }
+
+            return false;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to resolve conflict", [
+                'conflict_id' => $conflictId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
     }
 
     public function getConflicts(): array
     {
-        // In a real implementation, this would fetch actual conflicts
-        return [
-            'conflicts' => [],
-            'count' => 0
-        ];
+        try {
+            $response = $this->httpClient->get('/api/sync/conflicts', [
+                'headers' => $this->getAuthHeaders(),
+                'query' => ['device_id' => $this->currentDeviceId]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to get conflicts", ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
-    public function backupData(): array
+    public function registerDevice(): bool
     {
         try {
-            $this->logger->info('Creating data backup');
-            
-            $backup = [
-                'timestamp' => time(),
-                'version' => '1.0',
-                'data' => [
-                    'bookmarks' => $this->getBookmarksData(),
-                    'history' => $this->getHistoryData(),
-                    'settings' => $this->getSettingsData(),
-                    'passwords' => $this->getPasswordsData(),
-                    'tabs' => $this->getTabsData()
-                ]
+            $deviceInfo = [
+                'device_id' => $this->currentDeviceId,
+                'name' => $this->getDeviceName(),
+                'type' => $this->getDeviceType(),
+                'os' => $this->getOperatingSystem(),
+                'browser_version' => $this->getBrowserVersion(),
+                'capabilities' => $this->getDeviceCapabilities(),
+                'last_seen' => time()
             ];
-            
-            $backupId = $this->uploadBackup($backup);
-            
-            return [
-                'success' => true,
-                'backup_id' => $backupId,
-                'timestamp' => $backup['timestamp']
-            ];
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to create backup: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Backup failed'];
+
+            $response = $this->httpClient->post('/api/sync/devices', [
+                'headers' => $this->getAuthHeaders(),
+                'json' => $deviceInfo
+            ]);
+
+            if ($response->getStatusCode() === 201) {
+                $this->deviceRegistry[$this->currentDeviceId] = $deviceInfo;
+                $this->logger->info("Device registered", ['device_id' => $this->currentDeviceId]);
+                return true;
+            }
+
+            return false;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to register device", ['error' => $e->getMessage()]);
+            return false;
         }
     }
 
-    public function restoreData(string $backupId): array
+    public function getRegisteredDevices(): array
     {
         try {
-            $this->logger->info('Restoring data from backup', ['backup_id' => $backupId]);
+            $response = $this->httpClient->get('/api/sync/devices', [
+                'headers' => $this->getAuthHeaders()
+            ]);
+
+            $devices = json_decode($response->getBody()->getContents(), true);
+            $this->deviceRegistry = array_merge($this->deviceRegistry, $devices);
             
-            $backup = $this->downloadBackup($backupId);
-            
-            if (!$backup) {
-                return ['success' => false, 'message' => 'Backup not found'];
-            }
-            
-            $this->applyBackup($backup);
-            
-            return [
-                'success' => true,
-                'message' => 'Data restored successfully',
-                'backup_timestamp' => $backup['timestamp']
-            ];
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to restore data: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Restore failed'];
+            return $devices;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to get registered devices", ['error' => $e->getMessage()]);
+            return $this->deviceRegistry;
         }
     }
 
-    public function getBackups(): array
+    public function removeDevice(string $deviceId): bool
     {
-        // In a real implementation, this would fetch actual backups
-        return [
-            'backups' => [],
-            'count' => 0
-        ];
+        try {
+            $response = $this->httpClient->delete('/api/sync/devices/' . $deviceId, [
+                'headers' => $this->getAuthHeaders()
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                unset($this->deviceRegistry[$deviceId]);
+                $this->logger->info("Device removed", ['device_id' => $deviceId]);
+                return true;
+            }
+
+            return false;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to remove device", [
+                'device_id' => $deviceId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
-    private function processSyncQueue(): array
+    public function enableRealTimeSync(): bool
     {
-        $results = [];
-        
-        foreach ($this->syncQueue as $item) {
-            try {
-                $result = $this->syncItem($item);
-                $results[] = $result;
-                
-                if ($result['success']) {
-                    $this->lastSync[$item['type']] = time();
-                }
-            } catch (\Exception $e) {
-                $this->logger->error('Failed to sync item', [
-                    'item_id' => $item['id'],
-                    'error' => $e->getMessage()
-                ]);
-                $results[] = [
-                    'success' => false,
-                    'item_id' => $item['id'],
-                    'error' => $e->getMessage()
-                ];
-            }
+        if (!$this->loop) {
+            return false;
         }
-        
-        // Clear successfully synced items
-        $this->syncQueue = array_filter($this->syncQueue, function($item) use ($results) {
-            foreach ($results as $result) {
-                if (isset($result['item_id']) && $result['item_id'] === $item['id']) {
-                    return !$result['success'];
-                }
-            }
+
+        try {
+            // Set up WebSocket connection for real-time sync
+            $this->loop->addPeriodicTimer(5.0, function() {
+                $this->checkForUpdates();
+            });
+
+            $this->logger->info("Real-time sync enabled");
             return true;
-        });
-        
-        return [
-            'success' => true,
-            'processed' => count($results),
-            'results' => $results
-        ];
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to enable real-time sync", ['error' => $e->getMessage()]);
+            return false;
+        }
     }
 
-    private function syncItem(array $item): array
+    public function createBackup(array $dataTypes = []): string
     {
-        // In a real implementation, this would make actual API calls
-        $this->logger->info('Syncing item', [
-            'type' => $item['type'],
-            'id' => $item['id']
+        try {
+            $backupData = [
+                'device_id' => $this->currentDeviceId,
+                'timestamp' => time(),
+                'data_types' => $dataTypes,
+                'version' => '1.0'
+            ];
+
+            foreach ($dataTypes as $dataType) {
+                $backupData['data'][$dataType] = $this->getSyncedData($dataType);
+            }
+
+            $backupId = uniqid('backup_');
+            $encryptedBackup = $this->encryptData($backupData);
+
+            $response = $this->httpClient->post('/api/sync/backups', [
+                'headers' => $this->getAuthHeaders(),
+                'json' => [
+                    'backup_id' => $backupId,
+                    'data' => $encryptedBackup
+                ]
+            ]);
+
+            if ($response->getStatusCode() === 201) {
+                $this->logger->info("Backup created", ['backup_id' => $backupId]);
+                return $backupId;
+            }
+
+            return '';
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to create backup", ['error' => $e->getMessage()]);
+            return '';
+        }
+    }
+
+    public function restoreBackup(string $backupId): bool
+    {
+        try {
+            $response = $this->httpClient->get('/api/sync/backups/' . $backupId, [
+                'headers' => $this->getAuthHeaders()
+            ]);
+
+            $backupData = json_decode($response->getBody()->getContents(), true);
+            $decryptedData = $this->decryptData($backupData['data']);
+
+            // Restore each data type
+            foreach ($decryptedData['data'] as $dataType => $data) {
+                $this->syncData($dataType, $data, ['priority' => 'high']);
+            }
+
+            $this->logger->info("Backup restored", ['backup_id' => $backupId]);
+            return true;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to restore backup", [
+                'backup_id' => $backupId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    public function getSyncStatistics(): array
+    {
+        try {
+            $response = $this->httpClient->get('/api/sync/statistics', [
+                'headers' => $this->getAuthHeaders(),
+                'query' => ['device_id' => $this->currentDeviceId]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to get sync statistics", ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    public function setConflictResolutionStrategy(string $dataType, string $strategy): void
+    {
+        $this->conflictResolution[$dataType] = $strategy;
+        $this->logger->info("Conflict resolution strategy set", [
+            'data_type' => $dataType,
+            'strategy' => $strategy
         ]);
-        
-        // Simulate API call
-        usleep(100000); // 100ms delay
-        
-        return [
-            'success' => true,
-            'item_id' => $item['id'],
-            'type' => $item['type'],
-            'timestamp' => time()
-        ];
     }
 
-    private function fetchFromCloud(string $dataType): array
+    public function getSyncHistory(int $limit = 100): array
     {
-        // In a real implementation, this would make an API call
-        $this->logger->info('Fetching data from cloud', ['type' => $dataType]);
-        
-        // Simulate API call
-        usleep(200000); // 200ms delay
-        
-        return [];
+        return array_slice($this->syncHistory, -$limit);
     }
 
-    private function applyConflictResolution(string $conflictId, array $resolution): array
+    private function processSyncQueue(): void
     {
-        // In a real implementation, this would apply the resolution
-        $this->logger->info('Applying conflict resolution', [
+        if (empty($this->syncQueue)) {
+            return;
+        }
+
+        foreach ($this->syncQueue as $item) {
+            $this->uploadSyncItem($item);
+        }
+
+        $this->syncQueue = [];
+    }
+
+    private function uploadSyncItem(array $item): bool
+    {
+        try {
+            $response = $this->httpClient->post('/api/sync/upload', [
+                'headers' => $this->getAuthHeaders(),
+                'json' => $item
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                $this->syncHistory[] = [
+                    'item_id' => $item['id'],
+                    'data_type' => $item['data_type'],
+                    'timestamp' => $item['timestamp'],
+                    'status' => 'success'
+                ];
+                return true;
+            }
+
+            return false;
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to upload sync item", [
+                'item_id' => $item['id'],
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    private function checkForUpdates(): void
+    {
+        try {
+            $response = $this->httpClient->get('/api/sync/updates', [
+                'headers' => $this->getAuthHeaders(),
+                'query' => [
+                    'device_id' => $this->currentDeviceId,
+                    'since' => $this->getLastSyncTime()
+                ]
+            ]);
+
+            $updates = json_decode($response->getBody()->getContents(), true);
+            
+            foreach ($updates['items'] as $update) {
+                $this->processUpdate($update);
+            }
+
+            $this->updateLastSyncTime();
+        } catch (RequestException $e) {
+            $this->logger->error("Failed to check for updates", ['error' => $e->getMessage()]);
+        }
+    }
+
+    private function processUpdate(array $update): void
+    {
+        // Decrypt the update data
+        $update['data'] = $this->decryptData($update['data']);
+        
+        // Apply conflict resolution if needed
+        $strategy = $this->conflictResolution[$update['data_type']] ?? 'last_write_wins';
+        
+        switch ($strategy) {
+            case 'last_write_wins':
+                $this->applyUpdate($update);
+                break;
+            case 'first_write_wins':
+                if ($this->isNewerUpdate($update)) {
+                    $this->applyUpdate($update);
+                }
+                break;
+            case 'manual':
+                $this->createConflict($update);
+                break;
+        }
+    }
+
+    private function applyUpdate(array $update): void
+    {
+        // This would integrate with the appropriate service to apply the update
+        $this->logger->debug("Update applied", [
+            'data_type' => $update['data_type'],
+            'update_id' => $update['id']
+        ]);
+    }
+
+    private function createConflict(array $update): void
+    {
+        $conflictId = uniqid('conflict_');
+        
+        $this->logger->info("Conflict created", [
             'conflict_id' => $conflictId,
-            'resolution' => $resolution
+            'data_type' => $update['data_type']
         ]);
+    }
+
+    private function isNewerUpdate(array $update): bool
+    {
+        // Check if this update is newer than the local version
+        return true; // Simplified for now
+    }
+
+    private function encryptData(array $data): string
+    {
+        $jsonData = json_encode($data);
+        $key = $this->encryptionKeys['data_key'];
         
-        return ['resolved' => true];
-    }
-
-    private function getBookmarksData(): array
-    {
-        // In a real implementation, this would fetch from database
-        return [];
-    }
-
-    private function getHistoryData(): array
-    {
-        // In a real implementation, this would fetch from database
-        return [];
-    }
-
-    private function getSettingsData(): array
-    {
-        // In a real implementation, this would fetch from database
-        return [];
-    }
-
-    private function getPasswordsData(): array
-    {
-        // In a real implementation, this would fetch from database
-        return [];
-    }
-
-    private function getTabsData(): array
-    {
-        // In a real implementation, this would fetch from database
-        return [];
-    }
-
-    private function uploadBackup(array $backup): string
-    {
-        // In a real implementation, this would upload to cloud storage
-        $backupId = 'backup_' . uniqid();
-        $this->logger->info('Backup uploaded', ['backup_id' => $backupId]);
-        return $backupId;
-    }
-
-    private function downloadBackup(string $backupId): ?array
-    {
-        // In a real implementation, this would download from cloud storage
-        $this->logger->info('Backup downloaded', ['backup_id' => $backupId]);
+        $iv = random_bytes(16);
+        $encrypted = openssl_encrypt($jsonData, 'AES-256-CBC', $key, 0, $iv);
         
-        // Return mock backup data
-        return [
-            'timestamp' => time() - 3600,
-            'version' => '1.0',
-            'data' => []
+        return base64_encode($iv . $encrypted);
+    }
+
+    private function decryptData(string $encryptedData): array
+    {
+        $data = base64_decode($encryptedData);
+        $iv = substr($data, 0, 16);
+        $encrypted = substr($data, 16);
+        
+        $key = $this->encryptionKeys['data_key'];
+        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $key, 0, $iv);
+        
+        return json_decode($decrypted, true) ?? [];
+    }
+
+    private function initializeEncryption(): void
+    {
+        $this->encryptionKeys = [
+            'data_key' => $this->config['encryption_key'] ?? hash('sha256', 'default_key'),
+            'device_key' => hash('sha256', $this->currentDeviceId)
         ];
     }
 
-    private function applyBackup(array $backup): void
+    private function generateDeviceId(): string
     {
-        // In a real implementation, this would apply the backup data
-        $this->logger->info('Backup applied', ['timestamp' => $backup['timestamp']]);
+        return 'device_' . uniqid() . '_' . substr(md5(php_uname()), 0, 8);
+    }
+
+    private function getDeviceName(): string
+    {
+        return gethostname() ?: 'Unknown Device';
+    }
+
+    private function getDeviceType(): string
+    {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        
+        if (strpos($userAgent, 'Mobile') !== false) {
+            return 'mobile';
+        } elseif (strpos($userAgent, 'Tablet') !== false) {
+            return 'tablet';
+        } else {
+            return 'desktop';
+        }
+    }
+
+    private function getOperatingSystem(): string
+    {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        
+        if (strpos($userAgent, 'Windows') !== false) {
+            return 'Windows';
+        } elseif (strpos($userAgent, 'Mac') !== false) {
+            return 'macOS';
+        } elseif (strpos($userAgent, 'Linux') !== false) {
+            return 'Linux';
+        } else {
+            return 'Unknown';
+        }
+    }
+
+    private function getBrowserVersion(): string
+    {
+        return 'Prism Browser 1.0.0';
+    }
+
+    private function getDeviceCapabilities(): array
+    {
+        return [
+            'sync_enabled' => true,
+            'real_time_sync' => $this->loop !== null,
+            'encryption_supported' => true,
+            'conflict_resolution' => true
+        ];
+    }
+
+    private function getAuthHeaders(): array
+    {
+        $token = $this->generateAuthToken();
+        return [
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json',
+            'X-Device-ID' => $this->currentDeviceId
+        ];
+    }
+
+    private function generateAuthToken(): string
+    {
+        $payload = [
+            'device_id' => $this->currentDeviceId,
+            'timestamp' => time(),
+            'exp' => time() + 3600 // 1 hour
+        ];
+
+        return JWT::encode($payload, $this->config['jwt_secret'] ?? 'default_secret', 'HS256');
+    }
+
+    private function getLastSyncTime(): int
+    {
+        return $this->config['last_sync_time'] ?? 0;
+    }
+
+    private function updateLastSyncTime(): void
+    {
+        $this->config['last_sync_time'] = time();
+    }
+
+    private function startSyncProcess(): void
+    {
+        if (!$this->loop) {
+            return;
+        }
+
+        // Process sync queue every 30 seconds
+        $this->loop->addPeriodicTimer(30.0, function() {
+            $this->processSyncQueue();
+        });
+
+        // Check for updates every 60 seconds
+        $this->loop->addPeriodicTimer(60.0, function() {
+            $this->checkForUpdates();
+        });
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->isEnabled;
+    }
+
+    public function cleanup(): void
+    {
+        $this->syncQueue = [];
+        $this->conflictResolution = [];
+        $this->deviceRegistry = [];
+        $this->syncHistory = [];
+        $this->isEnabled = false;
+        $this->logger->info("Cloud Sync Service cleaned up");
     }
 }
