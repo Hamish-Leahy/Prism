@@ -3,19 +3,33 @@
 namespace Prism\Backend\Services;
 
 use Monolog\Logger;
+use React\EventLoop\LoopInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 
 class PushNotificationService
 {
     private array $config;
     private Logger $logger;
+    private LoopInterface $loop;
+    private Client $httpClient;
     private array $subscriptions = [];
     private array $notifications = [];
+    private array $notificationTemplates = [];
+    private array $scheduledNotifications = [];
     private bool $initialized = false;
+    private array $vapidKeys = [];
 
-    public function __construct(array $config, Logger $logger)
+    public function __construct(array $config, Logger $logger, LoopInterface $loop = null)
     {
         $this->config = $config;
         $this->logger = $logger;
+        $this->loop = $loop;
+        $this->httpClient = new Client([
+            'timeout' => 30,
+            'connect_timeout' => 10
+        ]);
+        $this->loadNotificationTemplates();
     }
 
     public function initialize(): bool
