@@ -1,142 +1,217 @@
-import React, { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { BrowserWindow } from './components/BrowserWindow'
-import { SettingsPanel } from './components/SettingsPanel'
-import { EngineSelector } from './components/EngineSelector'
-import { TabManager } from './components/TabManager'
-import { AddressBar } from './components/AddressBar'
-import { BookmarkBar } from './components/BookmarkBar'
-import { useEngine } from './hooks/useEngine'
-import { useTabs } from './hooks/useTabs'
-import { useSettings } from './hooks/useSettings'
+import React, { useState, useEffect, useRef } from 'react'
+import { SearchEngines } from './components/SearchEngines'
+import { RevolutionaryTabs } from './components/RevolutionaryTabs'
+import { SmartAddressBar } from './components/SmartAddressBar'
+import { WebView } from './components/WebView'
+import { Sidebar } from './components/Sidebar'
+import { CommandPalette } from './components/CommandPalette'
+
+interface Tab {
+  id: string
+  title: string
+  url: string
+  favicon: string
+  isActive: boolean
+  isPinned: boolean
+  groupId?: string
+  searchEngine?: string
+  canGoBack: boolean
+  canGoForward: boolean
+  isLoading: boolean
+}
+
+interface SearchEngine {
+  id: string
+  name: string
+  url: string
+  icon: string
+  shortcut: string
+  isDefault: boolean
+}
 
 function App() {
-  const [showSettings, setShowSettings] = useState(false)
-  const { currentEngine, switchEngine, engines } = useEngine()
-  const { 
-    tabs, 
-    tabGroups, 
-    createTab, 
-    closeTab, 
-    activeTab, 
-    setActiveTab, 
-    navigateTab, 
-    loading,
-    searchQuery,
-    setSearchQuery,
-    createTabGroup,
-    updateTabGroup,
-    deleteTabGroup,
-    addTabToGroup,
-    removeTabFromGroup,
-    pinTab,
-    unpinTab,
-    duplicateTab,
-    getTabsByGroup,
-    getUngroupedTabs
-  } = useTabs()
-  const { settings, updateSettings } = useSettings()
+  const [tabs, setTabs] = useState<Tab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([
+    { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=', icon: '🔍', shortcut: 'g', isDefault: true },
+    { id: 'duckduckgo', name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=', icon: '🦆', shortcut: 'd', isDefault: false },
+    { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=', icon: '🔎', shortcut: 'b', isDefault: false },
+    { id: 'youtube', name: 'YouTube', url: 'https://www.youtube.com/results?search_query=', icon: '📺', shortcut: 'y', isDefault: false },
+    { id: 'github', name: 'GitHub', url: 'https://github.com/search?q=', icon: '🐙', shortcut: 'gh', isDefault: false },
+    { id: 'stackoverflow', name: 'Stack Overflow', url: 'https://stackoverflow.com/search?q=', icon: '📚', shortcut: 'so', isDefault: false },
+    { id: 'reddit', name: 'Reddit', url: 'https://www.reddit.com/search/?q=', icon: '🤖', shortcut: 'r', isDefault: false },
+    { id: 'wikipedia', name: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Special:Search?search=', icon: '📖', shortcut: 'w', isDefault: false }
+  ])
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [currentSearchEngine, setCurrentSearchEngine] = useState<SearchEngine>(searchEngines[0])
+  const webviewRef = useRef<HTMLWebViewElement>(null)
 
+  // Initialize with a new tab
   useEffect(() => {
-    // Create initial tab
     if (tabs.length === 0) {
-      createTab('New Tab', 'about:blank')
+      createNewTab()
     }
   }, [])
 
+  const createNewTab = (url: string = 'about:blank', searchEngine?: string) => {
+    const newTab: Tab = {
+      id: `tab-${Date.now()}`,
+      title: 'New Tab',
+      url,
+      favicon: '🌐',
+      isActive: true,
+      isPinned: false,
+      searchEngine: searchEngine || currentSearchEngine.id,
+      canGoBack: false,
+      canGoForward: false,
+      isLoading: false
+    }
+
+    setTabs(prevTabs => {
+      const updatedTabs = prevTabs.map(tab => ({ ...tab, isActive: false }))
+      return [...updatedTabs, newTab]
+    })
+    setActiveTabId(newTab.id)
+  }
+
+  const closeTab = (tabId: string) => {
+    setTabs(prevTabs => {
+      const filteredTabs = prevTabs.filter(tab => tab.id !== tabId)
+      if (filteredTabs.length === 0) {
+        createNewTab()
+        return []
+      }
+      
+      // If closing active tab, activate another tab
+      if (tabId === activeTabId) {
+        const activeIndex = prevTabs.findIndex(tab => tab.id === tabId)
+        const newActiveIndex = activeIndex > 0 ? activeIndex - 1 : 0
+        const newActiveTab = filteredTabs[newActiveIndex]
+        if (newActiveTab) {
+          setActiveTabId(newActiveTab.id)
+        }
+      }
+      
+      return filteredTabs
+    })
+  }
+
+  const setActiveTab = (tabId: string) => {
+    setTabs(prevTabs => 
+      prevTabs.map(tab => ({ ...tab, isActive: tab.id === tabId }))
+    )
+    setActiveTabId(tabId)
+  }
+
+  const navigateTab = (tabId: string, url: string) => {
+    setTabs(prevTabs => 
+      prevTabs.map(tab => 
+        tab.id === tabId 
+          ? { ...tab, url, isLoading: true, title: 'Loading...' }
+          : tab
+      )
+    )
+  }
+
+  const handleSearch = (query: string, searchEngineId?: string) => {
+    const engine = searchEngines.find(e => e.id === (searchEngineId || currentSearchEngine.id)) || currentSearchEngine
+    const searchUrl = `${engine.url}${encodeURIComponent(query)}`
+    createNewTab(searchUrl, engine.id)
+  }
+
+  const activeTab = tabs.find(tab => tab.id === activeTabId)
+
   return (
-    <Router>
-      <div className="h-screen flex flex-col bg-arc-bg">
-        {/* Title Bar */}
-        <div className="h-8 bg-arc-surface border-b border-arc-border flex items-center justify-between px-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-arc-accent rounded-full"></div>
-            <span className="text-sm font-medium text-arc-text">Prism Browser</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <EngineSelector
-              engines={engines}
-              currentEngine={currentEngine}
-              onEngineChange={switchEngine}
-            />
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-1 hover:bg-arc-border rounded transition-colors"
-            >
-              <svg className="w-4 h-4 text-arc-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
-        </div>
+    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+      {/* Revolutionary Tab Bar */}
+      <RevolutionaryTabs
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabSelect={setActiveTab}
+        onTabClose={closeTab}
+        onNewTab={() => createNewTab()}
+        onTabPin={(tabId) => {
+          setTabs(prevTabs => 
+            prevTabs.map(tab => 
+              tab.id === tabId ? { ...tab, isPinned: !tab.isPinned } : tab
+            )
+          )
+        }}
+      />
 
-        {/* Address Bar */}
-        <AddressBar
-          currentUrl={activeTab?.url || ''}
-          loading={loading}
-          onNavigate={(url) => {
-            if (activeTab) {
-              navigateTab(activeTab.id, url)
-            }
-          }}
-          onRefresh={() => {
-            if (activeTab && activeTab.url !== 'about:blank') {
-              navigateTab(activeTab.id, activeTab.url)
-            }
-          }}
-          onHome={() => {
-            if (activeTab) {
-              navigateTab(activeTab.id, 'about:blank')
-            }
-          }}
-        />
+      {/* Smart Address Bar */}
+      <SmartAddressBar
+        currentUrl={activeTab?.url || ''}
+        searchEngines={searchEngines}
+        currentSearchEngine={currentSearchEngine}
+        onSearch={handleSearch}
+        onNavigate={(url) => {
+          if (activeTab) {
+            navigateTab(activeTab.id, url)
+          }
+        }}
+        onSearchEngineChange={setCurrentSearchEngine}
+        onCommandPalette={() => setShowCommandPalette(true)}
+      />
 
-        {/* Bookmark Bar */}
-        <BookmarkBar />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex">
-          {/* Sidebar */}
-          <div className="w-64 sidebar flex flex-col">
-            <TabManager
-              tabs={tabs}
-              tabGroups={tabGroups}
-              activeTab={activeTab}
-              searchQuery={searchQuery}
-              onTabSelect={setActiveTab}
-              onTabClose={closeTab}
-              onTabPin={pinTab}
-              onTabUnpin={unpinTab}
-              onTabDuplicate={duplicateTab}
-              onNewTab={(groupId) => createTab('New Tab', 'about:blank', groupId)}
-              onSearchChange={setSearchQuery}
-              onCreateGroup={createTabGroup}
-              onGroupUpdate={updateTabGroup}
-              onGroupDelete={deleteTabGroup}
-              onTabRemoveFromGroup={removeTabFromGroup}
-              getTabsByGroup={getTabsByGroup}
-              getUngroupedTabs={getUngroupedTabs}
-            />
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 content-area">
-            <BrowserWindow
-              tab={activeTab}
-              engine={currentEngine}
-            />
-          </div>
-        </div>
-
-        {/* Settings Panel */}
-        {showSettings && (
-          <SettingsPanel
-            onClose={() => setShowSettings(false)}
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        {!sidebarCollapsed && (
+          <Sidebar
+            tabs={tabs}
+            searchEngines={searchEngines}
+            onTabSelect={setActiveTab}
+            onTabClose={closeTab}
+            onNewTab={() => createNewTab()}
+            onSearch={handleSearch}
           />
         )}
+
+        {/* Web Content */}
+        <div className="flex-1 bg-white relative">
+          {activeTab && (
+            <WebView
+              ref={webviewRef}
+              tab={activeTab}
+              onTitleChange={(title) => {
+                setTabs(prevTabs => 
+                  prevTabs.map(tab => 
+                    tab.id === activeTab.id ? { ...tab, title } : tab
+                  )
+                )
+              }}
+              onFaviconChange={(favicon) => {
+                setTabs(prevTabs => 
+                  prevTabs.map(tab => 
+                    tab.id === activeTab.id ? { ...tab, favicon } : tab
+                  )
+                )
+              }}
+              onLoadingChange={(isLoading) => {
+                setTabs(prevTabs => 
+                  prevTabs.map(tab => 
+                    tab.id === activeTab.id ? { ...tab, isLoading } : tab
+                  )
+                )
+              }}
+            />
+          )}
+        </div>
       </div>
-    </Router>
+
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <CommandPalette
+          onClose={() => setShowCommandPalette(false)}
+          onSearch={handleSearch}
+          searchEngines={searchEngines}
+          tabs={tabs}
+          onTabSelect={setActiveTab}
+        />
+      )}
+    </div>
   )
 }
 

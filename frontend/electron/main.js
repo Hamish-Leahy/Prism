@@ -1,26 +1,31 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell, ipcMain, webContents } = require('electron')
 const path = require('path')
 const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow
+let webviewWindows = new Map() // Store webview windows
 
 function createWindow() {
-  // Create the browser window
+  // Create the main browser window
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1600,
+    height: 1000,
+    minWidth: 1200,
+    minHeight: 800,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      enableRemoteModule: false,
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true,
+      webSecurity: false,
       preload: path.join(__dirname, 'preload.js')
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
     show: false,
-    backgroundColor: '#0C0C0C'
+    backgroundColor: '#000000',
+    frame: true,
+    transparent: false,
+    vibrancy: 'dark'
   })
 
   // Load the app
@@ -39,12 +44,6 @@ function createWindow() {
   // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null
-  })
-
-  // Handle external links
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
   })
 
   // Create menu

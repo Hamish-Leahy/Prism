@@ -4,13 +4,15 @@
 
 @layer base {
   * {
-    @apply border-border;
+    box-sizing: border-box;
   }
   
   body {
-    @apply bg-arc-bg text-arc-text font-sans;
     margin: 0;
     padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: #1a1a1a;
+    color: #ffffff;
     overflow: hidden;
   }
   
@@ -22,34 +24,42 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    @apply px-3 py-1.5 rounded-md font-medium transition-all duration-200 text-sm;
   }
   
   .btn-primary {
-    @apply bg-arc-accent text-white hover:bg-arc-accent-hover;
+    @apply bg-blue-600 text-white hover:bg-blue-700;
   }
   
   .btn-secondary {
-    @apply bg-arc-surface text-arc-text border border-arc-border hover:bg-arc-border;
+    @apply bg-gray-700 text-gray-200 hover:bg-gray-600;
   }
   
   .input {
-    @apply bg-arc-surface border border-arc-border rounded-lg px-3 py-2 text-arc-text placeholder-arc-text-secondary focus:outline-none focus:ring-2 focus:ring-arc-accent focus:border-transparent;
+    @apply bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
   
   .tab {
-    @apply px-4 py-2 bg-arc-surface border border-arc-border rounded-t-lg text-arc-text-secondary hover:text-arc-text transition-colors;
+    @apply px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:text-white transition-colors text-sm;
   }
   
   .tab-active {
-    @apply bg-arc-bg border-b-transparent text-arc-text;
+    @apply bg-blue-600 border-blue-500 text-white;
   }
   
   .sidebar {
-    @apply bg-arc-surface border-r border-arc-border;
+    @apply bg-gray-800 border-r border-gray-700;
   }
   
   .content-area {
-    @apply bg-arc-bg;
+    @apply bg-white;
+  }
+  
+  .address-bar {
+    @apply bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full;
+  }
+  
+  .nav-button {
+    @apply p-2 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
 }
