@@ -1,0 +1,29 @@
+# Prism Browser Tor Configuration
+
+# SOCKS proxy
+SOCKSPort 9050
+
+# Control port
+ControlPort 9051
+
+# Client only
+ClientOnly 1
+SafeSocks 1
+TestSocks 1
+WarnUnsafeSocks 1
+
+# Circuit preferences
+CircuitBuildTimeout 60
+LearnCircuitBuildTimeout 0
+MaxCircuitDirtiness 600
+
+# Performance
+NumEntryGuards 8
+NumDirectoryGuards 3
+
+# DNS
+DNSPort 5353
+
+# Logs
+Log notice stdout
+

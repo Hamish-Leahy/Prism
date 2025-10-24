@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron')
 const path = require('path')
+const EngineManager = require('./engines/EngineManager')
 
 let mainWindow
+let engineManager
 
 // Configure engine-specific sessions
 function setupEngineSessions() {
@@ -79,12 +81,22 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
 
   // Show window when ready
-  mainWindow.once('ready-to-show', () => {
+  mainWindow.once('ready-to-show', async () => {
     mainWindow.show()
+    
+    // Initialize Engine Manager after window is ready
+    engineManager = new EngineManager(mainWindow)
+    await engineManager.initialize()
+    
+    console.log('✅ Prism Browser ready with native engines')
   })
 
   // Handle window closed
-  mainWindow.on('closed', () => {
+  mainWindow.on('closed', async () => {
+    if (engineManager) {
+      await engineManager.shutdown()
+      engineManager = null
+    }
     mainWindow = null
   })
 
