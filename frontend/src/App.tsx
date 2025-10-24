@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { SearchEngines } from './components/SearchEngines'
+import { useState, useEffect, useRef } from 'react'
 import { RevolutionaryTabs } from './components/RevolutionaryTabs'
 import { SmartAddressBar } from './components/SmartAddressBar'
 import { WebView } from './components/WebView'
@@ -32,7 +31,7 @@ interface SearchEngine {
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
-  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([
+  const [searchEngines] = useState<SearchEngine[]>([
     { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=', icon: '🔍', shortcut: 'g', isDefault: true },
     { id: 'duckduckgo', name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=', icon: '🦆', shortcut: 'd', isDefault: false },
     { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=', icon: '🔎', shortcut: 'b', isDefault: false },
@@ -43,7 +42,7 @@ function App() {
     { id: 'wikipedia', name: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Special:Search?search=', icon: '📖', shortcut: 'w', isDefault: false }
   ])
   const [showCommandPalette, setShowCommandPalette] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed] = useState(false)
   const [currentSearchEngine, setCurrentSearchEngine] = useState<SearchEngine>(searchEngines[0])
   const webviewRef = useRef<HTMLWebViewElement>(null)
 
