@@ -23,10 +23,16 @@ class OfflineService
     private array $cacheStrategies = [];
     private array $offlineAnalytics = [];
 
-    public function __construct(array $config, Logger $logger)
+    public function __construct(array $config, Logger $logger, LoopInterface $loop = null)
     {
         $this->config = $config;
         $this->logger = $logger;
+        $this->loop = $loop;
+        $this->httpClient = new Client([
+            'timeout' => 30,
+            'connect_timeout' => 10
+        ]);
+        $this->initializeCacheStrategies();
     }
 
     public function initialize(): bool
