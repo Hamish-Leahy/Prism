@@ -1,5 +1,49 @@
 /* Component Styles */
 
+/* App Layout */
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  color: white;
+  overflow: hidden;
+}
+
+/* Tab Bar */
+.tab-bar {
+  height: 48px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #3a3a3a;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.tabs-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.tab-new {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #8a8a8a;
+  font-size: 18px;
+  font-weight: 300;
+  transition: all 0.2s ease;
+}
+
+.tab-new:hover {
+  background: #3a3a3a;
+  color: white;
+}
+
 /* Tab Styles */
 .tab {
   display: flex;
@@ -45,33 +89,49 @@
 
 /* Address Bar Styles */
 .address-bar {
+  height: 56px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #3a3a3a;
   display: flex;
   align-items: center;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  border-radius: 12px;
   padding: 0 16px;
-  height: 40px;
   gap: 12px;
-  transition: all 0.2s ease;
 }
 
-.address-bar:focus-within {
-  border-color: #007AFF;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+.nav-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.address-input-container {
+  flex: 1;
+  max-width: 800px;
 }
 
 .address-input {
-  flex: 1;
-  background: none;
-  border: none;
+  width: 100%;
+  height: 36px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 0 12px;
   color: white;
   font-size: 14px;
-  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.address-input:focus {
+  border-color: #007AFF;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
 }
 
 .address-input::placeholder {
   color: #8a8a8a;
+}
+
+.address-actions {
+  display: flex;
+  gap: 4px;
 }
 
 /* Navigation Button Styles */
@@ -99,6 +159,19 @@
 .nav-button:disabled:hover {
   background: none;
   color: #8a8a8a;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.web-content {
+  flex: 1;
+  background: white;
+  position: relative;
 }
 
 /* Sidebar Styles */
@@ -146,6 +219,114 @@
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  font-size: 24px;
+}
+
+.logo-text h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: white;
+}
+
+.logo-text p {
+  font-size: 12px;
+  color: #8a8a8a;
+  margin: 0;
+}
+
+.tabs-section, .search-section {
+  margin-bottom: 24px;
+}
+
+.tabs-section h3, .search-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a8a8a;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tab-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #e0e0e0;
+}
+
+.tab-item:hover {
+  background: #2a2a2a;
+}
+
+.tab-item.active {
+  background: #007AFF;
+  color: white;
+}
+
+.tab-item .tab-favicon {
+  font-size: 14px;
+}
+
+.tab-item .tab-title {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-engines {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.search-engine-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #e0e0e0;
+}
+
+.search-engine-btn:hover {
+  background: #3a3a3a;
+  border-color: #4a4a4a;
+}
+
+.engine-icon {
+  font-size: 18px;
+}
+
+.engine-name {
+  font-size: 11px;
+  font-weight: 500;
 }
 
 /* Command Palette Styles */

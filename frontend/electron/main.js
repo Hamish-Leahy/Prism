@@ -12,13 +12,14 @@ function createWindow() {
     height: 1000,
     minWidth: 1200,
     minHeight: 800,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true,
-      webSecurity: false,
-      preload: path.join(__dirname, 'preload.js')
-    },
+            webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              enableRemoteModule: true,
+              webSecurity: false,
+              webviewTag: true,
+              preload: path.join(__dirname, 'preload.js')
+            },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
     show: false,
@@ -28,26 +29,31 @@ function createWindow() {
     vibrancy: 'dark'
   })
 
-  // Load the app
-  if (isDev) {
-    // Wait for Vite dev server to be ready
-    const loadApp = () => {
-      mainWindow.loadURL('http://localhost:5173')
-        .then(() => {
-          console.log('Successfully loaded Vite dev server')
-          mainWindow.webContents.openDevTools()
-        })
-        .catch((err) => {
-          console.log('Failed to load Vite dev server, retrying in 2 seconds...', err.message)
-          setTimeout(loadApp, 2000)
-        })
-    }
-    
-    // Wait a bit for Vite to start
-    setTimeout(loadApp, 3000)
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
-  }
+          // Load the app
+          if (isDev) {
+            // Load Vite dev server
+            mainWindow.loadURL('http://localhost:5173')
+              .then(() => {
+                console.log('Successfully loaded Vite dev server')
+                mainWindow.webContents.openDevTools()
+              })
+              .catch((err) => {
+                console.log('Failed to load Vite dev server:', err.message)
+                // Retry after a short delay
+                setTimeout(() => {
+                  mainWindow.loadURL('http://localhost:5173')
+                    .then(() => {
+                      console.log('Successfully loaded Vite dev server on retry')
+                      mainWindow.webContents.openDevTools()
+                    })
+                    .catch((retryErr) => {
+                      console.log('Failed to load Vite dev server on retry:', retryErr.message)
+                    })
+                }, 2000)
+              })
+          } else {
+            mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+          }
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
