@@ -406,4 +406,52 @@ class EngineController
             return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
     }
+
+    /**
+     * Navigate to URL with specified engine
+     */
+    public function navigate(Request $request, Response $response): Response
+    {
+        try {
+            $data = json_decode($request->getBody()->getContents(), true);
+            $url = $data['url'] ?? '';
+            $engineName = $data['engine'] ?? 'prism';
+
+            if (empty($url)) {
+                throw new \InvalidArgumentException('URL is required');
+            }
+
+            // Switch to specified engine if different from current
+            if ($engineName !== $this->engineManager->getCurrentEngine()) {
+                $this->engineManager->switchEngine($engineName);
+            }
+
+            $engine = $this->engineManager->getActiveEngine();
+            if (!$engine) {
+                throw new \RuntimeException('No engine available');
+            }
+
+            // Navigate to URL
+            $engine->navigateTo($url);
+            
+            // Get rendered content
+            $content = $engine->getPageContent();
+            $title = $engine->getPageTitle();
+            $currentUrl = $engine->getCurrentUrl();
+            
+            $result = [
+                'success' => true,
+                'url' => $currentUrl,
+                'title' => $title,
+                'content' => $content,
+                'engine' => $engineName
+            ];
+            
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode(['error' => $e->getMessage()]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+        }
+    }
 }

@@ -78,6 +78,10 @@ class Application
         });
         
         // Engine routes
+        $this->app->group('/api/engine', function ($group) use ($container) {
+            $group->post('/navigate', [EngineController::class, 'navigate']);
+        });
+        
         $this->app->group('/api/engines', function ($group) use ($container) {
             $group->get('', [EngineController::class, 'list']);
             $group->post('/switch', [EngineController::class, 'switch']);
