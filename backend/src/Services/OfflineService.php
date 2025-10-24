@@ -3,16 +3,25 @@
 namespace Prism\Backend\Services;
 
 use Monolog\Logger;
+use React\EventLoop\LoopInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 
 class OfflineService
 {
     private array $config;
     private Logger $logger;
+    private LoopInterface $loop;
+    private Client $httpClient;
     private array $manifests = [];
     private array $cachedResources = [];
     private array $syncQueue = [];
+    private array $offlinePages = [];
+    private array $backgroundSync = [];
     private bool $isOnline = true;
     private bool $initialized = false;
+    private array $cacheStrategies = [];
+    private array $offlineAnalytics = [];
 
     public function __construct(array $config, Logger $logger)
     {
