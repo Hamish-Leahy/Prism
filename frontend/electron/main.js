@@ -30,8 +30,21 @@ function createWindow() {
 
   // Load the app
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools()
+    // Wait for Vite dev server to be ready
+    const loadApp = () => {
+      mainWindow.loadURL('http://localhost:5173')
+        .then(() => {
+          console.log('Successfully loaded Vite dev server')
+          mainWindow.webContents.openDevTools()
+        })
+        .catch((err) => {
+          console.log('Failed to load Vite dev server, retrying in 2 seconds...', err.message)
+          setTimeout(loadApp, 2000)
+        })
+    }
+    
+    // Wait a bit for Vite to start
+    setTimeout(loadApp, 3000)
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
