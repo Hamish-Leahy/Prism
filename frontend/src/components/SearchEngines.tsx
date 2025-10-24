@@ -1,4 +1,4 @@
-import React from 'react'
+// SearchEngines component
 
 interface SearchEngine {
   id: string

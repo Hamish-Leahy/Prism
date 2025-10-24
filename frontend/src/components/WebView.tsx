@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useRef } from 'react'
 
 interface Tab {
   id: string
@@ -26,7 +26,7 @@ export const WebView = forwardRef<HTMLWebViewElement, WebViewProps>(({
   onTitleChange,
   onFaviconChange,
   onLoadingChange
-}, ref) => {
+}) => {
   const webviewRef = useRef<HTMLWebViewElement>(null)
 
   useEffect(() => {
@@ -175,7 +175,7 @@ export const WebView = forwardRef<HTMLWebViewElement, WebViewProps>(({
       `
     } else {
       // Load the actual URL
-      webview.src = tab.url
+      (webview as any).src = tab.url
     }
   }, [tab.url])
 

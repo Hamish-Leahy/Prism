@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 
 interface Tab {
   id: string
@@ -25,14 +25,12 @@ interface RevolutionaryTabsProps {
 
 export function RevolutionaryTabs({
   tabs,
-  activeTabId,
   onTabSelect,
   onTabClose,
   onNewTab,
   onTabPin
 }: RevolutionaryTabsProps) {
   const [draggedTab, setDraggedTab] = useState<string | null>(null)
-  const [tabGroups, setTabGroups] = useState<{[key: string]: string[]}>({})
   const tabRefs = useRef<{[key: string]: HTMLDivElement}>({})
 
   const pinnedTabs = tabs.filter(tab => tab.isPinned)
