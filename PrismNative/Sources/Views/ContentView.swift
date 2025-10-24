@@ -288,42 +288,33 @@ struct StartPage: View {
     
     var body: some View {
         ZStack {
-            // Clean white background
-            Color.white
+            // Clean background
+            Color(red: 0.97, green: 0.97, blue: 0.98)
             
             VStack(spacing: 50) {
                 Spacer()
                 
-                // Logo and branding
-                VStack(spacing: 20) {
-                    Text("🔮")
-                        .font(.system(size: 70))
+                // Just branding text - no emoji
+                VStack(spacing: 16) {
+                    Text("Prism")
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .foregroundColor(.black)
                     
-                    Text("Prism Browser")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.blue, Color.purple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("Multi-Engine Browsing")
-                        .font(.system(size: 15))
-                        .foregroundColor(.secondary)
-                        .fontWeight(.medium)
+                    Text("Multi-Engine Browser")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Color.black.opacity(0.6))
                 }
                 
                 // Large, prominent search bar
                 HStack(spacing: 14) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.black.opacity(0.5))
                     
                     TextField("Search or enter address", text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
+                        .foregroundColor(.black)
                         .onSubmit {
                             if !searchText.isEmpty {
                                 navigateToSearch(searchText)
@@ -336,16 +327,16 @@ struct StartPage: View {
                 .cornerRadius(14)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.gray.opacity(0.25), lineWidth: 1.5)
+                        .stroke(Color.black.opacity(0.15), lineWidth: 1.5)
                 )
                 .frame(maxWidth: 650)
-                .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
                 
                 // Quick links with clear borders
                 VStack(spacing: 20) {
                     Text("QUICK ACCESS")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.black.opacity(0.5))
                         .tracking(1.2)
                     
                     HStack(spacing: 16) {
@@ -389,20 +380,20 @@ struct QuickLink: View {
             VStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             .frame(width: 110, height: 100)
             .background(Color.white)
             .cornerRadius(14)
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.gray.opacity(isHovering ? 0.35 : 0.2), lineWidth: 1.5)
+                    .stroke(Color.black.opacity(isHovering ? 0.25 : 0.12), lineWidth: 1.5)
             )
             .scaleEffect(isHovering ? 1.05 : 1.0)
-            .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.04), radius: isHovering ? 16 : 6, x: 0, y: isHovering ? 6 : 3)
+            .shadow(color: Color.black.opacity(isHovering ? 0.12 : 0.05), radius: isHovering ? 16 : 6, x: 0, y: isHovering ? 6 : 3)
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovering in
