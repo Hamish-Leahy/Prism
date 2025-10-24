@@ -15,6 +15,8 @@ use Prism\Backend\Controllers\SettingsController;
 use Prism\Backend\Controllers\DownloadController;
 use Prism\Backend\Controllers\AuthenticationController;
 use Prism\Backend\Controllers\HealthController;
+use Prism\Backend\Controllers\CryptoWalletController;
+use Prism\Backend\Controllers\SearchController;
 use Prism\Backend\Services\EngineManager;
 use Prism\Backend\Services\DatabaseService;
 use Prism\Backend\Services\AuthenticationService;
@@ -139,6 +141,25 @@ class Application
             $group->post('/{id}/resume', [DownloadController::class, 'resume']);
             $group->post('/{id}/cancel', [DownloadController::class, 'cancel']);
             $group->delete('/{id}', [DownloadController::class, 'delete']);
+        });
+        
+        // Crypto Wallet routes
+        $this->app->group('/api/wallet', function ($group) use ($container) {
+            $group->post('/create', [CryptoWalletController::class, 'createWallet']);
+            $group->post('/import', [CryptoWalletController::class, 'importWallet']);
+            $group->get('', [CryptoWalletController::class, 'getWallets']);
+            $group->get('/chains', [CryptoWalletController::class, 'getSupportedChains']);
+            $group->get('/{walletId}/balance', [CryptoWalletController::class, 'getBalance']);
+            $group->get('/{walletId}/transactions', [CryptoWalletController::class, 'getTransactions']);
+            $group->post('/send', [CryptoWalletController::class, 'sendTransaction']);
+        });
+        
+        // Search routes
+        $this->app->group('/api/search', function ($group) use ($container) {
+            $group->get('', [SearchController::class, 'search']);
+            $group->post('/index', [SearchController::class, 'indexPage']);
+            $group->get('/stats', [SearchController::class, 'getStats']);
+            $group->post('/clear', [SearchController::class, 'clearIndex']);
         });
         
         // Health check

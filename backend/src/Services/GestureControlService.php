@@ -25,9 +25,9 @@ class GestureControlService
 
     public function enable(): bool
     {
-        $this->isEnabled = true;
-        $this->logger->info('Gesture control enabled');
-        return true;
+            $this->isEnabled = true;
+            $this->logger->info('Gesture control enabled');
+            return true;
     }
 
     public function disable(): bool

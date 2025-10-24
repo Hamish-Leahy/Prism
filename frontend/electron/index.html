@@ -12,11 +12,12 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+            background: #ffffff;
+            color: #1d1d1f;
             height: 100vh;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
         .app {
@@ -25,15 +26,16 @@
             flex-direction: column;
         }
 
-        /* Basic Top Bar */
+        /* Top Bar - Apple Style */
         .top-bar {
-            height: 50px;
-            background: #fff;
-            border-bottom: 1px solid #ddd;
+            height: 52px;
+            background: rgba(246, 246, 246, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
             display: flex;
             align-items: center;
-            padding: 0 12px;
-            gap: 12px;
+            padding: 0 12px 0 80px;
+            gap: 8px;
             -webkit-app-region: drag;
         }
 
@@ -41,185 +43,333 @@
             -webkit-app-region: no-drag;
         }
 
-        .browser-name {
-            font-size: 16px;
-            font-weight: 600;
-            color: #333;
-            margin-right: 20px;
-            margin-left: 80px; /* Move away from traffic lights */
-        }
-
-        .nav-buttons {
+        .nav-group {
             display: flex;
-            gap: 4px;
+            gap: 6px;
         }
 
         .nav-btn {
-            width: 32px;
-            height: 32px;
-            border: 1px solid #ddd;
-            background: #fff;
-            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: #1d1d1f;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 16px;
-            color: #666;
+            transition: background 0.2s ease;
         }
 
         .nav-btn:hover {
-            background: #f0f0f0;
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .nav-btn:active {
+            background: rgba(0, 0, 0, 0.12);
         }
 
         .nav-btn:disabled {
-            opacity: 0.5;
+            opacity: 0.3;
             cursor: not-allowed;
         }
 
-        .address-container {
+        .address-wrapper {
             flex: 1;
-            max-width: 600px;
-        }
-
-        .address-input {
-            width: 100%;
+            max-width: 700px;
             height: 32px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 0 12px;
-            font-size: 14px;
-            background: #fff;
+            background: rgba(255, 255, 255, 0.8);
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            gap: 8px;
+            transition: all 0.2s ease;
         }
 
-        .address-input:focus {
+        .address-wrapper:focus-within {
+            background: #ffffff;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .engine-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 3px 8px;
+            background: #007AFF;
+            color: white;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+
+        .engine-badge.prism {
+            background: #34C759; /* Green */
+        }
+
+        .engine-badge.chromium {
+            background: #007AFF; /* Blue */
+        }
+
+        .engine-badge.firefox {
+            background: #FF9500; /* Orange */
+        }
+
+        .engine-badge.tor {
+            background: #7C3AED; /* Purple */
+        }
+
+        .address-bar {
+            flex: 1;
+            height: 100%;
+            background: transparent;
+            border: none;
+            padding: 0 12px 0 0;
+            font-size: 13px;
             outline: none;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+            align-items: center;
+        }
+
+        .engine-selector {
+            position: relative;
+        }
+
+        .engine-dropdown {
+            height: 28px;
+            padding: 0 24px 0 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #1d1d1f;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%231d1d1f" height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            background-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .engine-dropdown:hover {
+            background-color: #ffffff;
             border-color: #007AFF;
         }
 
-        .tab-controls {
-            display: flex;
-            gap: 4px;
+        .engine-dropdown:focus {
+            background-color: #ffffff;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
         }
 
-        .tab-btn {
-            width: 32px;
-            height: 32px;
-            border: 1px solid #ddd;
-            background: #fff;
-            border-radius: 4px;
+        .toolbar-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #666;
+            font-size: 16px;
+            transition: background 0.2s ease;
         }
 
-        .tab-btn:hover {
-            background: #f0f0f0;
+        .toolbar-btn:hover {
+            background: rgba(0, 0, 0, 0.06);
         }
 
-        /* Tab System */
+        /* Tab Bar - Apple Style */
         .tab-bar {
-            height: 40px;
-            background: #f8f8f8;
-            border-bottom: 1px solid #ddd;
+            height: 38px;
+            background: #e8e8e8;
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.15);
             display: flex;
             align-items: center;
-            padding: 0 12px;
-            gap: 4px;
+            padding: 0 8px;
+            gap: 0;
             overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .tab-bar::-webkit-scrollbar {
+            display: none;
         }
 
         .tab {
+            min-width: 160px;
+            max-width: 240px;
+            height: 32px;
+            background: #d4d4d4;
+            border: none;
+            border-right: 0.5px solid rgba(0, 0, 0, 0.1);
+            padding: 0 12px;
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
-            background: #e0e0e0;
-            border: 1px solid #ccc;
-            border-radius: 6px 6px 0 0;
             cursor: pointer;
-            min-width: 120px;
-            max-width: 200px;
-            font-size: 14px;
-            color: #666;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .tab:first-child {
+            border-top-left-radius: 6px;
+        }
+
+        .tab:hover {
+            background: #c8c8c8;
         }
 
         .tab.active {
-            background: #fff;
-            border-bottom: 1px solid #fff;
-            color: #333;
+            background: #ffffff;
+            box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+
+        .tab.active::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #007AFF;
+        }
+
+        .tab-favicon {
+            width: 16px;
+            height: 16px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
         .tab-title {
             flex: 1;
-            white-space: nowrap;
+            font-size: 12px;
+            color: #1d1d1f;
+            font-weight: 400;
             overflow: hidden;
             text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tab.active .tab-title {
+            font-weight: 500;
         }
 
         .tab-close {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: transparent;
             border: none;
-            background: none;
+            color: #86868b;
+            font-size: 14px;
+            font-weight: 300;
             cursor: pointer;
-            font-size: 12px;
-            color: #999;
-            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .tab:hover .tab-close {
+            opacity: 1;
         }
 
         .tab-close:hover {
-            background: #ff6b6b;
-            color: white;
+            background: rgba(0, 0, 0, 0.12);
+            color: #1d1d1f;
         }
 
         .tab-new {
             width: 32px;
             height: 32px;
-            border: 1px solid #ccc;
-            background: #e0e0e0;
-            border-radius: 6px 6px 0 0;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #1d1d1f;
+            font-size: 20px;
+            font-weight: 300;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #666;
+            flex-shrink: 0;
+            transition: background 0.15s ease;
             margin-left: 4px;
         }
 
         .tab-new:hover {
-            background: #d0d0d0;
-            color: #333;
+            background: rgba(0, 0, 0, 0.08);
         }
 
+        .tab-new:active {
+            transform: scale(0.95);
+        }
+
+        /* Content Area */
         .web-content {
             flex: 1;
-            background: white;
             position: relative;
             display: flex;
             flex-direction: column;
+            background: #ffffff;
+            overflow: hidden;
+            min-height: 0;
         }
 
         #webviewContainer {
-            flex: 1;
-            position: relative;
             width: 100%;
             height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
 
         webview {
             position: absolute;
             top: 0;
             left: 0;
+            right: 0;
+            bottom: 0;
             width: 100%;
             height: 100%;
+            display: none;
+            min-width: 100%;
+            min-height: 100%;
         }
 
-        .home-page {
+        webview.active {
+            display: flex;
+        }
+
+        /* Start Page - Minimal Apple Style */
+        .start-page {
             position: absolute;
             top: 0;
             left: 0;
@@ -229,397 +379,1008 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-align: center;
+            background: #ffffff;
             z-index: 100;
         }
 
-        .home-page h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            font-weight: 300;
+        .start-page.hidden {
+            display: none !important;
         }
 
-        .home-page p {
-            font-size: 18px;
-            margin-bottom: 30px;
-            opacity: 0.9;
+        .start-logo {
+            font-size: 64px;
+            margin-bottom: 32px;
+            font-weight: 600;
+            color: #1d1d1f;
+            letter-spacing: -0.02em;
         }
 
-        .home-page .search-box {
-            width: 500px;
-            height: 50px;
-            border: none;
-            border-radius: 25px;
-            padding: 0 25px;
-            font-size: 16px;
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
+        .start-search {
+            width: 580px;
+            max-width: 90%;
+            height: 44px;
+            background: rgba(246, 246, 246, 0.8);
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            padding: 0 16px;
+            font-size: 15px;
             outline: none;
-            z-index: 1000;
-            position: relative;
+            transition: all 0.2s ease;
         }
 
-        .home-page .search-box:focus {
-            background: white;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        .start-search:focus {
+            background: #ffffff;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+        }
+
+        .favorites {
+            display: flex;
+            gap: 24px;
+            margin-top: 48px;
+        }
+
+        .favorite-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.2s ease;
+        }
+
+        .favorite-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .favorite-icon {
+            width: 64px;
+            height: 64px;
+            background: rgba(246, 246, 246, 0.8);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .favorite-name {
+            font-size: 12px;
+            color: #86868b;
+        }
+
+        /* Wallet Modal */
+        .wallet-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .wallet-modal.show {
+            display: flex;
+        }
+
+        .modal-panel {
+            background: #ffffff;
+            border-radius: 12px;
+            width: 480px;
+            max-width: 90%;
+            max-height: 70vh;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .modal-close {
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            color: #86868b;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .modal-content {
+            padding: 20px;
+            max-height: calc(70vh - 60px);
+            overflow-y: auto;
+        }
+
+        .wallet-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .action-btn {
+            flex: 1;
+            height: 40px;
+            background: #007AFF;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            background: #0051d5;
+        }
+
+        .action-btn:active {
+            transform: scale(0.98);
+        }
+
+        .wallet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .wallet-item {
+            padding: 12px;
+            background: rgba(246, 246, 246, 0.6);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .wallet-info h4 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+
+        .wallet-info p {
+            font-size: 12px;
+            color: #86868b;
+        }
+
+        .wallet-balance {
+            text-align: right;
+        }
+
+        .balance {
+            font-size: 16px;
+            font-weight: 600;
+            color: #007AFF;
+        }
+
+        .currency {
+            font-size: 11px;
+            color: #86868b;
         }
     </style>
 </head>
 <body>
     <div class="app">
-        <!-- Basic Top Bar -->
+        <!-- Top Bar -->
         <div class="top-bar">
-            <div class="browser-name">Prism Browser</div>
-            
-            <div class="nav-buttons">
-                <button class="nav-btn" id="backBtn">←</button>
-                <button class="nav-btn" id="forwardBtn">→</button>
-                <button class="nav-btn" id="refreshBtn">↻</button>
+            <div class="nav-group">
+                <button class="nav-btn" id="backBtn" title="Back">◀</button>
+                <button class="nav-btn" id="forwardBtn" title="Forward">▶</button>
+                <button class="nav-btn" id="refreshBtn" title="Refresh">⟳</button>
             </div>
             
-            <div class="address-container">
-                <input type="text" class="address-input" id="addressInput" placeholder="Search or enter URL...">
+            <div class="address-wrapper">
+                <span class="engine-badge" id="engineBadge">Firefox</span>
+                <input type="text" class="address-bar" id="addressBar" placeholder="Search or enter website">
             </div>
             
+            <div class="toolbar-actions">
+                <div class="engine-selector">
+                    <select class="engine-dropdown" id="engineSelector">
+                        <option value="prism">Prism Engine</option>
+                        <option value="chromium">Chromium</option>
+                        <option value="firefox" selected>Firefox</option>
+                        <option value="tor">Tor</option>
+                    </select>
+                </div>
+                <button class="toolbar-btn" id="walletBtn" title="Crypto Wallet">₿</button>
+                <button class="toolbar-btn" id="extensionsBtn" title="Extensions">⊞</button>
+            </div>
         </div>
 
         <!-- Tab Bar -->
         <div class="tab-bar" id="tabBar">
-            <!-- Tabs will be added here dynamically -->
+            <!-- Tabs will be added here -->
         </div>
 
-        <!-- Web Content -->
+        <!-- Content Area -->
         <div class="web-content">
-            <div class="home-page" id="homePage">
-                <h1>Prism Browser</h1>
-                <p>Search the web with Firefox engine</p>
-                <input type="text" class="search-box" id="homeSearchBox" placeholder="Search or enter URL...">
+            <!-- Start Page -->
+            <div class="start-page" id="startPage">
+                <div class="start-logo">Prism</div>
+                <input type="text" class="start-search" id="startSearch" placeholder="Search the web">
+                
+                <div class="favorites">
+                    <div class="favorite-item" data-url="https://www.google.com">
+                        <div class="favorite-icon">G</div>
+                        <div class="favorite-name">Google</div>
+                    </div>
+                    <div class="favorite-item" data-url="https://www.youtube.com">
+                        <div class="favorite-icon">▶</div>
+                        <div class="favorite-name">YouTube</div>
+                    </div>
+                    <div class="favorite-item" data-url="https://www.github.com">
+                        <div class="favorite-icon">⌘</div>
+                        <div class="favorite-name">GitHub</div>
+                    </div>
+                    <div class="favorite-item" data-url="https://www.twitter.com">
+                        <div class="favorite-icon">✦</div>
+                        <div class="favorite-name">Twitter</div>
+                    </div>
+                </div>
             </div>
-            <div id="webviewContainer">
-                <!-- Webviews will be added here dynamically -->
+
+            <!-- Webviews -->
+            <div id="webviewContainer"></div>
+        </div>
+    </div>
+
+    <!-- Wallet Modal -->
+    <div class="wallet-modal" id="walletModal">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <div class="modal-title">Crypto Wallet</div>
+                <button class="modal-close" id="closeWallet">×</button>
+            </div>
+            <div class="modal-content">
+                <div class="wallet-actions">
+                    <button class="action-btn" onclick="createWallet()">Create Wallet</button>
+                    <button class="action-btn" onclick="importWallet()">Import Wallet</button>
+                </div>
+                <div class="wallet-list" id="walletList">
+                    <p style="text-align: center; color: #86868b; padding: 20px;">No wallets yet. Create or import one to get started.</p>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Browser State
+        // State
         let tabs = [];
         let activeTabId = null;
+        let tabIdCounter = 0;
+        let defaultEngine = 'firefox'; // Default engine for new tabs
 
         // DOM Elements
-        const homePage = document.getElementById('homePage');
-        const homeSearchBox = document.getElementById('homeSearchBox');
-        const addressInput = document.getElementById('addressInput');
+        const tabBar = document.getElementById('tabBar');
+        const addressBar = document.getElementById('addressBar');
+        const startPage = document.getElementById('startPage');
+        const startSearch = document.getElementById('startSearch');
+        const webviewContainer = document.getElementById('webviewContainer');
         const backBtn = document.getElementById('backBtn');
         const forwardBtn = document.getElementById('forwardBtn');
         const refreshBtn = document.getElementById('refreshBtn');
-        const tabBar = document.getElementById('tabBar');
-        const webviewContainer = document.getElementById('webviewContainer');
+        const extensionsBtn = document.getElementById('extensionsBtn');
+        const walletBtn = document.getElementById('walletBtn');
+        const walletModal = document.getElementById('walletModal');
+        const closeWallet = document.getElementById('closeWallet');
+        const engineSelector = document.getElementById('engineSelector');
+        const engineBadge = document.getElementById('engineBadge');
+
+        // Update engine badge based on active tab
+        function updateEngineBadge() {
+            const tab = tabs.find(t => t.id === activeTabId);
+            const engine = tab ? tab.engine : defaultEngine;
+            
+            const engineNames = {
+                'prism': 'Prism',
+                'chromium': 'Chromium',
+                'firefox': 'Firefox',
+                'tor': 'Tor'
+            };
+            
+            engineBadge.textContent = engineNames[engine];
+            engineBadge.className = 'engine-badge ' + engine;
+            
+            // Update selector to match active tab's engine
+            if (engineSelector.value !== engine) {
+                engineSelector.value = engine;
+            }
+        }
 
         // Initialize
         function init() {
+            updateEngineBadge();
             createNewTab();
             setupEventListeners();
+            loadWallets();
         }
 
-        // Create new tab
-        function createNewTab(url = null) {
-            const tabId = Date.now().toString();
-            const tab = {
-                id: tabId,
-                url: url || 'home',
-                title: 'New Tab',
-                isLoading: false,
-                webview: null
-            };
-            
-            tabs.push(tab);
-            activeTabId = tabId;
-            
-            // Create webview for this tab
-            createWebviewForTab(tab);
-            
-            // Update tab display
-            updateTabDisplay();
-            
-            // Show home page
-            showHomePage();
-        }
-
-        // Create webview for tab
-        function createWebviewForTab(tab) {
-            const webview = document.createElement('webview');
-            webview.id = `webview-${tab.id}`;
-            webview.partition = `persist:tab-${tab.id}`;
-            webview.allowpopups = true;
-            webview.webpreferences = 'contextIsolation=no, nodeIntegration=yes';
-            webview.style.display = 'none';
-            webview.style.width = '100%';
-            webview.style.height = '100%';
-            
-            // Add event listeners
-            webview.addEventListener('did-start-loading', () => {
-                tab.isLoading = true;
-                updateTabDisplay();
-            });
-            
-            webview.addEventListener('did-stop-loading', () => {
-                tab.isLoading = false;
-                tab.title = webview.getTitle() || 'Untitled';
-                tab.url = webview.getURL();
-                updateTabDisplay();
-                updateAddressBar();
-            });
-            
-            webview.addEventListener('did-navigate', (e) => {
-                tab.url = e.url;
-                updateAddressBar();
-            });
-            
-            webview.addEventListener('did-navigate-in-page', (e) => {
-                tab.url = e.url;
-                updateAddressBar();
-            });
-            
-            webviewContainer.appendChild(webview);
-            tab.webview = webview;
-        }
-
-        // Update tab display
-        function updateTabDisplay() {
-            tabBar.innerHTML = '';
-            
-            tabs.forEach(tab => {
-                const tabElement = document.createElement('div');
-                tabElement.className = `tab ${tab.id === activeTabId ? 'active' : ''}`;
-                tabElement.innerHTML = `
-                    <span class="tab-title">${tab.title}</span>
-                    <button class="tab-close" onclick="closeTab('${tab.id}')">×</button>
-                `;
-                
-                tabElement.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('tab-close')) return;
-                    switchToTab(tab.id);
-                });
-                
-                tabBar.appendChild(tabElement);
-            });
-            
-            // Add new tab button at the end
-            const newTabButton = document.createElement('div');
-            newTabButton.className = 'tab-new';
-            newTabButton.innerHTML = '+';
-            newTabButton.addEventListener('click', () => {
-                createNewTab();
-            });
-            tabBar.appendChild(newTabButton);
-        }
-
-        // Switch to tab
-        function switchToTab(tabId) {
-            activeTabId = tabId;
-            const tab = tabs.find(t => t.id === tabId);
-            
-            if (tab) {
-                // Hide all webviews
-                tabs.forEach(t => {
-                    if (t.webview) {
-                        t.webview.style.display = 'none';
-                    }
-                });
-                
-                if (tab.url === 'home') {
-                    showHomePage();
-                } else {
-                    hideHomePage();
-                    if (tab.webview) {
-                        tab.webview.style.display = 'flex';
-                    }
-                }
-                updateAddressBar();
-            }
-            
-            updateTabDisplay();
-        }
-
-        // Update address bar
-        function updateAddressBar() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (tab) {
-                addressInput.value = tab.url === 'home' ? '' : tab.url;
-            }
-        }
-
-        // Close tab
-        function closeTab(tabId) {
-            const tabIndex = tabs.findIndex(t => t.id === tabId);
-            if (tabIndex === -1) return;
-            
-            const tab = tabs[tabIndex];
-            
-            // Remove webview from DOM
-            if (tab.webview) {
-                tab.webview.remove();
-            }
-            
-            tabs.splice(tabIndex, 1);
-            
-            // If we closed the active tab, switch to another tab
-            if (activeTabId === tabId) {
-                if (tabs.length > 0) {
-                    activeTabId = tabs[Math.max(0, tabIndex - 1)].id;
-                    switchToTab(activeTabId);
-                } else {
-                    // No tabs left, create a new one
-                    createNewTab();
-                }
-            } else {
-                updateTabDisplay();
-            }
-        }
-
-        // Show home page
-        function showHomePage() {
-            homePage.style.display = 'flex';
-            // Hide all webviews
-            tabs.forEach(t => {
-                if (t.webview) {
-                    t.webview.style.display = 'none';
-                }
-            });
-            addressInput.value = '';
-        }
-
-        // Hide home page and show webview
-        function hideHomePage() {
-            homePage.style.display = 'none';
-        }
-
-        // Load URL with Firefox engine
-        async function loadWithFirefoxEngine(url) {
-            try {
-                const tab = tabs.find(t => t.id === activeTabId);
-                if (!tab || !tab.webview) return;
-                
-                // Hide home page and show webview
-                hideHomePage();
-                tab.webview.style.display = 'flex';
-                
-                // Format URL properly
-                let formattedUrl = url;
-                if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('file://')) {
-                    // Check if it looks like a domain
-                    if (url.includes('.') && !url.includes(' ')) {
-                        formattedUrl = 'https://' + url;
-                    } else {
-                        // Treat as search query
-                        formattedUrl = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-                    }
-                }
-                
-                console.log('Loading URL:', formattedUrl);
-                
-                // Update tab URL immediately
-                tab.url = formattedUrl;
-                updateAddressBar();
-                
-                // Try backend first, fallback to direct loading
-                try {
-                    const response = await fetch('http://localhost:8000/api/engine/navigate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            url: formattedUrl,
-                            engine: 'firefox'
-                        })
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(data.content)}`;
-                        tab.webview.src = dataUrl;
-                        
-                        // Update tab title
-                        tab.title = data.title || 'Firefox Page';
-                        updateTabDisplay();
-                    } else {
-                        console.error('Failed to load with Firefox engine:', response.statusText);
-                        // Fallback to direct webview loading
-                        tab.webview.src = formattedUrl;
-                    }
-                } catch (fetchError) {
-                    console.error('Backend fetch error:', fetchError);
-                    // Fallback to direct webview loading
-                    tab.webview.src = formattedUrl;
-                }
-            } catch (error) {
-                console.error('Error loading with Firefox engine:', error);
-            }
-        }
-
-        // Setup event listeners
+        // Event Listeners
         function setupEventListeners() {
-            // Home page search box
-            homeSearchBox.addEventListener('keypress', (e) => {
-                console.log('Home search box keypress:', e.key);
+            // Address bar
+            addressBar.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    const url = homeSearchBox.value.trim();
-                    console.log('Home search URL:', url);
-                    if (url) {
-                        loadWithFirefoxEngine(url);
-                    }
+                    navigateTo(addressBar.value);
                 }
             });
 
-            // Also add input event for debugging
-            homeSearchBox.addEventListener('input', (e) => {
-                console.log('Home search box input:', e.target.value);
-            });
-
-            // Address bar
-            addressInput.addEventListener('keypress', (e) => {
+            // Start search
+            startSearch.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    const url = addressInput.value.trim();
-                    if (url) {
-                        loadWithFirefoxEngine(url);
-                    }
+                    navigateTo(startSearch.value);
                 }
             });
 
             // Navigation buttons
             backBtn.addEventListener('click', () => {
                 const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview && tab.webview.canGoBack()) {
+                if (tab && tab.webview) {
                     tab.webview.goBack();
                 }
             });
 
             forwardBtn.addEventListener('click', () => {
                 const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview && tab.webview.canGoForward()) {
+                if (tab && tab.webview) {
                     tab.webview.goForward();
                 }
             });
 
             refreshBtn.addEventListener('click', () => {
                 const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview && tab.webview.style.display !== 'none') {
+                if (tab && tab.webview) {
                     tab.webview.reload();
                 } else {
-                    showHomePage();
+                    showStartPage();
                 }
             });
 
+            // Engine selector - changes engine for active tab
+            engineSelector.addEventListener('change', (e) => {
+                const newEngine = e.target.value;
+                const tab = tabs.find(t => t.id === activeTabId);
+                
+                if (tab) {
+                    tab.engine = newEngine;
+                    updateEngineBadge();
+                    renderTabs(); // Re-render to update tab favicon color
+                    console.log(`Tab "${tab.title}" switched to: ${newEngine}`);
+                }
+            });
 
-            // Update navigation button states periodically
-            setInterval(updateNavButtons, 1000);
+            // Extensions
+            extensionsBtn.addEventListener('click', () => {
+                alert('Extensions\n\nComing soon:\n• Ad blockers\n• Privacy tools\n• Themes\n• Developer tools');
+            });
+
+            // Wallet modal
+            walletBtn.addEventListener('click', () => {
+                walletModal.classList.add('show');
+            });
+
+            closeWallet.addEventListener('click', () => {
+                walletModal.classList.remove('show');
+            });
+
+            walletModal.addEventListener('click', (e) => {
+                if (e.target === walletModal) {
+                    walletModal.classList.remove('show');
+                }
+            });
+
+            // Favorites
+            document.querySelectorAll('.favorite-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const url = item.getAttribute('data-url');
+                    navigateTo(url);
+                });
+            });
         }
 
-        // Update navigation button states
+        // Tab Management
+        function createNewTab() {
+            const tabId = `tab-${tabIdCounter++}`;
+            const tab = {
+                id: tabId,
+                title: 'New Tab',
+                url: '',
+                webview: null,
+                engine: defaultEngine // Each tab has its own engine
+            };
+
+            tabs.push(tab);
+            renderTabs();
+            switchToTab(tabId);
+        }
+
+        function closeTab(tabId) {
+            const index = tabs.findIndex(t => t.id === tabId);
+            if (index === -1) return;
+
+            const tab = tabs[index];
+            if (tab.webview) {
+                tab.webview.remove();
+            }
+
+            tabs.splice(index, 1);
+
+            if (tabs.length === 0) {
+                createNewTab();
+            } else if (activeTabId === tabId) {
+                const newActiveIndex = Math.min(index, tabs.length - 1);
+                switchToTab(tabs[newActiveIndex].id);
+            }
+
+            renderTabs();
+        }
+
+        function switchToTab(tabId) {
+            activeTabId = tabId;
+            const tab = tabs.find(t => t.id === tabId);
+
+            // Hide all webviews
+            document.querySelectorAll('webview').forEach(wv => {
+                wv.classList.remove('active');
+            });
+
+            if (tab.webview) {
+                tab.webview.classList.add('active');
+                startPage.classList.add('hidden');
+                addressBar.value = tab.url;
+                updateNavButtons();
+            } else {
+                showStartPage();
+            }
+
+            // Update engine badge for this tab
+            updateEngineBadge();
+            
+            renderTabs();
+        }
+
+        function renderTabs() {
+            tabBar.innerHTML = '';
+
+            tabs.forEach(tab => {
+                const tabEl = document.createElement('div');
+                tabEl.className = `tab ${tab.id === activeTabId ? 'active' : ''}`;
+                
+                // Favicon with engine indicator
+                const faviconEl = document.createElement('div');
+                faviconEl.className = 'tab-favicon';
+                
+                // Color-coded by engine
+                if (tab.engine === 'tor') {
+                    faviconEl.textContent = tab.url ? '●' : '○';
+                    faviconEl.style.color = '#7C3AED'; // Purple for Tor
+                } else if (tab.engine === 'prism') {
+                    faviconEl.textContent = tab.url ? '●' : '○';
+                    faviconEl.style.color = '#34C759'; // Green for Prism
+                } else if (tab.engine === 'chromium') {
+                    faviconEl.textContent = tab.url ? '●' : '○';
+                    faviconEl.style.color = '#007AFF'; // Blue for Chromium
+                } else if (tab.engine === 'firefox') {
+                    faviconEl.textContent = tab.url ? '●' : '○';
+                    faviconEl.style.color = '#FF9500'; // Orange for Firefox
+                } else {
+                    faviconEl.textContent = tab.url ? '●' : '○';
+                    faviconEl.style.color = ''; // Default color
+                }
+                
+                const titleEl = document.createElement('div');
+                titleEl.className = 'tab-title';
+                titleEl.textContent = tab.title;
+                
+                const closeEl = document.createElement('button');
+                closeEl.className = 'tab-close';
+                closeEl.textContent = '×';
+                closeEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                });
+
+                tabEl.appendChild(faviconEl);
+                tabEl.appendChild(titleEl);
+                tabEl.appendChild(closeEl);
+                
+                tabEl.addEventListener('click', () => {
+                    switchToTab(tab.id);
+                });
+
+                tabBar.appendChild(tabEl);
+            });
+
+            // Add new tab button
+            const newTabBtn = document.createElement('button');
+            newTabBtn.className = 'tab-new';
+            newTabBtn.textContent = '+';
+            newTabBtn.addEventListener('click', createNewTab);
+            tabBar.appendChild(newTabBtn);
+        }
+
+        // Navigation
+        async function navigateTo(input) {
+            if (!input) return;
+
+            let url = input.trim();
+            
+            // Handle prism:// protocol
+            if (url.startsWith('prism://')) {
+                await handlePrismProtocol(url);
+                return;
+            }
+            
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (!tab) return;
+
+            // Use the tab's engine
+            const tabEngine = tab.engine || defaultEngine;
+            
+            // Check if it's a URL or search query
+            const isSearch = !url.includes('.') || url.includes(' ');
+            
+            if (tabEngine === 'prism' && isSearch) {
+                // Use Prism search engine
+                await performPrismSearch(url);
+                return;
+            } else if (isSearch) {
+                // Use DuckDuckGo for Tor, Google for others
+                if (tabEngine === 'tor') {
+                    url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
+                } else {
+                    url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+                }
+            } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            tab.url = url;
+
+            // Use different engines based on tab's engine
+            if (tabEngine === 'prism') {
+                await navigateWithPrismEngine(url);
+            } else if (tabEngine === 'tor') {
+                // Use Tor with SOCKS proxy
+                await navigateWithTor(url, tab);
+            } else {
+                // For Firefox, Chromium, and default
+                if (!tab.webview) {
+                    createWebview(tab, url);
+                } else {
+                    tab.webview.src = url;
+                }
+            }
+
+            startPage.classList.add('hidden');
+            addressBar.value = url;
+        }
+
+        // Perform Prism Search
+        async function performPrismSearch(query) {
+            try {
+                const response = await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(query)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayPrismSearchResults(query, result.results);
+                } else {
+                    alert('Search error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Prism search error:', error);
+                alert('Failed to perform search. Check if backend is running.');
+            }
+        }
+
+        // Display Prism search results
+        function displayPrismSearchResults(query, results) {
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (!tab) return;
+
+            let html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Prism Search: ${query}</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                            background: #ffffff;
+                            color: #1d1d1f;
+                            padding: 40px 20px;
+                        }
+                        .container { max-width: 800px; margin: 0 auto; }
+                        .header { margin-bottom: 30px; }
+                        .logo { font-size: 32px; font-weight: 700; color: #007AFF; margin-bottom: 20px; }
+                        .search-box {
+                            width: 100%;
+                            padding: 12px 16px;
+                            border: 1px solid #ddd;
+                            border-radius: 8px;
+                            font-size: 16px;
+                        }
+                        .results-info { margin: 20px 0; color: #86868b; font-size: 14px; }
+                        .result {
+                            margin-bottom: 25px;
+                            padding: 15px;
+                            background: #f9f9f9;
+                            border-radius: 8px;
+                            transition: background 0.2s;
+                        }
+                        .result:hover { background: #f5f5f5; }
+                        .result-title {
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: #007AFF;
+                            margin-bottom: 5px;
+                            text-decoration: none;
+                            display: block;
+                        }
+                        .result-url {
+                            font-size: 13px;
+                            color: #34c759;
+                            margin-bottom: 8px;
+                        }
+                        .result-description {
+                            font-size: 14px;
+                            color: #1d1d1f;
+                            line-height: 1.5;
+                        }
+                        .suggestions {
+                            margin: 30px 0;
+                            padding: 15px;
+                            background: #f0f0f5;
+                            border-radius: 8px;
+                        }
+                        .suggestions-title {
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: #86868b;
+                            margin-bottom: 10px;
+                        }
+                        .suggestion {
+                            display: inline-block;
+                            margin: 5px 5px 5px 0;
+                            padding: 6px 12px;
+                            background: white;
+                            border-radius: 16px;
+                            font-size: 13px;
+                            color: #007AFF;
+                            text-decoration: none;
+                            border: 1px solid #ddd;
+                        }
+                        .suggestion:hover { background: #007AFF; color: white; }
+                        .no-results {
+                            text-align: center;
+                            padding: 60px 20px;
+                            color: #86868b;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <div class="logo">Prism Search</div>
+                            <input type="text" class="search-box" value="${query}" placeholder="Search with Prism...">
+                        </div>
+            `;
+
+            // Direct match
+            if (results.direct_match) {
+                const dm = results.direct_match;
+                html += `
+                    <div class="result">
+                        <a href="${dm.url}" class="result-title">${dm.title}</a>
+                        <div class="result-url">${dm.url}</div>
+                        <div class="result-description">${dm.description}</div>
+                    </div>
+                `;
+            }
+
+            // Suggestions
+            if (results.suggestions && results.suggestions.length > 0) {
+                html += '<div class="suggestions"><div class="suggestions-title">Suggestions</div>';
+                results.suggestions.forEach(sug => {
+                    html += `<a href="#" class="suggestion" onclick="window.parent.searchPrism('${sug}')">${sug}</a>`;
+                });
+                html += '</div>';
+            }
+
+            // Indexed results
+            if (results.indexed && results.indexed.length > 0) {
+                html += '<div class="results-info">Results from Prism Index</div>';
+                results.indexed.forEach(item => {
+                    html += `
+                        <div class="result">
+                            <a href="${item.url}" class="result-title">${item.title}</a>
+                            <div class="result-url">${item.url}</div>
+                            <div class="result-description">${item.description || item.content.substring(0, 200)}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Web results
+            if (results.web && results.web.length > 0) {
+                html += '<div class="results-info">Web Results</div>';
+                results.web.forEach(item => {
+                    html += `
+                        <div class="result">
+                            <a href="${item.url}" class="result-title">${item.title}</a>
+                            <div class="result-url">${item.url}</div>
+                            <div class="result-description">${item.description}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            // No results
+            if (!results.direct_match && (!results.indexed || results.indexed.length === 0) && (!results.web || results.web.length === 0)) {
+                html += '<div class="no-results">No results found for "' + query + '"</div>';
+            }
+
+            html += '</div></body></html>';
+
+            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+            
+            if (!tab.webview) {
+                createWebview(tab, dataUrl);
+            } else {
+                tab.webview.src = dataUrl;
+            }
+            
+            tab.title = 'Prism Search: ' + query;
+            tab.url = 'prism://search?q=' + encodeURIComponent(query);
+            addressBar.value = tab.url;
+            startPage.classList.add('hidden');
+            renderTabs();
+        }
+
+        // Handle prism:// protocol
+        async function handlePrismProtocol(url) {
+            const prismUrl = new URL(url);
+            const path = prismUrl.hostname;
+
+            if (path === 'search') {
+                const query = prismUrl.searchParams.get('q');
+                if (query) {
+                    await performPrismSearch(query);
+                }
+            } else if (path === 'home') {
+                showStartPage();
+            } else {
+                alert('Unknown Prism protocol: ' + path);
+            }
+        }
+
+        // Navigate with Prism Engine (via backend)
+        async function navigateWithPrismEngine(url) {
+            try {
+                const response = await fetch('http://localhost:8000/api/engine/navigate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url, engine: 'prism' })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (tab) {
+                        const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(result.content);
+                        
+                        if (!tab.webview) {
+                            createWebview(tab, dataUrl);
+                        } else {
+                            tab.webview.src = dataUrl;
+                        }
+                        
+                        tab.title = result.title || 'Prism Page';
+                        renderTabs();
+                    }
+                } else {
+                    alert('Prism Engine error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Prism Engine error:', error);
+                alert('Failed to load with Prism Engine. Using standard navigation.');
+                const tab = tabs.find(t => t.id === activeTabId);
+                if (tab) {
+                    if (!tab.webview) {
+                        createWebview(tab, url);
+                    } else {
+                        tab.webview.src = url;
+                    }
+                }
+            }
+        }
+
+        // Navigate with Tor (SOCKS5 proxy)
+        async function navigateWithTor(url, tab) {
+            // For Tor support, we configure the webview with proxy settings
+            if (!tab.webview) {
+                const webview = document.createElement('webview');
+                webview.src = url;
+                webview.className = 'active';
+                webview.setAttribute('allowpopups', '');
+                webview.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0'); // Tor Browser UA
+                
+                // Note: Tor requires SOCKS5 proxy on 127.0.0.1:9050
+                // In production, you'd need to configure Electron's proxy settings
+                // For now, we'll use standard navigation with privacy-focused settings
+                
+                webview.addEventListener('dom-ready', () => {
+                    webview.setZoomFactor(1.0);
+                    // Enhanced privacy for Tor tabs
+                    webview.executeJavaScript(`
+                        // Disable WebRTC IP leak
+                        if (navigator.mediaDevices) {
+                            navigator.mediaDevices.getUserMedia = undefined;
+                        }
+                        // Spoof timezone
+                        Date.prototype.getTimezoneOffset = function() { return 0; };
+                    `);
+                });
+                
+                webview.addEventListener('did-start-loading', () => {
+                    updateNavButtons();
+                });
+
+                webview.addEventListener('did-stop-loading', () => {
+                    tab.title = webview.getTitle() || 'Tor Tab';
+                    tab.url = webview.getURL();
+                    addressBar.value = tab.url;
+                    renderTabs();
+                    updateNavButtons();
+                });
+
+                webview.addEventListener('page-title-updated', (e) => {
+                    tab.title = e.title || 'Tor Tab';
+                    renderTabs();
+                });
+
+                tab.webview = webview;
+                webviewContainer.appendChild(webview);
+            } else {
+                tab.webview.src = url;
+            }
+        }
+
+        // Global function for search links
+        window.searchPrism = async function(query) {
+            await performPrismSearch(query);
+        };
+
+        function createWebview(tab, url) {
+            const webview = document.createElement('webview');
+            webview.src = url;
+            webview.className = 'active';
+            webview.setAttribute('allowpopups', '');
+            
+            // Configure webview based on engine
+            const engine = tab.engine || 'tor';
+            
+            // Set partition for engine isolation
+            webview.setAttribute('partition', `persist:${engine}`);
+            
+            // Set user agent based on engine
+            switch(engine) {
+                case 'firefox':
+                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0');
+                    break;
+                case 'tor':
+                    webview.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
+                    break;
+                case 'prism':
+                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Prism/1.0.0 (KHTML, like Gecko) Safari/605.1.15');
+                    break;
+                case 'chromium':
+                default:
+                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+                    break;
+            }
+            
+            // Fix viewport and zoom issues
+            webview.addEventListener('dom-ready', () => {
+                webview.setZoomFactor(1.0);
+                webview.insertCSS('body { zoom: 1.0 !important; }');
+                
+                // Engine-specific privacy/security configurations
+                if (engine === 'tor' || engine === 'firefox') {
+                    webview.executeJavaScript(`
+                        // Enhanced privacy settings
+                        if (navigator.mediaDevices) {
+                            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+                            navigator.mediaDevices.getUserMedia = function() {
+                                console.warn('getUserMedia blocked for privacy');
+                                return Promise.reject(new Error('Permission denied'));
+                            };
+                        }
+                        
+                        // Block WebRTC leaks
+                        if (window.RTCPeerConnection) {
+                            window.RTCPeerConnection = undefined;
+                        }
+                        if (window.webkitRTCPeerConnection) {
+                            window.webkitRTCPeerConnection = undefined;
+                        }
+                        if (window.mozRTCPeerConnection) {
+                            window.mozRTCPeerConnection = undefined;
+                        }
+                        
+                        // Spoof timezone to UTC
+                        Date.prototype.getTimezoneOffset = function() { return 0; };
+                        
+                        // Block canvas fingerprinting
+                        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                        HTMLCanvasElement.prototype.toDataURL = function() {
+                            console.warn('Canvas fingerprinting blocked');
+                            return originalToDataURL.call(this);
+                        };
+                    `);
+                }
+            });
+            
+            webview.addEventListener('did-start-loading', () => {
+                updateNavButtons();
+            });
+
+            webview.addEventListener('did-stop-loading', () => {
+                tab.title = webview.getTitle() || 'New Tab';
+                tab.url = webview.getURL();
+                addressBar.value = tab.url;
+                renderTabs();
+                updateNavButtons();
+            });
+
+            webview.addEventListener('page-title-updated', (e) => {
+                tab.title = e.title || 'New Tab';
+                renderTabs();
+            });
+
+            tab.webview = webview;
+            webviewContainer.appendChild(webview);
+        }
+
+        function showStartPage() {
+            startPage.classList.remove('hidden');
+            addressBar.value = '';
+            document.querySelectorAll('webview').forEach(wv => {
+                wv.classList.remove('active');
+            });
+        }
+
         function updateNavButtons() {
             const tab = tabs.find(t => t.id === activeTabId);
             if (tab && tab.webview) {
@@ -631,7 +1392,101 @@
             }
         }
 
-        // Initialize the app
+        // Crypto Wallet Functions
+        async function createWallet() {
+            const name = prompt('Wallet name:');
+            if (!name) return;
+
+            const password = prompt('Wallet password:');
+            if (!password) return;
+
+            try {
+                const response = await fetch('http://localhost:8000/api/wallet/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, password })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Wallet created!\n\n${result.wallet.address}`);
+                    loadWallets();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function importWallet() {
+            const privateKey = prompt('Private key:');
+            if (!privateKey) return;
+
+            const name = prompt('Wallet name:');
+            if (!name) return;
+
+            const password = prompt('Wallet password:');
+            if (!password) return;
+
+            try {
+                const response = await fetch('http://localhost:8000/api/wallet/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ private_key: privateKey, name, password })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Wallet imported!\n\n${result.wallet.address}`);
+                    loadWallets();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function loadWallets() {
+            try {
+                const response = await fetch('http://localhost:8000/api/wallet');
+                const result = await response.json();
+                
+                if (result.success && result.wallets.length > 0) {
+                    displayWallets(result.wallets);
+                }
+            } catch (error) {
+                console.error('Error loading wallets:', error);
+            }
+        }
+
+        function displayWallets(wallets) {
+            const walletList = document.getElementById('walletList');
+            walletList.innerHTML = '';
+
+            wallets.forEach(wallet => {
+                const item = document.createElement('div');
+                item.className = 'wallet-item';
+                
+                const balance = wallet.balance.ethereum || { native: 0 };
+                
+                item.innerHTML = `
+                    <div class="wallet-info">
+                        <h4>${wallet.name}</h4>
+                        <p>${wallet.address.substring(0, 10)}...${wallet.address.substring(wallet.address.length - 8)}</p>
+                    </div>
+                    <div class="wallet-balance">
+                        <div class="balance">${balance.native.toFixed(4)}</div>
+                        <div class="currency">ETH</div>
+                    </div>
+                `;
+                
+                walletList.appendChild(item);
+            });
+        }
+
+        // Start the app
         init();
     </script>
 </body>

@@ -70,8 +70,8 @@ class AIAssistantService
             $response = $this->processIntent($intent, $query, $enhancedContext);
             
             $this->addToConversationHistory('assistant', $response['message']);
-            
-            return $response;
+
+        return $response;
         } catch (\Exception $e) {
             $this->logger->error("Error processing AI query", [
                 'query' => $query,
@@ -439,7 +439,7 @@ class AIAssistantService
                 }
             }
         }
-
+        
         return 'general';
     }
 
@@ -739,7 +739,7 @@ class AIAssistantService
             case 'summarize':
                 return ['summary' => $this->basicSummarize($data['content'], $data['max_length'])];
             case 'translate':
-                return [
+        return [
                     'translated_text' => $data['text'],
                     'confidence' => 0.8
                 ];

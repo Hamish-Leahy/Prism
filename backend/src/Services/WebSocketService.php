@@ -168,8 +168,8 @@ class WebSocketService implements MessageComponentInterface
             'room' => $room
         ]);
 
-        return true;
-    }
+                return true;
+            }
 
     public function unsubscribeFromRoom(string $clientId, string $room): bool
     {

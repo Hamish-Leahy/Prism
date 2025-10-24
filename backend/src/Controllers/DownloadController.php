@@ -561,7 +561,7 @@ try {
             $this->logger->info('Download completed', ['id' => $id]);
         } else {
             // Download failed
-            $this->database->execute(
+        $this->database->execute(
                 'UPDATE downloads SET status = ?, error_message = ? WHERE id = ?',
                 ['failed', 'Download process exited with error', $id]
             );

@@ -253,7 +253,7 @@ class VoiceCommandService
                 if ($confidence >= $commandData['options']['confidence_threshold']) {
                     $parameters = $this->extractParameters($transcript, $pattern);
                     
-                    return [
+            return [
                         'name' => $commandName,
                         'pattern' => $pattern,
                         'confidence' => $confidence,
@@ -297,7 +297,7 @@ class VoiceCommandService
         
         // Extract URL from "go to" commands
         if (strpos($pattern, 'go to') !== false || strpos($pattern, 'navigate to') !== false) {
-            $url = $this->extractUrl($transcript);
+        $url = $this->extractUrl($transcript);
             if ($url) {
                 $parameters['url'] = $url;
             }

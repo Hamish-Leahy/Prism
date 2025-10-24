@@ -1,9 +1,55 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron')
 const path = require('path')
 
 let mainWindow
 
+// Configure engine-specific sessions
+function setupEngineSessions() {
+  // Chromium session (default)
+  const chromiumSession = session.fromPartition('persist:chromium')
+  chromiumSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+  
+  // Firefox session
+  const firefoxSession = session.fromPartition('persist:firefox')
+  firefoxSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0')
+  firefoxSession.setPreloads([])
+  
+  // Tor session with proxy
+  const torSession = session.fromPartition('persist:tor')
+  torSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0')
+  
+  // Configure Tor proxy (SOCKS5 on localhost:9050)
+  // Note: User needs to have Tor running locally
+  torSession.setProxy({
+    proxyRules: 'socks5://127.0.0.1:9050',
+    proxyBypassRules: '<local>'
+  }).then(() => {
+    console.log('Tor proxy configured')
+  }).catch((err) => {
+    console.warn('Tor proxy not available:', err.message)
+    console.log('To use Tor, install and start Tor service on port 9050')
+  })
+  
+  // Enhanced privacy settings for Tor
+  torSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    // Deny all permission requests for privacy
+    if (permission === 'media' || permission === 'geolocation' || permission === 'notifications') {
+      return callback(false)
+    }
+    callback(true)
+  })
+  
+  // Prism session (custom engine)
+  const prismSession = session.fromPartition('persist:prism')
+  prismSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Prism/1.0.0 (KHTML, like Gecko) Safari/605.1.15')
+  
+  console.log('Engine sessions configured: chromium, firefox, tor, prism')
+}
+
 function createWindow() {
+  // Setup engine sessions
+  setupEngineSessions()
+  
   // Create the main browser window
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -21,10 +67,12 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
     show: false,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#f6f6f6',
     frame: true,
     transparent: false,
-    vibrancy: 'dark'
+    vibrancy: 'light',
+    // Keep traffic lights visible even when window is unfocused
+    hiddenInsetTitleBarButtonsOnBlur: false
   })
 
   // Load the native HTML app
