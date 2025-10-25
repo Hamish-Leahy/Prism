@@ -579,97 +579,80 @@ function setupQuickLinks() {
     }
 
 // Tab Management
-// ===== GLOBAL MASTER TAB HANDLER =====
-// Centralized tab management - engines only activated when needed
-
-let masterTabs = new Map(); // Global tab registry
-let activeTabId = null;
-let tabIdCounter = 0;
-
-// Tab states
-const TAB_STATES = {
-    CREATED: 'created',      // Tab exists but no engine
-    LOADING: 'loading',     // Engine active, loading content
-    LOADED: 'loaded',       // Engine active, content loaded
-    HIDDEN: 'hidden'        // Engine hidden but active
-};
-
+// Tab Management - SIMPLE AND WORKING
 function createNewTab() {
     const tabId = `tab-${tabIdCounter++}`;
-    
-    // Create tab in master registry
     const tab = {
         id: tabId,
         title: 'New Tab',
         url: '',
         engine: defaultEngine,
-        state: TAB_STATES.CREATED,
         isLoading: false,
         visible: false,
-        view: null,
-        engineTabId: null
+        view: null
     };
-    
-    masterTabs.set(tabId, tab);
-    tabs.push(tab); // Keep compatibility with existing code
+
+    tabs.push(tab);
     activeTabId = tabId;
     
     // Update UI immediately
     renderTabs();
     updateEngineBadge();
     
-    // Hide all other tabs immediately
-    hideAllOtherTabs(tabId);
+    // CRITICAL: Hide ALL other tabs immediately to prevent content bleeding
+    console.log('🔒 Creating new tab - hiding all other tabs');
+    tabs.forEach(otherTab => {
+        if (otherTab.id !== tabId && otherTab.visible && otherTab.view) {
+            console.log('Hiding tab:', otherTab.id);
+            ipcRenderer.invoke('engine:hideTab', otherTab.id).catch(err => {
+                console.error('Failed to hide tab:', err);
+            });
+            otherTab.visible = false;
+        }
+    });
+    
+    // CRITICAL: Hide all BrowserViews to ensure clean state
+    ipcRenderer.invoke('engine:hideAllViews').catch(err => {
+        console.error('Failed to hide all views:', err);
+    });
     
     // Show start page
     startPage.classList.remove('hidden');
     addressBar.value = '';
     
-    console.log('✅ Master tab created:', tabId);
-}
-
-function hideAllOtherTabs(currentTabId) {
-    console.log('🔒 Master: Hiding all other tabs');
-    for (const [tabId, tab] of masterTabs.entries()) {
-        if (tabId !== currentTabId && tab.state !== TAB_STATES.CREATED) {
-            if (tab.view) {
-                // Hide the BrowserView
-                ipcRenderer.invoke('engine:hideTab', tab.engineTabId).catch(err => {
-                    console.error('Failed to hide tab:', err);
-                });
+    // Create engine tab in background
+    ipcRenderer.invoke('engine:createTab', tabId, defaultEngine, {})
+        .then(result => {
+            tab.view = result.view;
+            tab.visible = true;
+            console.log('✅ Tab created successfully');
+        })
+        .catch(error => {
+            console.error('Failed to create tab:', error);
+            // Remove failed tab
+            const index = tabs.findIndex(t => t.id === tabId);
+            if (index > -1) {
+                tabs.splice(index, 1);
+                if (tabs.length > 0) {
+                    switchToTab(tabs[tabs.length - 1].id);
+                } else {
+                    activeTabId = null;
+                }
+                renderTabs();
             }
-            tab.state = TAB_STATES.HIDDEN;
-            tab.visible = false;
-        }
-    }
+        });
 }
 
 function switchToTab(tabId) {
-    const tab = masterTabs.get(tabId);
-    if (!tab) return;
-    
     const oldActiveTabId = activeTabId;
     activeTabId = tabId;
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) return;
     
-    // Hide all other tabs
-    hideAllOtherTabs(tabId);
-    
-    // Update UI
-    updateTabUI(tab);
-    
-    // Activate engine if needed
-    if (tab.state === TAB_STATES.CREATED) {
-        activateTabEngine(tab);
-    } else if (tab.state === TAB_STATES.HIDDEN) {
-        showTabEngine(tab);
-    }
-}
-
-function updateTabUI(tab) {
     // Update active tab styling
     const allTabs = tabBar.querySelectorAll('.tab');
     allTabs.forEach(tabEl => {
-        if (tabEl.dataset.tabId === tab.id) {
+        if (tabEl.dataset.tabId === tabId) {
             tabEl.classList.add('active');
         } else {
             tabEl.classList.remove('active');
@@ -694,6 +677,11 @@ function updateTabUI(tab) {
         return;
     }
     
+    // Hide special pages
+    aiPage.style.display = 'none';
+    const extensionsPage = document.getElementById('extensionsPage');
+    if (extensionsPage) extensionsPage.style.display = 'none';
+    
     // Update address bar
     if (tab.url) {
         addressBar.value = tab.url;
@@ -705,55 +693,63 @@ function updateTabUI(tab) {
         startPage.classList.remove('hidden');
     }
     
-    updateNavButtons();
-}
-
-async function activateTabEngine(tab) {
-    console.log('🚀 Master: Activating engine for tab:', tab.id);
-    try {
-        const result = await ipcRenderer.invoke('engine:createTab', tab.id, tab.engine, {});
-        tab.view = result.view;
-        tab.engineTabId = tab.id;
-        tab.state = TAB_STATES.LOADING;
-        tab.visible = true;
+    // Hide other tabs and show current tab
+    if (tab.view) {
+        // CRITICAL: Hide ALL other tabs first to prevent content bleeding
+        console.log('🔒 Switching to tab - hiding all other tabs');
+        tabs.forEach(t => {
+            if (t.id !== tabId && t.visible && t.view) {
+                console.log('Hiding tab:', t.id);
+                ipcRenderer.invoke('engine:hideTab', t.id).catch(err => {
+                    console.error('Failed to hide tab:', err);
+                });
+                t.visible = false;
+            }
+        });
         
-        // Show the tab
-        await ipcRenderer.invoke('engine:showTab', tab.id);
-        console.log('✅ Master: Engine activated for tab:', tab.id);
-    } catch (error) {
-        console.error('Failed to activate engine:', error);
-        tab.state = TAB_STATES.CREATED;
-    }
-}
-
-async function showTabEngine(tab) {
-    console.log('👁️ Master: Showing engine for tab:', tab.id);
-    try {
-        await ipcRenderer.invoke('engine:showTab', tab.id);
-        tab.state = TAB_STATES.LOADED;
-        tab.visible = true;
-        console.log('✅ Master: Engine shown for tab:', tab.id);
-    } catch (error) {
-        console.error('Failed to show engine:', error);
+        // CRITICAL: Use hideOtherViews to ensure clean state
+        ipcRenderer.invoke('engine:hideOtherViews', tabId)
+            .then(() => {
+                // Show current tab
+                return ipcRenderer.invoke('engine:showTab', tabId);
+            })
+            .then(() => {
+                tab.visible = true;
+                updateNavButtons();
+                console.log('✅ Tab switched successfully');
+            })
+            .catch(error => {
+                console.error('Failed to switch tab:', error);
+            });
+    } else {
+        updateNavButtons();
     }
 }
 
 async function navigateTo(input) {
     if (!input) return;
-    
+
     let url = input.trim();
-    const tab = masterTabs.get(activeTabId);
-    if (!tab) return;
+    
+    // Get current active tab
+    let tab = tabs.find(t => t.id === activeTabId);
+    
+    // Create new tab if none exists
+    if (!tab) {
+        await createNewTab();
+        tab = tabs.find(t => t.id === activeTabId);
+        if (!tab) return;
+    }
     
     // Don't navigate in special tabs
     if (tab.isAITab || tab.isExtensionsTab) return;
-    
+
     // Handle prism:// protocol
     if (url.startsWith('prism://')) {
         handlePrismProtocol(url);
         return;
     }
-    
+
     // Use the tab's engine
     const tabEngine = tab.engine || defaultEngine;
     
@@ -777,51 +773,50 @@ async function navigateTo(input) {
     } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://' + url;
     }
-    
-    // Update tab state
+
+    // Update tab state immediately
     tab.url = url;
     tab.isLoading = true;
-    tab.state = TAB_STATES.LOADING;
     
     // Update UI immediately
     addressBar.value = url;
     updateSecurityIndicator(url);
     startPage.classList.add('hidden');
     renderTabs();
-    
-    // Activate engine if needed
-    if (tab.state === TAB_STATES.CREATED) {
-        await activateTabEngine(tab);
-    }
-    
-    // Navigate
-    try {
-        await ipcRenderer.invoke('engine:navigate', tab.id, url);
-        await ipcRenderer.invoke('engine:showTab', tab.id);
-    } catch (error) {
-        console.error('Navigation failed:', error);
-        tab.isLoading = false;
-        tab.state = TAB_STATES.LOADED;
-        
-        // Check if it's a network error
-        if (error.message && (
-            error.message.includes('net::') ||
-            error.message.includes('ERR_INTERNET_DISCONNECTED') ||
-            error.message.includes('ERR_NETWORK_CHANGED')
-        )) {
-            showNoInternetPage();
-        }
-    }
+
+    // Navigate and ensure BrowserView is visible
+    ipcRenderer.invoke('engine:navigate', tab.id, url)
+        .then(() => {
+            // Ensure the tab is visible after navigation
+            return ipcRenderer.invoke('engine:showTab', tab.id);
+        })
+        .then(() => {
+            // Don't set isLoading = false here - let the engine events handle it
+            hideNoInternetPage(); // Hide no internet page on successful navigation
+        })
+        .catch(error => {
+            console.error('Navigation failed:', error);
+            tab.isLoading = false;
+            
+            // Check if it's a network error
+            if (error.message && (
+                error.message.includes('net::') ||
+                error.message.includes('ERR_INTERNET_DISCONNECTED') ||
+                error.message.includes('ERR_NETWORK_CHANGED')
+            )) {
+                showNoInternetPage();
+            }
+        });
 }
 
 async function closeTab(tabId) {
-    const tab = masterTabs.get(tabId);
-    if (!tab) return;
-    
-    console.log('🗑️ Master: Closing tab:', tabId);
+    const index = tabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    const tab = tabs[index];
     
     // Close tab in native engine (skip for AI tabs and extensions tabs)
-    if (!tab.isAITab && !tab.isExtensionsTab && tab.state !== TAB_STATES.CREATED) {
+    if (!tab.isAITab && !tab.isExtensionsTab) {
         try {
             await ipcRenderer.invoke('engine:closeTab', tab.id);
         } catch (error) {
@@ -840,20 +835,14 @@ async function closeTab(tabId) {
             extensionsPage.style.display = 'none';
         }
     }
-    
-    // Remove from master registry
-    masterTabs.delete(tabId);
-    
-    // Remove from compatibility array
-    const index = tabs.findIndex(t => t.id === tabId);
-    if (index > -1) {
-        tabs.splice(index, 1);
-    }
-    
+
     // Clean up loading state
     tabLoadingStates.delete(tabId);
     sleepingTabs.delete(tabId);
     
+    // Remove from tabs array
+    tabs.splice(index, 1);
+
     if (tabs.length === 0) {
         // Show start page instead of creating a new tab
         showStartPage();
@@ -870,8 +859,6 @@ async function closeTab(tabId) {
     } else {
         renderTabs();
     }
-    
-    console.log('✅ Master: Tab closed:', tabId);
 }
 
 // Removed old broken switchToTab function - replaced with master handler
