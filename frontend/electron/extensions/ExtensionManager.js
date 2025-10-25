@@ -6,17 +6,24 @@
 
 const path = require('path');
 const fs = require('fs');
-const { session } = require('electron');
+const { session, app } = require('electron');
 
 class ExtensionManager {
     constructor() {
         this.extensions = new Map(); // extensionId -> extension info
-        this.extensionsDir = path.join(__dirname, 'installed');
+        
+        // Use app data directory instead of asar bundle (which is read-only when packaged)
+        const userDataPath = app.getPath('userData');
+        this.extensionsDir = path.join(userDataPath, 'extensions', 'installed');
         this.initialized = false;
         
         // Ensure extensions directory exists
-        if (!fs.existsSync(this.extensionsDir)) {
-            fs.mkdirSync(this.extensionsDir, { recursive: true });
+        try {
+            if (!fs.existsSync(this.extensionsDir)) {
+                fs.mkdirSync(this.extensionsDir, { recursive: true });
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not create extensions directory:', error.message);
         }
     }
 
@@ -28,7 +35,8 @@ class ExtensionManager {
             await this.loadInstalledExtensions();
             
             // Auto-install uBlock Origin if not already installed
-            await this.autoInstallEssentialExtensions();
+            // DISABLED for v0.1.0 - will enable in future version
+            // await this.autoInstallEssentialExtensions();
             
             this.initialized = true;
             console.log(`✅ Extension Manager initialized with ${this.extensions.size} extensions`);

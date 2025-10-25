@@ -14,7 +14,7 @@ class FirefoxEngine extends EngineInterface {
     constructor(config = {}) {
         super(config);
         this.name = 'firefox';
-        this.version = '122.0'; // Will be detected
+        this.version = '131.0'; // Updated to current version
         this.session = null;
         this.mainWindow = config.mainWindow;
         this.partition = 'persist:firefox';
@@ -56,8 +56,8 @@ class FirefoxEngine extends EngineInterface {
             // Create isolated session for Firefox engine
             this.session = session.fromPartition(this.partition);
             
-            // Configure session with Firefox-like settings
-            this.session.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0');
+            // Configure session with Firefox-like settings - use current Firefox version
+            this.session.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0');
             
             // Enhanced privacy settings (Firefox-style)
             this.session.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -125,13 +125,7 @@ class FirefoxEngine extends EngineInterface {
         const webContents = view.webContents;
         
         // Set Firefox user agent with more realistic details
-        webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0');
-        
-        // Disable automation flags
-        webContents.executeJavaScript(`
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-            window.chrome = { runtime: {} };
-        `);
+        webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0');
 
         // Store view reference
         const tabData = {
@@ -176,65 +170,131 @@ class FirefoxEngine extends EngineInterface {
     
     injectAntiDetection(tabData) {
         tabData.webContents.executeJavaScript(`
-            // Firefox Enhanced Tracking Protection + Anti-Bot Detection
+            // Firefox Enhanced Anti-Bot Detection Suite
             (function() {
-                // CRITICAL: Override automation detection
+                'use strict';
+                
+                // ===== CRITICAL: Remove ALL Automation Detection Flags =====
+                
+                // 1. Webdriver flag - Most important check
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined,
-                    configurable: false
+                    configurable: true
                 });
                 
-                // Remove Electron/Chromium automation flags
-                delete window.__nightmare;
-                delete window._phantom;
-                delete window.callPhantom;
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+                // 2. Remove ALL automation tool traces
+                const automationTools = [
+                    '__nightmare',
+                    '_phantom',
+                    'callPhantom',
+                    '__phantomas',
+                    'buffer',
+                    'emit',
+                    'spawn',
+                    'domAutomation',
+                    'domAutomationController',
+                    '_Selenium_IDE_Recorder',
+                    '_selenium',
+                    'calledSelenium',
+                    '_WEBDRIVER_ELEM_CACHE',
+                    '__webdriverFunc',
+                    '__lastWatirAlert',
+                    '__lastWatirConfirm',
+                    '__lastWatirPrompt',
+                    '__webdriver_evaluate',
+                    '__selenium_evaluate',
+                    '__webdriver_script_function',
+                    '__webdriver_script_func',
+                    '__webdriver_script_fn',
+                    '__fxdriver_evaluate',
+                    '__driver_unwrapped',
+                    '__webdriver_unwrapped',
+                    '__driver_evaluate',
+                    '__selenium_unwrapped',
+                    '__fxdriver_unwrapped'
+                ];
                 
-                // Override chrome automation flags
-                if (window.chrome) {
-                    delete window.chrome.runtime;
-                    Object.defineProperty(window, 'chrome', {
-                        get: () => ({
-                            loadTimes: function() {},
-                            csi: function() {},
-                            app: {}
-                        })
-                    });
-                }
+                // Remove from window
+                automationTools.forEach(tool => {
+                    if (window[tool]) {
+                        delete window[tool];
+                    }
+                });
                 
-                // Add Firefox-specific properties
+                // Remove Chrome DevTools Protocol (CDP) traces
+                const cdpProps = Object.keys(window).filter(prop => 
+                    prop.includes('cdc_') || prop.includes('$cdc_') || prop.includes('$chrome_')
+                );
+                cdpProps.forEach(prop => delete window[prop]);
+                
+                // 3. Remove Chrome/Chromium automation indicators
+                // Firefox shouldn't have chrome object, but if Electron adds it, remove it
+                delete window.chrome;
+                
+                // 4. Override document properties that might leak automation
+                Object.defineProperty(document, 'documentElement', {
+                    get: function() {
+                        return document.querySelector('html');
+                    }
+                });
+                
+                // ===== Firefox-Specific Properties =====
+                
+                // Add Mozilla-specific window properties
                 window.mozInnerScreenX = window.screenX;
                 window.mozInnerScreenY = window.screenY;
                 window.mozPaintCount = 0;
                 
-                // Add realistic plugins
+                // ===== Navigator Hardening =====
+                
+                // Plugins - realistic for modern Firefox
                 Object.defineProperty(navigator, 'plugins', {
-                    get: () => [
-                        {
-                            name: 'PDF Viewer',
-                            description: 'Portable Document Format',
-                            filename: 'internal-pdf-viewer',
-                            length: 1
-                        },
-                        {
-                            name: 'Chrome PDF Viewer',
-                            description: 'Portable Document Format',
-                            filename: 'internal-pdf-viewer',
-                            length: 1
-                        }
-                    ]
+                    get: () => {
+                        const pluginArray = [
+                            {
+                                name: 'PDF Viewer',
+                                description: 'Portable Document Format',
+                                filename: 'internal-pdf-viewer',
+                                length: 2,
+                                item: function(i) { return this[i]; },
+                                namedItem: function(name) { 
+                                    return this[name] || null; 
+                                }
+                            }
+                        ];
+                        Object.setPrototypeOf(pluginArray, PluginArray.prototype);
+                        return pluginArray;
+                    }
                 });
                 
-                // Realistic languages
+                // MimeTypes - realistic for modern Firefox
+                Object.defineProperty(navigator, 'mimeTypes', {
+                    get: () => {
+                        const mimeTypeArray = [
+                            {
+                                type: 'application/pdf',
+                                description: 'Portable Document Format',
+                                suffixes: 'pdf',
+                                enabledPlugin: {
+                                    name: 'PDF Viewer',
+                                    description: 'Portable Document Format',
+                                    filename: 'internal-pdf-viewer'
+                                }
+                            }
+                        ];
+                        Object.setPrototypeOf(mimeTypeArray, MimeTypeArray.prototype);
+                        return mimeTypeArray;
+                    }
+                });
+                
+                // Languages - realistic
                 Object.defineProperty(navigator, 'languages', {
                     get: () => ['en-US', 'en']
                 });
                 
-                // Hardware concurrency (realistic CPU count)
+                // Hardware - realistic M1/M2 Mac values
                 Object.defineProperty(navigator, 'hardwareConcurrency', {
-                    get: () => 8
+                    get: () => 10
                 });
                 
                 // Device memory (realistic)
@@ -247,21 +307,241 @@ class FirefoxEngine extends EngineInterface {
                     get: () => 'MacIntel'
                 });
                 
-                // Permissions API - make it behave realistically
-                const originalQuery = navigator.permissions.query;
-                navigator.permissions.query = function(parameters) {
-                    if (parameters.name === 'notifications') {
-                        return Promise.resolve({ state: 'prompt' });
+                // User Agent - ensure consistency
+                Object.defineProperty(navigator, 'userAgent', {
+                    get: () => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0'
+                });
+                
+                Object.defineProperty(navigator, 'appVersion', {
+                    get: () => '5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0'
+                });
+                
+                Object.defineProperty(navigator, 'vendor', {
+                    get: () => ''  // Firefox has empty vendor
+                });
+                
+                // ===== Permissions API - Critical for Google =====
+                
+                if (navigator.permissions && navigator.permissions.query) {
+                    const originalQuery = navigator.permissions.query;
+                    navigator.permissions.query = function(parameters) {
+                        // Return realistic values
+                        const permissionName = parameters.name;
+                        
+                        // Notifications should start as 'default' (not prompted yet)
+                        if (permissionName === 'notifications') {
+                            return Promise.resolve({ 
+                                state: 'default',
+                                onchange: null
+                            });
+                        }
+                        
+                        // Geolocation typically starts as 'prompt'
+                        if (permissionName === 'geolocation') {
+                            return Promise.resolve({ 
+                                state: 'prompt',
+                                onchange: null
+                            });
+                        }
+                        
+                        // Default: call original
+                        return originalQuery.call(navigator.permissions, parameters)
+                            .catch(() => Promise.resolve({ 
+                                state: 'prompt',
+                                onchange: null
+                            }));
+                    };
+                }
+                
+                // ===== Screen Properties - Must be consistent =====
+                
+                // Ensure screen dimensions are realistic and consistent
+                const screenWidth = window.screen.width;
+                const screenHeight = window.screen.height;
+                const availWidth = window.screen.availWidth;
+                const availHeight = window.screen.availHeight;
+                
+                Object.defineProperty(window.screen, 'width', {
+                    get: () => screenWidth
+                });
+                
+                Object.defineProperty(window.screen, 'height', {
+                    get: () => screenHeight
+                });
+                
+                Object.defineProperty(window.screen, 'availWidth', {
+                    get: () => availWidth
+                });
+                
+                Object.defineProperty(window.screen, 'availHeight', {
+                    get: () => availHeight
+                });
+                
+                Object.defineProperty(window.screen, 'colorDepth', {
+                    get: () => 24
+                });
+                
+                Object.defineProperty(window.screen, 'pixelDepth', {
+                    get: () => 24
+                });
+                
+                // ===== Canvas Fingerprinting Protection =====
+                
+                const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+                const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+                
+                // Add slight noise to prevent canvas fingerprinting
+                HTMLCanvasElement.prototype.toDataURL = function() {
+                    const context = this.getContext('2d');
+                    if (context) {
+                        const imageData = context.getImageData(0, 0, this.width, this.height);
+                        // Add minimal noise (undetectable to humans)
+                        for (let i = 0; i < imageData.data.length; i += 4) {
+                            imageData.data[i] = imageData.data[i] + Math.floor(Math.random() * 2);
+                        }
+                        context.putImageData(imageData, 0, 0);
                     }
-                    return originalQuery.call(navigator.permissions, parameters);
+                    return originalToDataURL.apply(this, arguments);
                 };
                 
-                // Override timezone offset to be consistent
+                // ===== WebGL Fingerprinting Protection =====
+                
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    // Spoof common WebGL fingerprinting parameters
+                    if (parameter === 37445) { // UNMASKED_VENDOR_WEBGL
+                        return 'Apple Inc.';
+                    }
+                    if (parameter === 37446) { // UNMASKED_RENDERER_WEBGL
+                        return 'Apple M1';
+                    }
+                    return getParameter.call(this, parameter);
+                };
+                
+                // Also handle WebGL2
+                if (typeof WebGL2RenderingContext !== 'undefined') {
+                    const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+                    WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+                        if (parameter === 37445) {
+                            return 'Apple Inc.';
+                        }
+                        if (parameter === 37446) {
+                            return 'Apple M1';
+                        }
+                        return getParameter2.call(this, parameter);
+                    };
+                }
+                
+                // ===== Date/Time Consistency =====
+                
+                // Ensure timezone is consistent
+                const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
                 Date.prototype.getTimezoneOffset = function() {
-                    return new Date().getTimezoneOffset();
+                    return originalGetTimezoneOffset.call(this);
                 };
                 
-                console.log('[Firefox Anti-Bot Detection] Active');
+                // ===== Connection Information =====
+                
+                // Make connection look real
+                if (navigator.connection) {
+                    Object.defineProperty(navigator.connection, 'rtt', {
+                        get: () => 50 + Math.floor(Math.random() * 50) // 50-100ms
+                    });
+                    
+                    Object.defineProperty(navigator.connection, 'downlink', {
+                        get: () => 10 + Math.random() * 5 // 10-15 Mbps
+                    });
+                    
+                    Object.defineProperty(navigator.connection, 'effectiveType', {
+                        get: () => '4g'
+                    });
+                }
+                
+                // ===== Battery API =====
+                
+                // Make battery status look realistic
+                if (navigator.getBattery) {
+                    const originalGetBattery = navigator.getBattery;
+                    navigator.getBattery = function() {
+                        return originalGetBattery.call(navigator).then(battery => {
+                            Object.defineProperty(battery, 'charging', {
+                                get: () => true
+                            });
+                            Object.defineProperty(battery, 'chargingTime', {
+                                get: () => 0
+                            });
+                            Object.defineProperty(battery, 'dischargingTime', {
+                                get: () => Infinity
+                            });
+                            Object.defineProperty(battery, 'level', {
+                                get: () => 1.0
+                            });
+                            return battery;
+                        });
+                    };
+                }
+                
+                // ===== Mouse Movement & Touch =====
+                
+                // Ensure mouse/touch events are properly supported
+                if (!('ontouchstart' in window)) {
+                    // Desktop - no touch support
+                    Object.defineProperty(navigator, 'maxTouchPoints', {
+                        get: () => 0
+                    });
+                }
+                
+                // ===== Remove Headless Indicators =====
+                
+                // Ensure we don't look headless
+                Object.defineProperty(navigator, 'headless', {
+                    get: () => undefined
+                });
+                
+                // ===== Prototype Pollution Protection =====
+                
+                // Prevent detection through prototype checks
+                const objectToString = Object.prototype.toString;
+                Object.prototype.toString = function() {
+                    if (this === window) {
+                        return '[object Window]';
+                    }
+                    return objectToString.call(this);
+                };
+                
+                // ===== Error Stack Traces =====
+                
+                // Clean up error stack traces that might reveal automation
+                const originalPrepareStackTrace = Error.prepareStackTrace;
+                Error.prepareStackTrace = function(error, stack) {
+                    if (originalPrepareStackTrace) {
+                        return originalPrepareStackTrace(error, stack);
+                    }
+                    return stack.map(frame => frame.toString()).join('\\n');
+                };
+                
+                // ===== Final Touches =====
+                
+                // Ensure window.opener is null (common bot indicator)
+                if (!window.opener) {
+                    Object.defineProperty(window, 'opener', {
+                        get: () => null
+                    });
+                }
+                
+                // Add realistic timing
+                const originalNow = performance.now;
+                let startTime = originalNow.call(performance);
+                performance.now = function() {
+                    return originalNow.call(performance) - startTime;
+                };
+                
+                console.log('[Firefox Stealth Mode] ✓ All anti-detection measures active');
+                console.log('[Firefox Stealth Mode] ✓ Navigator.webdriver:', navigator.webdriver);
+                console.log('[Firefox Stealth Mode] ✓ User Agent:', navigator.userAgent);
+                console.log('[Firefox Stealth Mode] ✓ Platform:', navigator.platform);
+                
             })();
         `).catch(err => {
             console.error('Failed to inject anti-detection:', err);

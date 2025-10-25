@@ -75,97 +75,92 @@ class EngineManager {
     }
 
     setupIPC() {
-        // Tab management
-        ipcMain.handle('engine:createTab', async (event, tabId, engineName, options) => {
-            // Wait for initialization if not ready yet
-            if (!this.initialized) {
-                console.log('⏳ Waiting for engines to initialize...');
-                await this.waitForInitialization();
+        // Only register handlers if they haven't been registered yet
+        // This prevents "Attempted to register a second handler" errors
+        const handlers = {
+            'engine:createTab': async (event, tabId, engineName, options) => {
+                // Wait for initialization if not ready yet
+                if (!this.initialized) {
+                    console.log('⏳ Waiting for engines to initialize...');
+                    await this.waitForInitialization();
+                }
+                return await this.createTab(tabId, engineName, options);
+            },
+            'engine:closeTab': async (event, tabId) => {
+                return await this.closeTab(tabId);
+            },
+            'engine:showTab': async (event, tabId) => {
+                return await this.showTab(tabId);
+            },
+            'engine:hideTab': async (event, tabId) => {
+                return await this.hideTab(tabId);
+            },
+            'engine:hideAllViews': async () => {
+                return await this.hideAllViews();
+            },
+            'engine:showActiveView': async () => {
+                return await this.showActiveView();
+            },
+            'engine:navigate': async (event, tabId, url) => {
+                return await this.navigate(tabId, url);
+            },
+            'engine:goBack': async (event, tabId) => {
+                return await this.goBack(tabId);
+            },
+            'engine:goForward': async (event, tabId) => {
+                return await this.goForward(tabId);
+            },
+            'engine:reload': async (event, tabId) => {
+                return await this.reload(tabId);
+            },
+            'engine:stop': async (event, tabId) => {
+                return await this.stop(tabId);
+            },
+            'engine:getTitle': async (event, tabId) => {
+                return await this.getTitle(tabId);
+            },
+            'engine:getURL': async (event, tabId) => {
+                return await this.getURL(tabId);
+            },
+            'engine:canGoBack': async (event, tabId) => {
+                return await this.canGoBack(tabId);
+            },
+            'engine:canGoForward': async (event, tabId) => {
+                return await this.canGoForward(tabId);
+            },
+            'engine:isLoading': async (event, tabId) => {
+                return await this.isLoading(tabId);
+            },
+            'engine:getInfo': async (event, engineName) => {
+                const engine = this.engines.get(engineName);
+                return engine ? engine.getInfo() : null;
+            },
+            'engine:getAllEngines': async () => {
+                const engines = {};
+                for (const [name, engine] of this.engines.entries()) {
+                    engines[name] = engine.getInfo();
+                }
+                return engines;
+            },
+            'engine:switchTabEngine': async (event, tabId, newEngine) => {
+                return await this.switchTabEngine(tabId, newEngine);
             }
-            return await this.createTab(tabId, engineName, options);
-        });
+        };
 
-        ipcMain.handle('engine:closeTab', async (event, tabId) => {
-            return await this.closeTab(tabId);
-        });
-
-        ipcMain.handle('engine:showTab', async (event, tabId) => {
-            return await this.showTab(tabId);
-        });
-
-        ipcMain.handle('engine:hideTab', async (event, tabId) => {
-            return await this.hideTab(tabId);
-        });
-
-        // Hide/show all BrowserViews (for modals and overlays)
-        ipcMain.handle('engine:hideAllViews', async () => {
-            return await this.hideAllViews();
-        });
-
-        ipcMain.handle('engine:showActiveView', async () => {
-            return await this.showActiveView();
-        });
-
-        // Navigation
-        ipcMain.handle('engine:navigate', async (event, tabId, url) => {
-            return await this.navigate(tabId, url);
-        });
-
-        ipcMain.handle('engine:goBack', async (event, tabId) => {
-            return await this.goBack(tabId);
-        });
-
-        ipcMain.handle('engine:goForward', async (event, tabId) => {
-            return await this.goForward(tabId);
-        });
-
-        ipcMain.handle('engine:reload', async (event, tabId) => {
-            return await this.reload(tabId);
-        });
-
-        ipcMain.handle('engine:stop', async (event, tabId) => {
-            return await this.stop(tabId);
-        });
-
-        // Tab state
-        ipcMain.handle('engine:getTitle', async (event, tabId) => {
-            return await this.getTitle(tabId);
-        });
-
-        ipcMain.handle('engine:getURL', async (event, tabId) => {
-            return await this.getURL(tabId);
-        });
-
-        ipcMain.handle('engine:canGoBack', async (event, tabId) => {
-            return await this.canGoBack(tabId);
-        });
-
-        ipcMain.handle('engine:canGoForward', async (event, tabId) => {
-            return await this.canGoForward(tabId);
-        });
-
-        ipcMain.handle('engine:isLoading', async (event, tabId) => {
-            return await this.isLoading(tabId);
-        });
-
-        // Engine info
-        ipcMain.handle('engine:getInfo', async (event, engineName) => {
-            const engine = this.engines.get(engineName);
-            return engine ? engine.getInfo() : null;
-        });
-
-        ipcMain.handle('engine:getAllEngines', async () => {
-            const engines = {};
-            for (const [name, engine] of this.engines.entries()) {
-                engines[name] = engine.getInfo();
+        // Register handlers only if they don't exist
+        for (const [channel, handler] of Object.entries(handlers)) {
+            try {
+                ipcMain.handle(channel, handler);
+            } catch (error) {
+                // Handler already exists, remove it first and re-register
+                if (error.message.includes('second handler')) {
+                    ipcMain.removeHandler(channel);
+                    ipcMain.handle(channel, handler);
+                } else {
+                    throw error;
+                }
             }
-            return engines;
-        });
-
-        // Engine switching
-        ipcMain.handle('engine:switchTabEngine', async (event, tabId, newEngine) => {
-            return await this.switchTabEngine(tabId, newEngine);
-        });
+        }
 
         console.log('✅ IPC handlers registered');
     }
@@ -365,43 +360,66 @@ class EngineManager {
             throw new Error('Tab not found: ' + tabId);
         }
 
-        if (tabInfo.engine === newEngineName) {
+        const oldEngineName = tabInfo.engine;
+        
+        if (oldEngineName === newEngineName) {
+            console.log(`Tab ${tabId} already using ${newEngineName}`);
             return { success: true, message: 'Already using ' + newEngineName };
         }
 
-        const oldEngine = this.engines.get(tabInfo.engine);
+        const oldEngine = this.engines.get(oldEngineName);
         const newEngine = this.engines.get(newEngineName);
+        
+        if (!oldEngine) {
+            throw new Error('Old engine not found: ' + oldEngineName);
+        }
         
         if (!newEngine) {
             throw new Error('New engine not found: ' + newEngineName);
         }
 
-        // Get current state
-        const currentUrl = await oldEngine.getURL(tabInfo.engineTabId);
-        const wasVisible = oldEngine.tabs.get(tabInfo.engineTabId).visible;
+        console.log(`🔄 Switching tab ${tabId} from ${oldEngineName} to ${newEngineName}...`);
 
-        // Close tab in old engine
-        await oldEngine.closeTab(tabInfo.engineTabId);
+        try {
+            // Get current state before closing
+            const currentUrl = await oldEngine.getURL(tabInfo.engineTabId);
+            const oldTab = oldEngine.tabs.get(tabInfo.engineTabId);
+            const wasVisible = oldTab ? oldTab.visible : false;
 
-        // Create tab in new engine
-        await newEngine.createTab(tabId, {});
-        
-        // Navigate to same URL
-        if (currentUrl) {
-            await newEngine.navigate(tabId, currentUrl);
+            console.log(`  Current URL: ${currentUrl}, Was visible: ${wasVisible}`);
+
+            // Close tab in old engine
+            await oldEngine.closeTab(tabInfo.engineTabId);
+            console.log(`  ✓ Closed tab in ${oldEngineName}`);
+
+            // Create tab in new engine
+            await newEngine.createTab(tabId, {});
+            console.log(`  ✓ Created tab in ${newEngineName}`);
+            
+            // Navigate to same URL if there was one
+            if (currentUrl && currentUrl !== 'about:blank' && currentUrl !== '') {
+                await newEngine.navigate(tabId, currentUrl);
+                console.log(`  ✓ Navigated to ${currentUrl}`);
+            }
+
+            // Show if was visible
+            if (wasVisible) {
+                await newEngine.showTab(tabId);
+                console.log(`  ✓ Tab shown`);
+            }
+
+            // Update tab info
+            tabInfo.engine = newEngineName;
+            tabInfo.engineTabId = tabId;
+
+            console.log(`✅ Tab ${tabId} successfully switched from ${oldEngineName} to ${newEngineName}`);
+            return { success: true, oldEngine: oldEngineName, newEngine: newEngineName };
+        } catch (error) {
+            console.error(`❌ Failed to switch tab ${tabId} from ${oldEngineName} to ${newEngineName}:`, error);
+            // Try to recover by keeping the old engine
+            tabInfo.engine = oldEngineName;
+            throw error;
         }
-
-        // Show if was visible
-        if (wasVisible) {
-            await newEngine.showTab(tabId);
-        }
-
-        // Update tab info
-        tabInfo.engine = newEngineName;
-        tabInfo.engineTabId = tabId;
-
-        console.log(`✅ Tab ${tabId} switched from ${tabInfo.engine} to ${newEngineName}`);
-        return { success: true, oldEngine: tabInfo.engine, newEngine: newEngineName };
     }
 
     handleEngineEvent(event, data) {

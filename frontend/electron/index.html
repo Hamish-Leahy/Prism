@@ -49,10 +49,52 @@
             padding: 0 12px 0 80px;
             gap: 8px;
             -webkit-app-region: drag;
+            position: relative;
         }
 
         .top-bar * {
             -webkit-app-region: no-drag;
+        }
+
+        /* Loading Bar */
+        .loading-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: transparent;
+            overflow: hidden;
+            z-index: 1000;
+        }
+
+        .loading-bar-progress {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #007AFF, #5AC8FA);
+            transition: width 0.3s ease, opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .loading-bar-progress.loading {
+            opacity: 1;
+            animation: loadingProgress 2s ease-in-out infinite;
+        }
+
+        @keyframes loadingProgress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 90%; }
+        }
+
+        .loading-bar-progress.complete {
+            width: 100% !important;
+            opacity: 1;
+            transition: width 0.2s ease, opacity 0.3s ease 0.2s;
+        }
+
+        .loading-bar-progress.complete.fade-out {
+            opacity: 0;
         }
 
         .nav-group {
@@ -106,6 +148,23 @@
             background: #ffffff;
             border-color: #007AFF;
             box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .security-indicator {
+            font-size: 14px;
+            color: #86868b;
+            flex-shrink: 0;
+            padding: 0 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .security-indicator.secure {
+            color: #34C759; /* Green for HTTPS */
+        }
+
+        .security-indicator.insecure {
+            color: #FF3B30; /* Red for HTTP */
         }
 
         .engine-badge {
@@ -720,6 +779,9 @@
             </div>
             
             <div class="address-wrapper">
+                <span class="security-indicator" id="securityIndicator" title="Connection security">
+                    <span class="icon"></span>
+                </span>
                 <span class="engine-badge" id="engineBadge">Firefox</span>
                 <input type="text" class="address-bar" id="addressBar" placeholder="Search or enter website">
             </div>
@@ -733,10 +795,23 @@
                         <option value="tor">Tor</option>
                     </select>
                 </div>
-                <button class="toolbar-btn" id="walletBtn" title="HavenWallet">₿</button>
-                <button class="toolbar-btn" id="havenPayBtn" title="HavenPay">💳</button>
-                <button class="toolbar-btn" id="aiBtn" title="AI Assistant">🤖</button>
-                <button class="toolbar-btn" id="extensionsBtn" title="Extensions">⊞</button>
+                <button class="toolbar-btn" id="walletBtn" title="HavenWallet">
+                    <span class="icon"></span>
+                </button>
+                <button class="toolbar-btn" id="havenPayBtn" title="HavenPay">
+                    <span class="icon"></span>
+                </button>
+                <button class="toolbar-btn" id="aiBtn" title="AI Assistant">
+                    <span class="icon"></span>
+                </button>
+                <button class="toolbar-btn" id="extensionsBtn" title="Extensions">
+                    <span class="icon"></span>
+                </button>
+            </div>
+            
+            <!-- Loading Bar -->
+            <div class="loading-bar">
+                <div class="loading-bar-progress" id="loadingBar"></div>
             </div>
         </div>
 
@@ -867,6 +942,33 @@
                     </p>
                     <button class="action-btn" onclick="alert('HavenPay card creation coming soon!')">Create Virtual Card</button>
                     <button class="action-btn" style="background: #34C759; margin-top: 12px;" onclick="alert('Link your bank account to get started')">Link Bank Account</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="wallet-modal" id="historyModal">
+        <div class="modal-panel" style="max-width: 900px; height: 80vh;">
+            <div class="modal-header">
+                <h2>Browsing History</h2>
+                <button class="close-modal" id="closeHistory">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="history-search" style="margin-bottom: 20px;">
+                    <input type="text" id="historySearch" placeholder="Search history..." 
+                           style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;">
+                </div>
+                <div class="history-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div style="color: #86868b; font-size: 14px;" id="historyCount">0 items</div>
+                    <button id="clearHistoryBtn" style="padding: 8px 16px; background: #FF3B30; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                        Clear All History
+                    </button>
+                </div>
+                <div id="historyList" style="max-height: calc(80vh - 200px); overflow-y: auto;">
+                    <div style="text-align: center; padding: 40px; color: #86868b;">
+                        No history yet
+                    </div>
                 </div>
             </div>
         </div>

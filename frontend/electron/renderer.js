@@ -9,6 +9,7 @@ let tabs = [];
 let activeTabId = null;
 let tabIdCounter = 0;
 let defaultEngine = 'firefox';
+let loadingBarActive = false; // Track if loading bar is currently active
 
 // DOM Elements
 const tabBar = document.getElementById('tabBar');
@@ -24,6 +25,16 @@ const walletModal = document.getElementById('walletModal');
 const closeWallet = document.getElementById('closeWallet');
 const engineSelector = document.getElementById('engineSelector');
 const engineBadge = document.getElementById('engineBadge');
+const loadingBar = document.getElementById('loadingBar');
+const securityIndicator = document.getElementById('securityIndicator');
+
+// History Elements
+const historyModal = document.getElementById('historyModal');
+const closeHistory = document.getElementById('closeHistory');
+const historySearch = document.getElementById('historySearch');
+const historyList = document.getElementById('historyList');
+const historyCount = document.getElementById('historyCount');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
 // New Haven Services Elements
 const havenPayBtn = document.getElementById('havenPayBtn');
@@ -52,9 +63,26 @@ async function init() {
     setupEventListeners();
     updateEngineBadge();
     loadWallets();
+    initializeToolbarIcons();
     
     // Wait for engines to be ready before creating first tab
     console.log('⏳ Waiting for engines to initialize...');
+}
+
+// Initialize toolbar button icons
+function initializeToolbarIcons() {
+    // Set icons for toolbar buttons
+    const walletIcon = document.querySelector('#walletBtn .icon');
+    const havenPayIcon = document.querySelector('#havenPayBtn .icon');
+    const aiIcon = document.querySelector('#aiBtn .icon');
+    const extensionsIcon = document.querySelector('#extensionsBtn .icon');
+    const securityIcon = document.querySelector('#securityIndicator .icon');
+    
+    if (walletIcon) walletIcon.innerHTML = Icons.wallet;
+    if (havenPayIcon) havenPayIcon.innerHTML = Icons.creditCard;
+    if (aiIcon) aiIcon.innerHTML = Icons.bot;
+    if (extensionsIcon) extensionsIcon.innerHTML = Icons.puzzle;
+    if (securityIcon) securityIcon.innerHTML = Icons.lock;
 }
 
 // Listen for engines ready event
@@ -184,6 +212,13 @@ function setupEventListeners() {
                 }
             }
             
+            // Special tabs (AI, Extensions, Start) can't switch engines
+            if (tab.isAITab || tab.isExtensionsTab || !tab.url) {
+                console.log('Cannot switch engine for special tabs');
+                engineSelector.value = tab.engine;
+                return;
+            }
+            
             try {
                 // Switch engine for this tab
                 await ipcRenderer.invoke('engine:switchTabEngine', tab.id, newEngine);
@@ -192,6 +227,7 @@ function setupEventListeners() {
                 renderTabs();
                 console.log(`Tab "${tab.title}" switched to: ${newEngine}`);
             } catch (error) {
+                console.error(`Failed to switch to ${newEngine}:`, error);
                 alert(`Failed to switch to ${newEngine}: ${error.message}`);
                 // Revert selector
                 engineSelector.value = tab.engine;
@@ -364,14 +400,22 @@ function setupQuickLinks() {
             
             if (url) {
                 try {
-                    // Make sure we have a tab to navigate
-                    if (tabs.length === 0 || !tabs.find(t => t.id === activeTabId)) {
-                        console.log('No active tab for quick link, creating one');
+                    // Ensure we have a valid active tab
+                    const activeTab = tabs.find(t => t.id === activeTabId);
+                    
+                    if (!activeTab || activeTab.isAITab || activeTab.isExtensionsTab || activeTab.url) {
+                        // Create a new tab if no valid tab exists or current tab is special or already has content
+                        console.log('Creating new tab for quick link');
                         await createNewTab();
+                        // Wait a bit for tab to be fully created
+                        await new Promise(resolve => setTimeout(resolve, 100));
                     }
+                    
+                    // Navigate to the URL
                     await navigateTo(url);
                 } catch (error) {
                     console.error('Quick link navigation error:', error);
+                    alert('Failed to open link: ' + error.message);
                 }
             }
         });
@@ -391,6 +435,47 @@ function setupQuickLinks() {
     ipcRenderer.on('navigate-forward', () => forwardBtn.click());
     ipcRenderer.on('navigate-refresh', () => refreshBtn.click());
     ipcRenderer.on('navigate-home', () => showStartPage());
+    
+    // History Modal
+    if (closeHistory) {
+        closeHistory.addEventListener('click', () => {
+            historyModal.classList.remove('active');
+            ipcRenderer.invoke('engine:showActiveView').catch(err => console.error(err));
+        });
+    }
+    
+    if (historySearch) {
+        let searchTimeout;
+        historySearch.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadHistory(100, historySearch.value);
+            }, 300);
+        });
+    }
+    
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear all browsing history? This cannot be undone.')) {
+                const result = await ipcRenderer.invoke('data:clearHistory');
+                if (result.success) {
+                    await loadHistory();
+                    alert('History cleared successfully');
+                } else {
+                    alert('Failed to clear history: ' + result.error);
+                }
+            }
+        });
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', async (e) => {
+        // Cmd+Y (or Ctrl+Y on Windows/Linux) to open history
+        if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+            e.preventDefault();
+            await openHistory();
+        }
+    });
 }
 
 // Tab Management
@@ -537,12 +622,14 @@ async function switchToTab(tabId) {
         if (extensionsPage) extensionsPage.style.display = 'none';
     }
 
-    // Update address bar IMMEDIATELY to prevent wrong URL showing
+    // Update address bar and security indicator IMMEDIATELY to prevent wrong URL showing
     if (tab.url) {
         addressBar.value = tab.url;
+        updateSecurityIndicator(tab.url);
         startPage.classList.add('hidden');
     } else {
         addressBar.value = '';
+        updateSecurityIndicator('');
         showStartPage();
     }
 
@@ -771,9 +858,10 @@ async function navigateTo(input) {
     tab.url = url;
     tab.isLoading = true;
     
-    // Update address bar
+    // Update address bar and security indicator
     if (activeTabId === tab.id) {
         addressBar.value = url;
+        updateSecurityIndicator(url);
     }
 
     try {
@@ -849,6 +937,9 @@ async function showStartPage() {
     
     startPage.classList.remove('hidden');
     addressBar.value = '';
+    
+    // Re-setup quick links to ensure they work
+    setupQuickLinks();
 }
 
 async function updateNavButtons() {
@@ -889,6 +980,66 @@ function updateEngineBadge() {
     }
 }
 
+// Loading Bar Functions
+function showLoadingBar() {
+    if (loadingBar && !loadingBarActive) {
+        loadingBarActive = true;
+        loadingBar.classList.remove('complete', 'fade-out');
+        loadingBar.classList.add('loading');
+    }
+}
+
+function hideLoadingBar() {
+    if (loadingBar && loadingBarActive) {
+        loadingBarActive = false;
+        loadingBar.classList.remove('loading');
+        loadingBar.classList.add('complete');
+        // Fade out after animation completes
+        setTimeout(() => {
+            loadingBar.classList.add('fade-out');
+            // Reset after fade out
+            setTimeout(() => {
+                loadingBar.classList.remove('complete', 'fade-out');
+            }, 300);
+        }, 200);
+    }
+}
+
+// Security Indicator Functions
+function updateSecurityIndicator(url) {
+    if (!securityIndicator) return;
+    
+    const iconElement = securityIndicator.querySelector('.icon');
+    if (!iconElement) return;
+    
+    // Reset classes
+    securityIndicator.classList.remove('secure', 'insecure');
+    
+    if (!url || url === '' || url.startsWith('prism://')) {
+        // Internal pages or no URL
+        iconElement.innerHTML = Icons.lock;
+        securityIndicator.title = 'Internal page';
+        securityIndicator.style.display = 'none';
+    } else if (url.startsWith('https://')) {
+        // Secure HTTPS connection
+        iconElement.innerHTML = Icons.lock;
+        securityIndicator.classList.add('secure');
+        securityIndicator.title = 'Secure connection (HTTPS)';
+        securityIndicator.style.display = 'flex';
+    } else if (url.startsWith('http://')) {
+        // Insecure HTTP connection
+        iconElement.innerHTML = Icons.shieldAlert;
+        securityIndicator.classList.add('insecure');
+        securityIndicator.title = 'Not secure (HTTP)';
+        securityIndicator.style.display = 'flex';
+    } else {
+        // Other protocols (file://, etc.)
+        iconElement.innerHTML = Icons.lock;
+        securityIndicator.title = 'Local resource';
+        securityIndicator.style.display = 'none';
+    }
+}
+
 // Handle engine events (title updates, loading state, etc.)
 function handleEngineEvent(eventName, data) {
     console.log('Engine event:', eventName, data);
@@ -901,18 +1052,36 @@ function handleEngineEvent(eventName, data) {
             tab.title = data.title || 'New Tab';
             renderTabs();
             break;
+        case 'navigation':
         case 'url-updated':
+            // Update tab URL
             tab.url = data.url;
+            // Update address bar and security indicator if this is the active tab
             if (tab.id === activeTabId) {
                 addressBar.value = data.url;
+                updateSecurityIndicator(data.url);
             }
             break;
         case 'loading-start':
             tab.isLoading = true;
+            if (tab.id === activeTabId) {
+                showLoadingBar();
+            }
+            renderTabs();
             break;
         case 'loading-stop':
             tab.isLoading = false;
+            if (tab.id === activeTabId) {
+                hideLoadingBar();
+            }
+            // Add to browsing history when page finishes loading
+            if (data.url && data.url !== 'about:blank' && !data.url.startsWith('prism://')) {
+                ipcRenderer.invoke('data:addToHistory', data.url, data.title || tab.title, tab.engine).catch(err => {
+                    console.error('Failed to add to history:', err);
+                });
+            }
             updateNavButtons();
+            renderTabs();
             break;
         case 'favicon-updated':
             // TODO: Handle favicon

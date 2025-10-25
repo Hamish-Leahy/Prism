@@ -3,15 +3,41 @@ const path = require('path')
 const EngineManager = require('./engines/EngineManager')
 const ExtensionManager = require('./extensions/ExtensionManager')
 const ExtensionDownloader = require('./extensions/ExtensionDownloader')
+const DataManager = require('./storage/DataManager')
 
 // Set app name and dock behavior
 app.setName('Prism')
 app.name = 'Prism'
 
+// ===== Anti-Detection: Command Line Switches =====
+// These switches help avoid bot detection by making Electron look more like a normal browser
+
+// Disable automation flags
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled')
+
+// Enable features that real browsers have
+app.commandLine.appendSwitch('enable-features', 'NetworkService,NetworkServiceInProcess')
+
+// Disable features that might indicate automation
+app.commandLine.appendSwitch('disable-features', 'IsolateOrigins,site-per-process')
+
+// Make hardware acceleration more realistic
+app.commandLine.appendSwitch('use-gl', 'desktop')
+
+// Disable logging that might slow things down or look suspicious
+app.commandLine.appendSwitch('disable-dev-shm-usage')
+app.commandLine.appendSwitch('disable-setuid-sandbox')
+
+// Make the renderer more like a normal browser
+app.commandLine.appendSwitch('disable-web-security', false)
+
+console.log('[Anti-Detection] Command line switches applied')
+
 let mainWindow
 let engineManager
 let extensionManager
 let extensionDownloader
+let dataManager
 
 // Configure engine-specific sessions
 function setupEngineSessions() {
@@ -37,7 +63,7 @@ function setupEngineSessions() {
   
   // Firefox session with DRM support
   const firefoxSession = session.fromPartition('persist:firefox')
-  firefoxSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0')
+  firefoxSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0')
   firefoxSession.setPreloads([])
   
   // Enable DRM and Passkeys for Firefox session
@@ -151,30 +177,52 @@ function createWindow() {
   // Create Engine Manager immediately (IPC handlers register in constructor)
   // Pass extensionManager so Tor tabs can load extensions
   engineManager = new EngineManager(mainWindow, extensionManager)
+  
+  // Create Data Manager for local persistence
+  dataManager = new DataManager()
+  setupDataIPCHandlers()
 
   // Load the native HTML app
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
+    console.log('🪟 Showing main window...')
     mainWindow.show()
+    mainWindow.focus()
   })
+
+  // Also force show after a timeout if ready-to-show doesn't fire
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      console.log('⚠️ Window not visible after 3s, forcing show...')
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }, 3000)
 
   // Initialize engines and extensions after window is shown
   mainWindow.webContents.once('did-finish-load', async () => {
-    // Initialize extension manager first (loads and auto-installs uBlock Origin)
-    await extensionManager.initialize()
-    
-    // Initialize extension downloader
-    extensionDownloader = new ExtensionDownloader(extensionManager)
-    
-    // Initialize engines (will have access to loaded extensions)
-    await engineManager.initialize()
-    
-    console.log('✅ Prism Browser ready with native engines and extensions')
-    
-    // Notify renderer that engines are ready
-    mainWindow.webContents.send('engines-ready')
+    console.log('📄 Window content loaded, initializing engines...')
+    try {
+      // Initialize extension manager first (loads and auto-installs uBlock Origin)
+      await extensionManager.initialize()
+      
+      // Initialize extension downloader
+      extensionDownloader = new ExtensionDownloader(extensionManager)
+      
+      // Initialize engines (will have access to loaded extensions)
+      await engineManager.initialize()
+      
+      console.log('✅ Prism Browser ready with native engines and extensions')
+      
+      // Notify renderer that engines are ready
+      mainWindow.webContents.send('engines-ready')
+    } catch (error) {
+      console.error('❌ Initialization error:', error)
+      // Still notify renderer so UI can load
+      mainWindow.webContents.send('engines-ready')
+    }
   })
 
   // Handle window closed
@@ -355,6 +403,67 @@ app.on('activate', () => {
     createWindow()
   }
 })
+
+// Data Management IPC handlers
+function setupDataIPCHandlers() {
+  // User Management
+  ipcMain.handle('data:createUser', async (event, username, password) => {
+    return dataManager.createUser(username, password)
+  })
+
+  ipcMain.handle('data:login', async (event, username, password) => {
+    return dataManager.loginUser(username, password)
+  })
+
+  ipcMain.handle('data:logout', async () => {
+    return dataManager.logoutUser()
+  })
+
+  ipcMain.handle('data:getCurrentUser', async () => {
+    return dataManager.getCurrentUser()
+  })
+
+  ipcMain.handle('data:getUsers', async () => {
+    return dataManager.getUsers().map(u => ({ username: u.username, lastLogin: u.lastLogin }))
+  })
+
+  // Password Vault
+  ipcMain.handle('data:savePassword', async (event, domain, username, password) => {
+    return dataManager.savePassword(domain, username, password)
+  })
+
+  ipcMain.handle('data:getPassword', async (event, domain, username) => {
+    return dataManager.getPassword(domain, username)
+  })
+
+  ipcMain.handle('data:getAllPasswords', async () => {
+    return dataManager.getAllPasswords()
+  })
+
+  ipcMain.handle('data:deletePassword', async (event, id) => {
+    return dataManager.deletePassword(id)
+  })
+
+  // Browsing History
+  ipcMain.handle('data:addToHistory', async (event, url, title, engine) => {
+    return dataManager.addToHistory(url, title, engine)
+  })
+
+  ipcMain.handle('data:getHistory', async (event, limit, searchQuery) => {
+    return dataManager.getHistory(limit, searchQuery)
+  })
+
+  ipcMain.handle('data:clearHistory', async () => {
+    return dataManager.clearHistory()
+  })
+
+  // Stats
+  ipcMain.handle('data:getStats', async () => {
+    return dataManager.getStats()
+  })
+
+  console.log('✅ Data IPC handlers registered')
+}
 
 // IPC handlers
 ipcMain.handle('get-app-version', () => {
