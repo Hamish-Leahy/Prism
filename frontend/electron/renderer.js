@@ -710,44 +710,20 @@ async function switchToTab(tabId) {
         }
     }
 
-    // INSTANT tab switching using pre-rendered views
-    if (tab.rendered && tab.view) {
-        // Use the pre-rendered view for instant switching
-        try {
-            await ipcRenderer.invoke('engine:showPreRenderedTab', tabId, tab.view);
-            await updateNavButtons();
-        } catch (error) {
-            console.error('Failed to switch to pre-rendered tab:', error);
-            // Fallback to normal switching
-            ipcRenderer.invoke('engine:showTab', tabId)
-                .then(() => updateNavButtons())
-                .catch(err => {
-                    console.error('Failed to switch tab:', err);
-                    // Revert if switch failed
-                    activeTabId = oldActiveTabId;
-                    const oldTab = tabs.find(t => t.id === oldActiveTabId);
-                    if (oldTab) {
-                        addressBar.value = oldTab.url || '';
-                        updateEngineBadge();
-                        renderTabs();
-                    }
-                });
+    // Show this tab, hide others (async in background - NON-BLOCKING)
+    try {
+        await ipcRenderer.invoke('engine:showTab', tabId);
+        await updateNavButtons();
+    } catch (error) {
+        console.error('Failed to switch tab:', error);
+        // Revert if switch failed
+        activeTabId = oldActiveTabId;
+        const oldTab = tabs.find(t => t.id === oldActiveTabId);
+        if (oldTab) {
+            addressBar.value = oldTab.url || '';
+            updateEngineBadge();
+            renderTabs();
         }
-    } else {
-        // Show this tab, hide others (async in background - NON-BLOCKING)
-        ipcRenderer.invoke('engine:showTab', tabId)
-            .then(() => updateNavButtons())
-            .catch(error => {
-                console.error('Failed to switch tab:', error);
-                // Revert if switch failed
-                activeTabId = oldActiveTabId;
-                const oldTab = tabs.find(t => t.id === oldActiveTabId);
-                if (oldTab) {
-                    addressBar.value = oldTab.url || '';
-                    updateEngineBadge();
-                    renderTabs();
-                }
-            });
     }
 }
 
