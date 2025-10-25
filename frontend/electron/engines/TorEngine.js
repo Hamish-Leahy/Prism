@@ -24,9 +24,27 @@ class TorEngine extends EngineInterface {
         this.torControlPort = 9051;
         this.torRunning = false;
         this.torDataDir = path.join(os.tmpdir(), 'prism-tor-data');
+        this.torInitialized = false;
+        this.tabCircuits = new Map(); // Track Tor circuits per tab
     }
 
     async initialize() {
+        try {
+            // Just mark as ready - we'll initialize Tor lazily when first tab requests it
+            this.ready = true;
+            console.log('✅ Tor Engine initialized (lazy mode - will connect when first Tor tab is created)');
+            return true;
+        } catch (error) {
+            console.error('❌ Tor Engine initialization failed:', error);
+            return false;
+        }
+    }
+
+    async initializeTorConnection() {
+        if (this.torInitialized) {
+            return true;
+        }
+
         try {
             // Create Tor data directory
             if (!fs.existsSync(this.torDataDir)) {
@@ -51,13 +69,13 @@ class TorEngine extends EngineInterface {
             // Detect and start Tor if available
             await this.startTor();
 
-            this.ready = true;
-            console.log('✅ Tor Engine initialized');
+            this.torInitialized = true;
+            console.log('✅ Tor connection established');
             console.log('   SOCKS5 Proxy:', '127.0.0.1:' + this.torSocksPort);
             console.log('   Status:', this.torRunning ? '🟢 Connected' : '🔴 Not running (install Tor)');
             return true;
         } catch (error) {
-            console.error('❌ Tor Engine initialization failed:', error);
+            console.error('❌ Tor connection failed:', error);
             return false;
         }
     }
@@ -196,6 +214,21 @@ class TorEngine extends EngineInterface {
         if (this.tabs.has(tabId)) {
             throw new Error('Tab already exists: ' + tabId);
         }
+
+        // Initialize Tor connection if this is the first Tor tab
+        if (!this.torInitialized) {
+            console.log('🔒 First Tor tab - initializing Tor connection...');
+            const success = await this.initializeTorConnection();
+            
+            if (!success || !this.torRunning) {
+                throw new Error('Tor is not running. Please install and start Tor service.');
+            }
+        }
+
+        // Create a new circuit for this tab
+        const circuitId = `circuit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        this.tabCircuits.set(tabId, circuitId);
+        console.log(`🔒 New Tor circuit for tab ${tabId}: ${circuitId}`);
 
         // Create BrowserView with maximum privacy
         const view = new BrowserView({
@@ -582,6 +615,14 @@ class TorEngine extends EngineInterface {
 
         if (tabData.visible) await this.hideTab(tabId);
         tabData.view.webContents.destroy();
+        
+        // Remove circuit tracking
+        const circuitId = this.tabCircuits.get(tabId);
+        if (circuitId) {
+            console.log(`🔒 Tor circuit closed for tab ${tabId}: ${circuitId}`);
+            this.tabCircuits.delete(tabId);
+        }
+        
         this.tabs.delete(tabId);
         console.log('✅ Tor tab closed:', tabId);
     }

@@ -7,7 +7,9 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 
 /**
- * CryptoWalletService - Built-in cryptocurrency wallet
+ * HavenWallet Service
+ * Part of the Haven family of secure services
+ * Multi-chain cryptocurrency wallet with hardware wallet support
  */
 class CryptoWalletService
 {

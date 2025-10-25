@@ -223,10 +223,14 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            cursor: pointer;
+            cursor: grab;
             transition: all 0.15s ease;
             flex-shrink: 0;
             position: relative;
+        }
+
+        .tab:active {
+            cursor: grabbing;
         }
 
         .tab:first-child {
@@ -341,34 +345,9 @@
             min-height: 0;
         }
 
-        #webviewContainer {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-        }
+        /* Native engines render via BrowserView - no webview tags needed */
 
-        webview {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            min-width: 100%;
-            min-height: 100%;
-        }
-
-        webview.active {
-            display: flex;
-        }
-
-        /* Start Page - Minimal Apple Style */
+        /* Start Page - Clean Design */
         .start-page {
             position: absolute;
             top: 0;
@@ -377,78 +356,207 @@
             height: 100%;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: #ffffff;
-            z-index: 100;
+            background: #f5f5f7;
+            z-index: 10;
+            overflow-y: auto;
+            pointer-events: all;
         }
 
         .start-page.hidden {
             display: none !important;
         }
 
+        .start-header {
+            padding: 60px 20px 40px;
+            text-align: center;
+        }
+
         .start-logo {
-            font-size: 64px;
-            margin-bottom: 32px;
-            font-weight: 600;
+            font-size: 72px;
+            margin-bottom: 12px;
+            font-weight: 700;
             color: #1d1d1f;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
         }
 
-        .start-search {
-            width: 580px;
-            max-width: 90%;
-            height: 44px;
-            background: rgba(246, 246, 246, 0.8);
-            border: 0.5px solid rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-            padding: 0 16px;
-            font-size: 15px;
-            outline: none;
-            transition: all 0.2s ease;
+        .start-subtitle {
+            font-size: 16px;
+            color: #86868b;
+            font-weight: 400;
+            margin-bottom: 40px;
         }
 
-        .start-search:focus {
+        .search-container {
+            width: 100%;
+            max-width: 680px;
+            margin: 0 auto 40px;
+            padding: 0 20px;
+        }
+
+        .search-wrapper {
+            position: relative;
             background: #ffffff;
-            border-color: #007AFF;
-            box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.06);
         }
 
-        .favorites {
+        .search-input-wrapper {
+            padding: 16px 20px;
             display: flex;
-            gap: 24px;
-            margin-top: 48px;
-        }
-
-        .favorite-item {
-            display: flex;
-            flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
+            position: relative;
+        }
+
+        .search-mode-toggle {
+            background: transparent;
+            border: none;
+            padding: 6px;
             cursor: pointer;
-            text-decoration: none;
-            transition: transform 0.2s ease;
-        }
-
-        .favorite-item:hover {
-            transform: translateY(-2px);
-        }
-
-        .favorite-icon {
-            width: 64px;
-            height: 64px;
-            background: rgba(246, 246, 246, 0.8);
-            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
-            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            transition: all 0.2s ease;
         }
 
-        .favorite-name {
-            font-size: 12px;
+        .search-mode-toggle:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .search-mode-toggle:active {
+            transform: scale(0.95);
+        }
+
+        .search-mode-indicator {
+            font-size: 20px;
             color: #86868b;
+            transition: all 0.3s ease;
+            display: block;
+        }
+
+        .search-mode-toggle.ai-mode .search-mode-indicator {
+            color: #007AFF;
+            transform: scale(1.15);
+        }
+
+        .search-hint {
+            position: absolute;
+            right: 20px;
+            font-size: 11px;
+            color: #86868b;
+            background: rgba(0, 122, 255, 0.05);
+            padding: 4px 10px;
+            border-radius: 8px;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .start-search:focus + .search-hint {
+            opacity: 0;
+        }
+
+        .start-search {
+            flex: 1;
+            height: 40px;
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            outline: none;
+            color: #1d1d1f;
+        }
+
+        .start-search::placeholder {
+            color: #86868b;
+        }
+
+        .search-input-wrapper.ai-mode .start-search {
+            border-left: 3px solid #007AFF;
+        }
+
+        .search-input-wrapper.ai-mode .start-search::placeholder {
+            color: #007AFF;
+        }
+
+        /* Main Content Area */
+        .start-content {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 40px 40px;
+        }
+
+        /* Quick Links Grid */
+        .quick-links-section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .quick-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+        }
+
+        .quick-link {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .quick-link:hover {
+            background: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .quick-link-icon {
+            width: 56px;
+            height: 56px;
+            background: transparent;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .quick-link-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .quick-link-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: #1d1d1f;
+            text-align: center;
+        }
+
+        /* Haven Services Section - Hidden */
+        .haven-services {
+            display: none;
         }
 
         /* Wallet Modal */
@@ -613,7 +721,9 @@
                         <option value="tor">Tor</option>
                     </select>
                 </div>
-                <button class="toolbar-btn" id="walletBtn" title="Crypto Wallet">₿</button>
+                <button class="toolbar-btn" id="walletBtn" title="HavenWallet">₿</button>
+                <button class="toolbar-btn" id="havenPayBtn" title="HavenPay">💳</button>
+                <button class="toolbar-btn" id="aiBtn" title="AI Assistant">🤖</button>
                 <button class="toolbar-btn" id="extensionsBtn" title="Extensions">⊞</button>
             </div>
         </div>
@@ -627,39 +737,90 @@
         <div class="web-content">
             <!-- Start Page -->
             <div class="start-page" id="startPage">
-                <div class="start-logo">Prism</div>
-                <input type="text" class="start-search" id="startSearch" placeholder="Search the web">
-                
-                <div class="favorites">
-                    <div class="favorite-item" data-url="https://www.google.com">
-                        <div class="favorite-icon">G</div>
-                        <div class="favorite-name">Google</div>
+                <div class="start-header">
+                    <div class="start-logo">Prism</div>
+                    <div class="start-subtitle">Part of the Haven family · Privacy-first browsing</div>
+                    
+                    <div class="search-container">
+                        <div class="search-wrapper">
+                            <div class="search-input-wrapper">
+                                <button class="search-mode-toggle" id="searchModeToggle">
+                                    <span id="searchModeIndicator">🔍</span>
+                                </button>
+                                <input type="text" class="start-search" id="startSearch" placeholder="Search the web...">
+                                <span class="search-hint" id="searchHint">Click 🔍 to toggle AI mode</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="favorite-item" data-url="https://www.youtube.com">
-                        <div class="favorite-icon">▶</div>
-                        <div class="favorite-name">YouTube</div>
-                    </div>
-                    <div class="favorite-item" data-url="https://www.github.com">
-                        <div class="favorite-icon">⌘</div>
-                        <div class="favorite-name">GitHub</div>
-                    </div>
-                    <div class="favorite-item" data-url="https://www.twitter.com">
-                        <div class="favorite-icon">✦</div>
-                        <div class="favorite-name">Twitter</div>
+                </div>
+
+                <div class="start-content">
+                    <!-- Quick Links -->
+                    <div class="quick-links-section">
+                        <div class="section-title">Quick Access</div>
+                        <div class="quick-links-grid">
+                            <div class="quick-link" data-url="https://www.google.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://www.google.com/favicon.ico" alt="Google" onerror="this.parentElement.innerHTML='G'">
+                                </div>
+                                <div class="quick-link-name">Google</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.youtube.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://www.youtube.com/favicon.ico" alt="YouTube" onerror="this.parentElement.innerHTML='▶'">
+                                </div>
+                                <div class="quick-link-name">YouTube</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.github.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://github.com/favicon.ico" alt="GitHub" onerror="this.parentElement.innerHTML='⌘'">
+                                </div>
+                                <div class="quick-link-name">GitHub</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.twitter.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://abs.twimg.com/favicons/twitter.3.ico" alt="Twitter" onerror="this.parentElement.innerHTML='✦'">
+                                </div>
+                                <div class="quick-link-name">Twitter</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.reddit.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://www.reddit.com/favicon.ico" alt="Reddit" onerror="this.parentElement.innerHTML='🌐'">
+                                </div>
+                                <div class="quick-link-name">Reddit</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.amazon.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://www.amazon.com/favicon.ico" alt="Amazon" onerror="this.parentElement.innerHTML='🛒'">
+                                </div>
+                                <div class="quick-link-name">Amazon</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.wikipedia.org">
+                                <div class="quick-link-icon">
+                                    <img src="https://www.wikipedia.org/static/favicon/wikipedia.ico" alt="Wikipedia" onerror="this.parentElement.innerHTML='W'">
+                                </div>
+                                <div class="quick-link-name">Wikipedia</div>
+                            </div>
+                            <div class="quick-link" data-url="https://www.netflix.com">
+                                <div class="quick-link-icon">
+                                    <img src="https://assets.nflxext.com/us/ffe/siteui/common/icons/nficon2023.ico" alt="Netflix" onerror="this.parentElement.innerHTML='N'">
+                                </div>
+                                <div class="quick-link-name">Netflix</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Webviews -->
-            <div id="webviewContainer"></div>
+            <!-- Native engine content renders here via BrowserView -->
         </div>
     </div>
 
-    <!-- Wallet Modal -->
+    <!-- HavenWallet Modal -->
     <div class="wallet-modal" id="walletModal">
         <div class="modal-panel">
             <div class="modal-header">
-                <div class="modal-title">Crypto Wallet</div>
+                <div class="modal-title">🔐 HavenWallet</div>
                 <button class="modal-close" id="closeWallet">×</button>
             </div>
             <div class="modal-content">
@@ -674,820 +835,269 @@
         </div>
     </div>
 
-    <script>
-        // State
-        let tabs = [];
-        let activeTabId = null;
-        let tabIdCounter = 0;
-        let defaultEngine = 'firefox'; // Default engine for new tabs
+    <!-- HavenPay Modal -->
+    <div class="wallet-modal" id="havenPayModal">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <div class="modal-title">💳 HavenPay</div>
+                <button class="modal-close" id="closeHavenPay">×</button>
+            </div>
+            <div class="modal-content">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">💳</div>
+                    <h3 style="font-size: 20px; margin-bottom: 12px; color: #1d1d1f;">Smart Shopping Cards</h3>
+                    <p style="color: #86868b; margin-bottom: 24px; line-height: 1.6;">
+                        Create virtual cards for online shopping with:<br>
+                        • One-time use cards for maximum security<br>
+                        • Spending limits and merchant restrictions<br>
+                        • 2% cashback on all purchases<br>
+                        • Real-time fraud detection
+                    </p>
+                    <button class="action-btn" onclick="alert('HavenPay card creation coming soon!')">Create Virtual Card</button>
+                    <button class="action-btn" style="background: #34C759; margin-top: 12px;" onclick="alert('Link your bank account to get started')">Link Bank Account</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // DOM Elements
-        const tabBar = document.getElementById('tabBar');
-        const addressBar = document.getElementById('addressBar');
-        const startPage = document.getElementById('startPage');
-        const startSearch = document.getElementById('startSearch');
-        const webviewContainer = document.getElementById('webviewContainer');
-        const backBtn = document.getElementById('backBtn');
-        const forwardBtn = document.getElementById('forwardBtn');
-        const refreshBtn = document.getElementById('refreshBtn');
-        const extensionsBtn = document.getElementById('extensionsBtn');
-        const walletBtn = document.getElementById('walletBtn');
-        const walletModal = document.getElementById('walletModal');
-        const closeWallet = document.getElementById('closeWallet');
-        const engineSelector = document.getElementById('engineSelector');
-        const engineBadge = document.getElementById('engineBadge');
-
-        // Update engine badge based on active tab
-        function updateEngineBadge() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            const engine = tab ? tab.engine : defaultEngine;
-            
-            const engineNames = {
-                'prism': 'Prism',
-                'chromium': 'Chromium',
-                'firefox': 'Firefox',
-                'tor': 'Tor'
-            };
-            
-            engineBadge.textContent = engineNames[engine];
-            engineBadge.className = 'engine-badge ' + engine;
-            
-            // Update selector to match active tab's engine
-            if (engineSelector.value !== engine) {
-                engineSelector.value = engine;
-            }
-        }
-
-        // Initialize
-        function init() {
-            updateEngineBadge();
-            createNewTab();
-            setupEventListeners();
-            loadWallets();
-        }
-
-        // Event Listeners
-        function setupEventListeners() {
-            // Address bar
-            addressBar.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    navigateTo(addressBar.value);
-                }
-            });
-
-            // Start search
-            startSearch.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    navigateTo(startSearch.value);
-                }
-            });
-
-            // Navigation buttons
-            backBtn.addEventListener('click', () => {
-                const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview) {
-                    tab.webview.goBack();
-                }
-            });
-
-            forwardBtn.addEventListener('click', () => {
-                const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview) {
-                    tab.webview.goForward();
-                }
-            });
-
-            refreshBtn.addEventListener('click', () => {
-                const tab = tabs.find(t => t.id === activeTabId);
-                if (tab && tab.webview) {
-                    tab.webview.reload();
-                } else {
-                    showStartPage();
-                }
-            });
-
-            // Engine selector - changes engine for active tab
-            engineSelector.addEventListener('change', (e) => {
-                const newEngine = e.target.value;
-                const tab = tabs.find(t => t.id === activeTabId);
-                
-                if (tab) {
-                    tab.engine = newEngine;
-                    updateEngineBadge();
-                    renderTabs(); // Re-render to update tab favicon color
-                    console.log(`Tab "${tab.title}" switched to: ${newEngine}`);
-                }
-            });
-
-            // Extensions
-            extensionsBtn.addEventListener('click', () => {
-                alert('Extensions\n\nComing soon:\n• Ad blockers\n• Privacy tools\n• Themes\n• Developer tools');
-            });
-
-            // Wallet modal
-            walletBtn.addEventListener('click', () => {
-                walletModal.classList.add('show');
-            });
-
-            closeWallet.addEventListener('click', () => {
-                walletModal.classList.remove('show');
-            });
-
-            walletModal.addEventListener('click', (e) => {
-                if (e.target === walletModal) {
-                    walletModal.classList.remove('show');
-                }
-            });
-
-            // Favorites
-            document.querySelectorAll('.favorite-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const url = item.getAttribute('data-url');
-                    navigateTo(url);
-                });
-            });
-        }
-
-        // Tab Management
-        function createNewTab() {
-            const tabId = `tab-${tabIdCounter++}`;
-            const tab = {
-                id: tabId,
-                title: 'New Tab',
-                url: '',
-                webview: null,
-                engine: defaultEngine // Each tab has its own engine
-            };
-
-            tabs.push(tab);
-            renderTabs();
-            switchToTab(tabId);
-        }
-
-        function closeTab(tabId) {
-            const index = tabs.findIndex(t => t.id === tabId);
-            if (index === -1) return;
-
-            const tab = tabs[index];
-            if (tab.webview) {
-                tab.webview.remove();
+    <!-- AI Assistant Page (renders as tab content) -->
+    <div class="ai-page" id="aiPage" style="display: none;">
+        <style>
+            .ai-page {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #f5f5f7;
+                display: flex;
+                flex-direction: column;
+                z-index: 50;
             }
 
-            tabs.splice(index, 1);
-
-            if (tabs.length === 0) {
-                createNewTab();
-            } else if (activeTabId === tabId) {
-                const newActiveIndex = Math.min(index, tabs.length - 1);
-                switchToTab(tabs[newActiveIndex].id);
+            .ai-container {
+                flex: 1;
+                max-width: 900px;
+                width: 100%;
+                margin: 0 auto;
+                padding: 40px 20px;
+                display: flex;
+                flex-direction: column;
             }
 
-            renderTabs();
-        }
-
-        function switchToTab(tabId) {
-            activeTabId = tabId;
-            const tab = tabs.find(t => t.id === tabId);
-
-            // Hide all webviews
-            document.querySelectorAll('webview').forEach(wv => {
-                wv.classList.remove('active');
-            });
-
-            if (tab.webview) {
-                tab.webview.classList.add('active');
-                startPage.classList.add('hidden');
-                addressBar.value = tab.url;
-                updateNavButtons();
-            } else {
-                showStartPage();
+            .ai-header {
+                text-align: center;
+                margin-bottom: 32px;
             }
 
-            // Update engine badge for this tab
-            updateEngineBadge();
-            
-            renderTabs();
-        }
-
-        function renderTabs() {
-            tabBar.innerHTML = '';
-
-            tabs.forEach(tab => {
-                const tabEl = document.createElement('div');
-                tabEl.className = `tab ${tab.id === activeTabId ? 'active' : ''}`;
-                
-                // Favicon with engine indicator
-                const faviconEl = document.createElement('div');
-                faviconEl.className = 'tab-favicon';
-                
-                // Color-coded by engine
-                if (tab.engine === 'tor') {
-                    faviconEl.textContent = tab.url ? '●' : '○';
-                    faviconEl.style.color = '#7C3AED'; // Purple for Tor
-                } else if (tab.engine === 'prism') {
-                    faviconEl.textContent = tab.url ? '●' : '○';
-                    faviconEl.style.color = '#34C759'; // Green for Prism
-                } else if (tab.engine === 'chromium') {
-                    faviconEl.textContent = tab.url ? '●' : '○';
-                    faviconEl.style.color = '#007AFF'; // Blue for Chromium
-                } else if (tab.engine === 'firefox') {
-                    faviconEl.textContent = tab.url ? '●' : '○';
-                    faviconEl.style.color = '#FF9500'; // Orange for Firefox
-                } else {
-                    faviconEl.textContent = tab.url ? '●' : '○';
-                    faviconEl.style.color = ''; // Default color
-                }
-                
-                const titleEl = document.createElement('div');
-                titleEl.className = 'tab-title';
-                titleEl.textContent = tab.title;
-                
-                const closeEl = document.createElement('button');
-                closeEl.className = 'tab-close';
-                closeEl.textContent = '×';
-                closeEl.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                });
-
-                tabEl.appendChild(faviconEl);
-                tabEl.appendChild(titleEl);
-                tabEl.appendChild(closeEl);
-                
-                tabEl.addEventListener('click', () => {
-                    switchToTab(tab.id);
-                });
-
-                tabBar.appendChild(tabEl);
-            });
-
-            // Add new tab button
-            const newTabBtn = document.createElement('button');
-            newTabBtn.className = 'tab-new';
-            newTabBtn.textContent = '+';
-            newTabBtn.addEventListener('click', createNewTab);
-            tabBar.appendChild(newTabBtn);
-        }
-
-        // Navigation
-        async function navigateTo(input) {
-            if (!input) return;
-
-            let url = input.trim();
-            
-            // Handle prism:// protocol
-            if (url.startsWith('prism://')) {
-                await handlePrismProtocol(url);
-                return;
-            }
-            
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (!tab) return;
-
-            // Use the tab's engine
-            const tabEngine = tab.engine || defaultEngine;
-            
-            // Check if it's a URL or search query
-            const isSearch = !url.includes('.') || url.includes(' ');
-            
-            if (tabEngine === 'prism' && isSearch) {
-                // Use Prism search engine
-                await performPrismSearch(url);
-                return;
-            } else if (isSearch) {
-                // Use DuckDuckGo for Tor, Google for others
-                if (tabEngine === 'tor') {
-                    url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
-                } else {
-                    url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
-                }
-            } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                url = 'https://' + url;
+            .ai-title {
+                font-size: 42px;
+                font-weight: 700;
+                color: #1d1d1f;
+                margin-bottom: 8px;
             }
 
-            tab.url = url;
-
-            // Use different engines based on tab's engine
-            if (tabEngine === 'prism') {
-                await navigateWithPrismEngine(url);
-            } else if (tabEngine === 'tor') {
-                // Use Tor with SOCKS proxy
-                await navigateWithTor(url, tab);
-            } else {
-                // For Firefox, Chromium, and default
-                if (!tab.webview) {
-                    createWebview(tab, url);
-                } else {
-                    tab.webview.src = url;
-                }
+            .ai-subtitle {
+                font-size: 15px;
+                color: #86868b;
             }
 
-            startPage.classList.add('hidden');
-            addressBar.value = url;
-        }
-
-        // Perform Prism Search
-        async function performPrismSearch(query) {
-            try {
-                const response = await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(query)}`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    displayPrismSearchResults(query, result.results);
-                } else {
-                    alert('Search error: ' + (result.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Prism search error:', error);
-                alert('Failed to perform search. Check if backend is running.');
+            .ai-chat-area {
+                flex: 1;
+                background: #ffffff;
+                border-radius: 16px;
+                border: 1px solid rgba(0, 0, 0, 0.06);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
             }
-        }
 
-        // Display Prism search results
-        function displayPrismSearchResults(query, results) {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (!tab) return;
+            .ai-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px;
+            }
 
-            let html = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Prism Search: ${query}</title>
-                    <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                            background: #ffffff;
-                            color: #1d1d1f;
-                            padding: 40px 20px;
-                        }
-                        .container { max-width: 800px; margin: 0 auto; }
-                        .header { margin-bottom: 30px; }
-                        .logo { font-size: 32px; font-weight: 700; color: #007AFF; margin-bottom: 20px; }
-                        .search-box {
-                            width: 100%;
-                            padding: 12px 16px;
-                            border: 1px solid #ddd;
-                            border-radius: 8px;
-                            font-size: 16px;
-                        }
-                        .results-info { margin: 20px 0; color: #86868b; font-size: 14px; }
-                        .result {
-                            margin-bottom: 25px;
-                            padding: 15px;
-                            background: #f9f9f9;
-                            border-radius: 8px;
-                            transition: background 0.2s;
-                        }
-                        .result:hover { background: #f5f5f5; }
-                        .result-title {
-                            font-size: 18px;
-                            font-weight: 600;
-                            color: #007AFF;
-                            margin-bottom: 5px;
-                            text-decoration: none;
-                            display: block;
-                        }
-                        .result-url {
-                            font-size: 13px;
-                            color: #34c759;
-                            margin-bottom: 8px;
-                        }
-                        .result-description {
-                            font-size: 14px;
-                            color: #1d1d1f;
-                            line-height: 1.5;
-                        }
-                        .suggestions {
-                            margin: 30px 0;
-                            padding: 15px;
-                            background: #f0f0f5;
-                            border-radius: 8px;
-                        }
-                        .suggestions-title {
-                            font-size: 14px;
-                            font-weight: 600;
-                            color: #86868b;
-                            margin-bottom: 10px;
-                        }
-                        .suggestion {
-                            display: inline-block;
-                            margin: 5px 5px 5px 0;
-                            padding: 6px 12px;
-                            background: white;
-                            border-radius: 16px;
-                            font-size: 13px;
-                            color: #007AFF;
-                            text-decoration: none;
-                            border: 1px solid #ddd;
-                        }
-                        .suggestion:hover { background: #007AFF; color: white; }
-                        .no-results {
-                            text-align: center;
-                            padding: 60px 20px;
-                            color: #86868b;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <div class="header">
-                            <div class="logo">Prism Search</div>
-                            <input type="text" class="search-box" value="${query}" placeholder="Search with Prism...">
+            .ai-message {
+                margin-bottom: 20px;
+                display: flex;
+                flex-direction: column;
+                animation: fadeIn 0.3s ease;
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .ai-message.user {
+                align-items: flex-end;
+            }
+
+            .ai-message-bubble {
+                max-width: 70%;
+                padding: 14px 18px;
+                border-radius: 18px;
+                font-size: 15px;
+                line-height: 1.5;
+                word-wrap: break-word;
+            }
+
+            .ai-message.user .ai-message-bubble {
+                background: #007AFF;
+                color: white;
+            }
+
+            .ai-message.assistant .ai-message-bubble {
+                background: #e9e9eb;
+                color: #1d1d1f;
+            }
+
+            .ai-input-area {
+                padding: 20px;
+                border-top: 1px solid rgba(0, 0, 0, 0.06);
+                display: flex;
+                gap: 12px;
+                background: #fafafa;
+            }
+
+            .ai-input-field {
+                flex: 1;
+                padding: 12px 20px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 24px;
+                font-size: 15px;
+                outline: none;
+                background: #ffffff;
+                transition: all 0.2s ease;
+            }
+
+            .ai-input-field:focus {
+                border-color: #007AFF;
+                box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+            }
+
+            .ai-send-btn {
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: #007AFF;
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+            }
+
+            .ai-send-btn:hover {
+                background: #0051d5;
+                transform: scale(1.05);
+            }
+
+            .ai-send-btn:active {
+                transform: scale(0.95);
+            }
+
+            .ai-welcome {
+                text-align: center;
+                padding: 60px 20px;
+                color: #86868b;
+            }
+
+            .ai-welcome-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+
+            .ai-welcome-title {
+                font-size: 24px;
+                font-weight: 600;
+                color: #1d1d1f;
+                margin-bottom: 12px;
+            }
+
+            .ai-suggestions-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 12px;
+                margin-top: 32px;
+            }
+
+            .ai-suggestion-card {
+                background: #f5f5f7;
+                border: 1px solid rgba(0, 0, 0, 0.06);
+                border-radius: 12px;
+                padding: 16px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .ai-suggestion-card:hover {
+                background: #ebebed;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            }
+
+            .ai-suggestion-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #1d1d1f;
+                margin-bottom: 4px;
+            }
+
+            .ai-suggestion-desc {
+                font-size: 12px;
+                color: #86868b;
+            }
+        </style>
+
+        <div class="ai-container">
+            <div class="ai-header">
+                <div class="ai-title">✨ AI Assistant</div>
+                <div class="ai-subtitle">Ask me anything - powered by advanced AI</div>
+            </div>
+
+            <div class="ai-chat-area">
+                <div class="ai-messages" id="aiTabMessages">
+                    <div class="ai-welcome" id="aiWelcome">
+                        <div class="ai-welcome-icon">🤖</div>
+                        <div class="ai-welcome-title">How can I help you today?</div>
+                        <p>I can answer questions, explain concepts, help with research, and more.</p>
+                        
+                        <div class="ai-suggestions-grid">
+                            <div class="ai-suggestion-card" data-prompt="Explain quantum computing in simple terms">
+                                <div class="ai-suggestion-title">🔬 Quantum Computing</div>
+                                <div class="ai-suggestion-desc">Learn the basics</div>
+                            </div>
+                            <div class="ai-suggestion-card" data-prompt="What are the best privacy practices for browsing?">
+                                <div class="ai-suggestion-title">🔒 Privacy Tips</div>
+                                <div class="ai-suggestion-desc">Stay secure online</div>
+                            </div>
+                            <div class="ai-suggestion-card" data-prompt="How does blockchain technology work?">
+                                <div class="ai-suggestion-title">⛓️ Blockchain</div>
+                                <div class="ai-suggestion-desc">Understand crypto</div>
+                            </div>
+                            <div class="ai-suggestion-card" data-prompt="Explain the Prism browser and Haven services">
+                                <div class="ai-suggestion-title">🌟 About Prism</div>
+                                <div class="ai-suggestion-desc">Learn more</div>
+                            </div>
                         </div>
-            `;
-
-            // Direct match
-            if (results.direct_match) {
-                const dm = results.direct_match;
-                html += `
-                    <div class="result">
-                        <a href="${dm.url}" class="result-title">${dm.title}</a>
-                        <div class="result-url">${dm.url}</div>
-                        <div class="result-description">${dm.description}</div>
                     </div>
-                `;
-            }
+                </div>
 
-            // Suggestions
-            if (results.suggestions && results.suggestions.length > 0) {
-                html += '<div class="suggestions"><div class="suggestions-title">Suggestions</div>';
-                results.suggestions.forEach(sug => {
-                    html += `<a href="#" class="suggestion" onclick="window.parent.searchPrism('${sug}')">${sug}</a>`;
-                });
-                html += '</div>';
-            }
+                <div class="ai-input-area">
+                    <input type="text" class="ai-input-field" id="aiTabInput" placeholder="Ask me anything...">
+                    <button class="ai-send-btn" id="aiTabSendBtn">↑</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            // Indexed results
-            if (results.indexed && results.indexed.length > 0) {
-                html += '<div class="results-info">Results from Prism Index</div>';
-                results.indexed.forEach(item => {
-                    html += `
-                        <div class="result">
-                            <a href="${item.url}" class="result-title">${item.title}</a>
-                            <div class="result-url">${item.url}</div>
-                            <div class="result-description">${item.description || item.content.substring(0, 200)}</div>
-                        </div>
-                    `;
-                });
-            }
-
-            // Web results
-            if (results.web && results.web.length > 0) {
-                html += '<div class="results-info">Web Results</div>';
-                results.web.forEach(item => {
-                    html += `
-                        <div class="result">
-                            <a href="${item.url}" class="result-title">${item.title}</a>
-                            <div class="result-url">${item.url}</div>
-                            <div class="result-description">${item.description}</div>
-                        </div>
-                    `;
-                });
-            }
-
-            // No results
-            if (!results.direct_match && (!results.indexed || results.indexed.length === 0) && (!results.web || results.web.length === 0)) {
-                html += '<div class="no-results">No results found for "' + query + '"</div>';
-            }
-
-            html += '</div></body></html>';
-
-            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-            
-            if (!tab.webview) {
-                createWebview(tab, dataUrl);
-            } else {
-                tab.webview.src = dataUrl;
-            }
-            
-            tab.title = 'Prism Search: ' + query;
-            tab.url = 'prism://search?q=' + encodeURIComponent(query);
-            addressBar.value = tab.url;
-            startPage.classList.add('hidden');
-            renderTabs();
-        }
-
-        // Handle prism:// protocol
-        async function handlePrismProtocol(url) {
-            const prismUrl = new URL(url);
-            const path = prismUrl.hostname;
-
-            if (path === 'search') {
-                const query = prismUrl.searchParams.get('q');
-                if (query) {
-                    await performPrismSearch(query);
-                }
-            } else if (path === 'home') {
-                showStartPage();
-            } else {
-                alert('Unknown Prism protocol: ' + path);
-            }
-        }
-
-        // Navigate with Prism Engine (via backend)
-        async function navigateWithPrismEngine(url) {
-            try {
-                const response = await fetch('http://localhost:8000/api/engine/navigate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url, engine: 'prism' })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    const tab = tabs.find(t => t.id === activeTabId);
-                    if (tab) {
-                        const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(result.content);
-                        
-                        if (!tab.webview) {
-                            createWebview(tab, dataUrl);
-                        } else {
-                            tab.webview.src = dataUrl;
-                        }
-                        
-                        tab.title = result.title || 'Prism Page';
-                        renderTabs();
-                    }
-                } else {
-                    alert('Prism Engine error: ' + (result.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Prism Engine error:', error);
-                alert('Failed to load with Prism Engine. Using standard navigation.');
-                const tab = tabs.find(t => t.id === activeTabId);
-                if (tab) {
-                    if (!tab.webview) {
-                        createWebview(tab, url);
-                    } else {
-                        tab.webview.src = url;
-                    }
-                }
-            }
-        }
-
-        // Navigate with Tor (SOCKS5 proxy)
-        async function navigateWithTor(url, tab) {
-            // For Tor support, we configure the webview with proxy settings
-            if (!tab.webview) {
-                const webview = document.createElement('webview');
-                webview.src = url;
-                webview.className = 'active';
-                webview.setAttribute('allowpopups', '');
-                webview.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0'); // Tor Browser UA
-                
-                // Note: Tor requires SOCKS5 proxy on 127.0.0.1:9050
-                // In production, you'd need to configure Electron's proxy settings
-                // For now, we'll use standard navigation with privacy-focused settings
-                
-                webview.addEventListener('dom-ready', () => {
-                    webview.setZoomFactor(1.0);
-                    // Enhanced privacy for Tor tabs
-                    webview.executeJavaScript(`
-                        // Disable WebRTC IP leak
-                        if (navigator.mediaDevices) {
-                            navigator.mediaDevices.getUserMedia = undefined;
-                        }
-                        // Spoof timezone
-                        Date.prototype.getTimezoneOffset = function() { return 0; };
-                    `);
-                });
-                
-                webview.addEventListener('did-start-loading', () => {
-                    updateNavButtons();
-                });
-
-                webview.addEventListener('did-stop-loading', () => {
-                    tab.title = webview.getTitle() || 'Tor Tab';
-                    tab.url = webview.getURL();
-                    addressBar.value = tab.url;
-                    renderTabs();
-                    updateNavButtons();
-                });
-
-                webview.addEventListener('page-title-updated', (e) => {
-                    tab.title = e.title || 'Tor Tab';
-                    renderTabs();
-                });
-
-                tab.webview = webview;
-                webviewContainer.appendChild(webview);
-            } else {
-                tab.webview.src = url;
-            }
-        }
-
-        // Global function for search links
-        window.searchPrism = async function(query) {
-            await performPrismSearch(query);
-        };
-
-        function createWebview(tab, url) {
-            const webview = document.createElement('webview');
-            webview.src = url;
-            webview.className = 'active';
-            webview.setAttribute('allowpopups', '');
-            
-            // Configure webview based on engine
-            const engine = tab.engine || 'tor';
-            
-            // Set partition for engine isolation
-            webview.setAttribute('partition', `persist:${engine}`);
-            
-            // Set user agent based on engine
-            switch(engine) {
-                case 'firefox':
-                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0');
-                    break;
-                case 'tor':
-                    webview.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
-                    break;
-                case 'prism':
-                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Prism/1.0.0 (KHTML, like Gecko) Safari/605.1.15');
-                    break;
-                case 'chromium':
-                default:
-                    webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-                    break;
-            }
-            
-            // Fix viewport and zoom issues
-            webview.addEventListener('dom-ready', () => {
-                webview.setZoomFactor(1.0);
-                webview.insertCSS('body { zoom: 1.0 !important; }');
-                
-                // Engine-specific privacy/security configurations
-                if (engine === 'tor' || engine === 'firefox') {
-                    webview.executeJavaScript(`
-                        // Enhanced privacy settings
-                        if (navigator.mediaDevices) {
-                            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-                            navigator.mediaDevices.getUserMedia = function() {
-                                console.warn('getUserMedia blocked for privacy');
-                                return Promise.reject(new Error('Permission denied'));
-                            };
-                        }
-                        
-                        // Block WebRTC leaks
-                        if (window.RTCPeerConnection) {
-                            window.RTCPeerConnection = undefined;
-                        }
-                        if (window.webkitRTCPeerConnection) {
-                            window.webkitRTCPeerConnection = undefined;
-                        }
-                        if (window.mozRTCPeerConnection) {
-                            window.mozRTCPeerConnection = undefined;
-                        }
-                        
-                        // Spoof timezone to UTC
-                        Date.prototype.getTimezoneOffset = function() { return 0; };
-                        
-                        // Block canvas fingerprinting
-                        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                        HTMLCanvasElement.prototype.toDataURL = function() {
-                            console.warn('Canvas fingerprinting blocked');
-                            return originalToDataURL.call(this);
-                        };
-                    `);
-                }
-            });
-            
-            webview.addEventListener('did-start-loading', () => {
-                updateNavButtons();
-            });
-
-            webview.addEventListener('did-stop-loading', () => {
-                tab.title = webview.getTitle() || 'New Tab';
-                tab.url = webview.getURL();
-                addressBar.value = tab.url;
-                renderTabs();
-                updateNavButtons();
-            });
-
-            webview.addEventListener('page-title-updated', (e) => {
-                tab.title = e.title || 'New Tab';
-                renderTabs();
-            });
-
-            tab.webview = webview;
-            webviewContainer.appendChild(webview);
-        }
-
-        function showStartPage() {
-            startPage.classList.remove('hidden');
-            addressBar.value = '';
-            document.querySelectorAll('webview').forEach(wv => {
-                wv.classList.remove('active');
-            });
-        }
-
-        function updateNavButtons() {
-            const tab = tabs.find(t => t.id === activeTabId);
-            if (tab && tab.webview) {
-                backBtn.disabled = !tab.webview.canGoBack();
-                forwardBtn.disabled = !tab.webview.canGoForward();
-            } else {
-                backBtn.disabled = true;
-                forwardBtn.disabled = true;
-            }
-        }
-
-        // Crypto Wallet Functions
-        async function createWallet() {
-            const name = prompt('Wallet name:');
-            if (!name) return;
-
-            const password = prompt('Wallet password:');
-            if (!password) return;
-
-            try {
-                const response = await fetch('http://localhost:8000/api/wallet/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, password })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    alert(`Wallet created!\n\n${result.wallet.address}`);
-                    loadWallets();
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-
-        async function importWallet() {
-            const privateKey = prompt('Private key:');
-            if (!privateKey) return;
-
-            const name = prompt('Wallet name:');
-            if (!name) return;
-
-            const password = prompt('Wallet password:');
-            if (!password) return;
-
-            try {
-                const response = await fetch('http://localhost:8000/api/wallet/import', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ private_key: privateKey, name, password })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    alert(`Wallet imported!\n\n${result.wallet.address}`);
-                    loadWallets();
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-
-        async function loadWallets() {
-            try {
-                const response = await fetch('http://localhost:8000/api/wallet');
-                const result = await response.json();
-                
-                if (result.success && result.wallets.length > 0) {
-                    displayWallets(result.wallets);
-                }
-            } catch (error) {
-                console.error('Error loading wallets:', error);
-            }
-        }
-
-        function displayWallets(wallets) {
-            const walletList = document.getElementById('walletList');
-            walletList.innerHTML = '';
-
-            wallets.forEach(wallet => {
-                const item = document.createElement('div');
-                item.className = 'wallet-item';
-                
-                const balance = wallet.balance.ethereum || { native: 0 };
-                
-                item.innerHTML = `
-                    <div class="wallet-info">
-                        <h4>${wallet.name}</h4>
-                        <p>${wallet.address.substring(0, 10)}...${wallet.address.substring(wallet.address.length - 8)}</p>
-                    </div>
-                    <div class="wallet-balance">
-                        <div class="balance">${balance.native.toFixed(4)}</div>
-                        <div class="currency">ETH</div>
-                    </div>
-                `;
-                
-                walletList.appendChild(item);
-            });
-        }
-
-        // Start the app
-        init();
-    </script>
+    <!-- Load renderer script that connects to native engines -->
+    <script src="renderer.js"></script>
 </body>
 </html>

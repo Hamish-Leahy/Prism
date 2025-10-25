@@ -2,19 +2,41 @@ const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron'
 const path = require('path')
 const EngineManager = require('./engines/EngineManager')
 
+// Set app name and dock behavior
+app.setName('Prism')
+app.name = 'Prism'
+
 let mainWindow
 let engineManager
 
 // Configure engine-specific sessions
 function setupEngineSessions() {
-  // Chromium session (default)
+  // Chromium session (default) with DRM support
   const chromiumSession = session.fromPartition('persist:chromium')
   chromiumSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
   
-  // Firefox session
+  // Enable Widevine DRM (for Netflix, Spotify, Disney+, etc.)
+  chromiumSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    // Allow protected media (DRM)
+    if (permission === 'media' || permission === 'protectedMedia') {
+      return callback(true)
+    }
+    // Default: prompt for other permissions
+    callback(false)
+  })
+  
+  // Firefox session with DRM support
   const firefoxSession = session.fromPartition('persist:firefox')
   firefoxSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0')
   firefoxSession.setPreloads([])
+  
+  // Enable DRM for Firefox session
+  firefoxSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media' || permission === 'protectedMedia') {
+      return callback(true)
+    }
+    callback(false)
+  })
   
   // Tor session with proxy
   const torSession = session.fromPartition('persist:tor')
@@ -52,19 +74,48 @@ function createWindow() {
   // Setup engine sessions
   setupEngineSessions()
   
+  // Set dock icon (macOS) - with error handling
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(__dirname, 'icon.svg')
+    const fs = require('fs')
+    if (fs.existsSync(iconPath)) {
+      try {
+        const nativeImage = require('electron').nativeImage
+        const icon = nativeImage.createFromPath(iconPath)
+        if (!icon.isEmpty()) {
+          app.dock.setIcon(icon)
+        }
+      } catch (err) {
+        console.warn('Could not set dock icon:', err.message)
+      }
+    }
+  }
+  
   // Create the main browser window
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 1000,
     minWidth: 1200,
     minHeight: 800,
+    title: 'Prism',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
       enableRemoteModule: true,
-      webSecurity: false,
+      webSecurity: false, // Needed for cross-origin content
       webviewTag: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // DRM Support (Widevine for Netflix, Spotify, etc.)
+      plugins: true,
+      // Security features
+      sandbox: false, // Need this for BrowserView
+      allowRunningInsecureContent: false,
+      experimentalFeatures: true,
+      enableWebSQL: false, // Deprecated, disable for security
+      // Media features
+      enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions',
+      // Hardware acceleration
+      hardwareAcceleration: true
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
@@ -77,18 +128,25 @@ function createWindow() {
     hiddenInsetTitleBarButtonsOnBlur: false
   })
 
+  // Create Engine Manager immediately (IPC handlers register in constructor)
+  engineManager = new EngineManager(mainWindow)
+
   // Load the native HTML app
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
 
   // Show window when ready
-  mainWindow.once('ready-to-show', async () => {
+  mainWindow.once('ready-to-show', () => {
     mainWindow.show()
-    
-    // Initialize Engine Manager after window is ready
-    engineManager = new EngineManager(mainWindow)
+  })
+
+  // Initialize engines after window is shown
+  mainWindow.webContents.once('did-finish-load', async () => {
     await engineManager.initialize()
     
     console.log('✅ Prism Browser ready with native engines')
+    
+    // Notify renderer that engines are ready
+    mainWindow.webContents.send('engines-ready')
   })
 
   // Handle window closed

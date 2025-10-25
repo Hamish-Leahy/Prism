@@ -6,13 +6,18 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Prism\Backend\Services\CryptoWalletService;
 
+/**
+ * HavenWallet Controller
+ * Part of the Haven family of services
+ * Secure multi-chain cryptocurrency wallet management
+ */
 class CryptoWalletController
 {
-    private CryptoWalletService $cryptoWallet;
+    private CryptoWalletService $havenWallet;
 
-    public function __construct(CryptoWalletService $cryptoWallet)
+    public function __construct(CryptoWalletService $havenWallet)
     {
-        $this->cryptoWallet = $cryptoWallet;
+        $this->havenWallet = $havenWallet;
     }
 
     public function createWallet(Request $request, Response $response): Response
@@ -26,7 +31,11 @@ class CryptoWalletController
                 throw new \InvalidArgumentException('Name and password are required');
             }
 
-            $result = $this->cryptoWallet->createWallet($name, $password);
+            $result = $this->havenWallet->createWallet($name, $password);
+            
+            // Add Haven branding to response
+            $result['service'] = 'HavenWallet';
+            $result['family'] = 'Haven';
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -48,7 +57,11 @@ class CryptoWalletController
                 throw new \InvalidArgumentException('Private key, name and password are required');
             }
 
-            $result = $this->cryptoWallet->importWallet($privateKey, $name, $password);
+            $result = $this->havenWallet->importWallet($privateKey, $name, $password);
+            
+            // Add Haven branding to response
+            $result['service'] = 'HavenWallet';
+            $result['family'] = 'Haven';
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -61,7 +74,11 @@ class CryptoWalletController
     public function getWallets(Request $request, Response $response): Response
     {
         try {
-            $result = $this->cryptoWallet->getWallets();
+            $result = $this->havenWallet->getWallets();
+            
+            // Add Haven branding to response
+            $result['service'] = 'HavenWallet';
+            $result['family'] = 'Haven';
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -81,7 +98,7 @@ class CryptoWalletController
                 throw new \InvalidArgumentException('Wallet ID is required');
             }
 
-            $result = $this->cryptoWallet->getWalletBalance($walletId, $chain);
+            $result = $this->havenWallet->getWalletBalance($walletId, $chain);
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -105,7 +122,7 @@ class CryptoWalletController
                 throw new \InvalidArgumentException('All transaction parameters are required');
             }
 
-            $result = $this->cryptoWallet->sendTransaction($walletId, $password, $to, $amount, $chain);
+            $result = $this->havenWallet->sendTransaction($walletId, $password, $to, $amount, $chain);
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -118,7 +135,7 @@ class CryptoWalletController
     public function getSupportedChains(Request $request, Response $response): Response
     {
         try {
-            $result = $this->cryptoWallet->getSupportedChains();
+            $result = $this->havenWallet->getSupportedChains();
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
@@ -137,7 +154,7 @@ class CryptoWalletController
                 throw new \InvalidArgumentException('Wallet ID is required');
             }
 
-            $result = $this->cryptoWallet->getWalletTransactions($walletId);
+            $result = $this->havenWallet->getWalletTransactions($walletId);
             
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');

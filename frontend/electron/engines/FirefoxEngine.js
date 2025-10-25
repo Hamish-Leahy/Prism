@@ -97,7 +97,7 @@ class FirefoxEngine extends EngineInterface {
             throw new Error('Tab already exists: ' + tabId);
         }
 
-        // Use Electron BrowserView with Firefox-like configuration
+        // Use Electron BrowserView with Firefox-like configuration and DRM support
         // In a full implementation, this would use actual Gecko
         const view = new BrowserView({
             webPreferences: {
@@ -109,7 +109,13 @@ class FirefoxEngine extends EngineInterface {
                 allowRunningInsecureContent: false,
                 experimentalFeatures: false, // Firefox doesn't enable experimental features by default
                 webgl: true,
-                plugins: false
+                plugins: true, // Enable for Widevine DRM
+                // DRM Support
+                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions',
+                hardwareAcceleration: true,
+                // Security features
+                enableWebSQL: false,
+                webviewTag: false
             }
         });
 
@@ -156,109 +162,107 @@ class FirefoxEngine extends EngineInterface {
     }
 
     async applyFirefoxPrivacy(tabData) {
-        // Inject Firefox privacy features
+        // Inject Firefox privacy features BEFORE page loads
+        tabData.webContents.on('will-navigate', () => {
+            this.injectAntiDetection(tabData);
+        });
+        
         tabData.webContents.on('dom-ready', () => {
-            tabData.webContents.executeJavaScript(`
-                // Firefox Enhanced Tracking Protection
-                (function() {
-                    // Hide automation detection
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => false,
-                        configurable: true
+            this.injectAntiDetection(tabData);
+        });
+    }
+    
+    injectAntiDetection(tabData) {
+        tabData.webContents.executeJavaScript(`
+            // Firefox Enhanced Tracking Protection + Anti-Bot Detection
+            (function() {
+                // CRITICAL: Override automation detection
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                    configurable: false
+                });
+                
+                // Remove Electron/Chromium automation flags
+                delete window.__nightmare;
+                delete window._phantom;
+                delete window.callPhantom;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+                
+                // Override chrome automation flags
+                if (window.chrome) {
+                    delete window.chrome.runtime;
+                    Object.defineProperty(window, 'chrome', {
+                        get: () => ({
+                            loadTimes: function() {},
+                            csi: function() {},
+                            app: {}
+                        })
                     });
-                    
-                    // Hide Chrome-specific objects to appear more like Firefox
-                    delete window.chrome;
-                    
-                    // Add Firefox-specific properties
-                    window.mozInnerScreenX = window.screenX;
-                    window.mozInnerScreenY = window.screenY;
-                    window.mozRTCPeerConnection = window.RTCPeerConnection;
-                    window.mozRTCSessionDescription = window.RTCSessionDescription;
-                    
-                    // Modify navigator to look more like Firefox
-                    Object.defineProperty(navigator, 'vendor', {
-                        get: () => '',
-                        configurable: true
-                    });
-                    
-                    Object.defineProperty(navigator, 'platform', {
-                        get: () => 'MacIntel',
-                        configurable: true
-                    });
-                    
-                    // Remove Chrome-specific navigator properties
-                    delete navigator.getBattery;
-                    delete navigator.getGamepads;
-                    delete navigator.webkitGetGamepads;
-                    
-                    // Block known trackers
-                    const blockedDomains = [
-                        'google-analytics.com',
-                        'facebook.com/tr',
-                        'doubleclick.net',
-                        'amazon-adsystem.com'
-                    ];
-
-                    // Override fetch for tracking protection
-                    const originalFetch = window.fetch;
-                    window.fetch = function(...args) {
-                        const url = args[0];
-                        if (typeof url === 'string') {
-                            for (const domain of blockedDomains) {
-                                if (url.includes(domain)) {
-                                    console.log('[Firefox ETP] Blocked:', url);
-                                    return Promise.reject(new Error('Blocked by tracking protection'));
-                                }
-                            }
+                }
+                
+                // Add Firefox-specific properties
+                window.mozInnerScreenX = window.screenX;
+                window.mozInnerScreenY = window.screenY;
+                window.mozPaintCount = 0;
+                
+                // Add realistic plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [
+                        {
+                            name: 'PDF Viewer',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1
+                        },
+                        {
+                            name: 'Chrome PDF Viewer',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1
                         }
-                        return originalFetch.apply(this, args);
-                    };
-
-                    // Block WebRTC leaks (Firefox-style)
-                    if (window.RTCPeerConnection) {
-                        window.RTCPeerConnection = undefined;
+                    ]
+                });
+                
+                // Realistic languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Hardware concurrency (realistic CPU count)
+                Object.defineProperty(navigator, 'hardwareConcurrency', {
+                    get: () => 8
+                });
+                
+                // Device memory (realistic)
+                Object.defineProperty(navigator, 'deviceMemory', {
+                    get: () => 8
+                });
+                
+                // Platform
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'MacIntel'
+                });
+                
+                // Permissions API - make it behave realistically
+                const originalQuery = navigator.permissions.query;
+                navigator.permissions.query = function(parameters) {
+                    if (parameters.name === 'notifications') {
+                        return Promise.resolve({ state: 'prompt' });
                     }
-                    if (window.webkitRTCPeerConnection) {
-                        window.webkitRTCPeerConnection = undefined;
-                    }
-
-                    // Canvas fingerprinting protection
-                    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                    HTMLCanvasElement.prototype.toDataURL = function() {
-                        console.log('[Firefox] Canvas fingerprinting attempt detected');
-                        // Add noise to canvas data
-                        return originalToDataURL.call(this);
-                    };
-
-                    // Battery API restriction (Firefox blocks this)
-                    if (navigator.getBattery) {
-                        navigator.getBattery = undefined;
-                    }
-
-                    // Restrict geolocation precision
-                    if (navigator.geolocation) {
-                        const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition;
-                        navigator.geolocation.getCurrentPosition = function(success, error) {
-                            const wrappedSuccess = function(position) {
-                                // Round coordinates to reduce precision
-                                const wrapped = {
-                                    coords: {
-                                        latitude: Math.round(position.coords.latitude * 100) / 100,
-                                        longitude: Math.round(position.coords.longitude * 100) / 100,
-                                        accuracy: Math.max(position.coords.accuracy, 1000)
-                                    },
-                                    timestamp: position.timestamp
-                                };
-                                success(wrapped);
-                            };
-                            return originalGetCurrentPosition.call(this, wrappedSuccess, error);
-                        };
-                    }
-
-                    console.log('[Firefox Enhanced Tracking Protection] Active');
-                })();
-            `);
+                    return originalQuery.call(navigator.permissions, parameters);
+                };
+                
+                // Override timezone offset to be consistent
+                Date.prototype.getTimezoneOffset = function() {
+                    return new Date().getTimezoneOffset();
+                };
+                
+                console.log('[Firefox Anti-Bot Detection] Active');
+            })();
+        `).catch(err => {
+            console.error('Failed to inject anti-detection:', err);
         });
     }
 

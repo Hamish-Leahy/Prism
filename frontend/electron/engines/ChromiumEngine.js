@@ -48,7 +48,7 @@ class ChromiumEngine extends EngineInterface {
             throw new Error('Tab already exists: ' + tabId);
         }
 
-        // Create BrowserView (actual Chromium view)
+        // Create BrowserView (actual Chromium view) with DRM support
         const view = new BrowserView({
             webPreferences: {
                 partition: this.partition,
@@ -59,7 +59,13 @@ class ChromiumEngine extends EngineInterface {
                 allowRunningInsecureContent: false,
                 experimentalFeatures: true,
                 webgl: true,
-                plugins: false
+                plugins: true, // Enable for Widevine DRM
+                // DRM Support (Widevine for Netflix, Spotify, Disney+)
+                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions',
+                hardwareAcceleration: true,
+                // Security features
+                enableWebSQL: false,
+                webviewTag: false
             }
         });
 
@@ -79,6 +85,9 @@ class ChromiumEngine extends EngineInterface {
 
         // Set up event listeners
         this.setupEventListeners(tabId, tabData);
+        
+        // Apply anti-bot detection
+        this.applyAntiDetection(tabData);
 
         console.log('✅ Chromium tab created:', tabId);
         return {
@@ -86,6 +95,101 @@ class ChromiumEngine extends EngineInterface {
             tabId: tabId,
             engine: 'chromium'
         };
+    }
+    
+    applyAntiDetection(tabData) {
+        // Inject anti-detection BEFORE page loads
+        tabData.webContents.on('will-navigate', () => {
+            this.injectAntiDetection(tabData);
+        });
+        
+        tabData.webContents.on('dom-ready', () => {
+            this.injectAntiDetection(tabData);
+        });
+    }
+    
+    injectAntiDetection(tabData) {
+        tabData.webContents.executeJavaScript(`
+            // Anti-Bot Detection for Chromium
+            (function() {
+                // CRITICAL: Override automation detection
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                    configurable: false
+                });
+                
+                // Remove automation flags
+                delete window.__nightmare;
+                delete window._phantom;
+                delete window.callPhantom;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+                
+                // Add realistic plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [
+                        {
+                            name: 'PDF Viewer',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1
+                        },
+                        {
+                            name: 'Chrome PDF Viewer',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1
+                        },
+                        {
+                            name: 'Chromium PDF Viewer',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer',
+                            length: 1
+                        }
+                    ]
+                });
+                
+                // Realistic languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Hardware concurrency (realistic CPU count)
+                Object.defineProperty(navigator, 'hardwareConcurrency', {
+                    get: () => 8
+                });
+                
+                // Device memory (realistic)
+                Object.defineProperty(navigator, 'deviceMemory', {
+                    get: () => 8
+                });
+                
+                // Platform
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'MacIntel'
+                });
+                
+                // Chrome object
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function() {},
+                    csi: function() {},
+                    app: {}
+                };
+                
+                // Permissions API
+                const originalQuery = navigator.permissions.query;
+                navigator.permissions.query = function(parameters) {
+                    if (parameters.name === 'notifications') {
+                        return Promise.resolve({ state: 'prompt' });
+                    }
+                    return originalQuery.call(navigator.permissions, parameters);
+                };
+            })();
+        `).catch(err => {
+            console.error('Failed to inject anti-detection:', err);
+        });
     }
 
     setupEventListeners(tabId, tabData) {

@@ -1,7 +1,8 @@
 {
-  "name": "prism-browser-frontend",
+  "name": "Prism",
+  "productName": "Prism",
   "version": "1.0.0",
-  "description": "Electron-based desktop app for Prism browser",
+  "description": "Prism Browser - Multi-Engine Web Browser",
   "main": "electron/main.js",
   "homepage": "./",
   "scripts": {

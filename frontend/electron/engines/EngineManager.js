@@ -16,6 +16,9 @@ class EngineManager {
         this.tabs = new Map(); // tabId -> { engine, engineTabId }
         this.eventListeners = new Map();
         this.initialized = false;
+        
+        // Register IPC handlers immediately so they're available before initialization completes
+        this.setupIPC();
     }
 
     async initialize() {
@@ -58,9 +61,6 @@ class EngineManager {
             this.engines.set('tor', tor);
             this.engines.set('prism', prism);
 
-            // Setup IPC handlers
-            this.setupIPC();
-
             this.initialized = true;
             console.log('✅ Engine Manager initialized');
             console.log('   Available engines:', Array.from(this.engines.keys()).join(', '));
@@ -75,6 +75,11 @@ class EngineManager {
     setupIPC() {
         // Tab management
         ipcMain.handle('engine:createTab', async (event, tabId, engineName, options) => {
+            // Wait for initialization if not ready yet
+            if (!this.initialized) {
+                console.log('⏳ Waiting for engines to initialize...');
+                await this.waitForInitialization();
+            }
             return await this.createTab(tabId, engineName, options);
         });
 
@@ -88,6 +93,15 @@ class EngineManager {
 
         ipcMain.handle('engine:hideTab', async (event, tabId) => {
             return await this.hideTab(tabId);
+        });
+
+        // Hide/show all BrowserViews (for modals and overlays)
+        ipcMain.handle('engine:hideAllViews', async () => {
+            return await this.hideAllViews();
+        });
+
+        ipcMain.handle('engine:showActiveView', async () => {
+            return await this.showActiveView();
         });
 
         // Navigation
@@ -152,6 +166,13 @@ class EngineManager {
         });
 
         console.log('✅ IPC handlers registered');
+    }
+
+    async waitForInitialization() {
+        // Poll until initialized
+        while (!this.initialized) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     }
 
     async createTab(tabId, engineName, options = {}) {
@@ -426,6 +447,28 @@ class EngineManager {
         }
 
         return stats;
+    }
+
+    async hideAllViews() {
+        // Remove all BrowserViews from the window (for modals/overlays)
+        this.mainWindow.setBrowserView(null);
+        return { success: true };
+    }
+
+    async showActiveView() {
+        // Find the currently active tab and show its view
+        for (const [tabId, tabInfo] of this.tabs.entries()) {
+            const engine = this.engines.get(tabInfo.engine);
+            const engineTab = engine.tabs.get(tabInfo.engineTabId);
+            
+            if (engineTab && engineTab.visible) {
+                // This tab should be visible, show it
+                await engine.showTab(tabInfo.engineTabId);
+                return { success: true, tabId };
+            }
+        }
+        
+        return { success: true, tabId: null };
     }
 
     async shutdown() {
