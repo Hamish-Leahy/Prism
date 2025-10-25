@@ -194,11 +194,15 @@ class FirefoxEngine extends EngineInterface {
             loading: false,
             canGoBack: false,
             canGoForward: false,
-            visible: false,
+            visible: true, // Make tab visible by default
             firefoxMode: this.firefoxPath !== null
         };
 
         this.tabs.set(tabId, tabData);
+
+        // Don't attach BrowserView immediately to prevent interfering with other tabs
+        // The BrowserView will be attached when the tab is first shown
+        tabData.visible = false;
 
         // Set up event listeners
         this.setupEventListeners(tabId, tabData);
@@ -642,10 +646,24 @@ class FirefoxEngine extends EngineInterface {
 
         webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error('Firefox load failed:', errorDescription);
+            
+            // Check for network-related errors
+            const isNetworkError = errorCode === -2 || // ERR_INTERNET_DISCONNECTED
+                                 errorCode === -21 || // ERR_NETWORK_CHANGED
+                                 errorCode === -102 || // ERR_CONNECTION_REFUSED
+                                 errorCode === -105 || // ERR_NAME_NOT_RESOLVED
+                                 errorDescription.includes('net::') ||
+                                 errorDescription.includes('ERR_INTERNET_DISCONNECTED') ||
+                                 errorDescription.includes('ERR_NETWORK_CHANGED') ||
+                                 errorDescription.includes('ERR_CONNECTION_REFUSED') ||
+                                 errorDescription.includes('ERR_NAME_NOT_RESOLVED');
+            
             this.emit('load-error', { 
                 tabId, 
                 engine: 'firefox',
-                error: errorDescription 
+                error: errorDescription,
+                errorCode: errorCode,
+                isNetworkError: isNetworkError
             });
         });
 
@@ -798,18 +816,30 @@ class FirefoxEngine extends EngineInterface {
         const tabData = this.tabs.get(tabId);
         if (!tabData) throw new Error('Tab not found: ' + tabId);
 
-        if (!tabData.visible) {
-            this.mainWindow.setBrowserView(tabData.view);
-            const bounds = this.mainWindow.getContentBounds();
-            tabData.view.setBounds({
-                x: 0,
-                y: 90,
-                width: bounds.width,
-                height: bounds.height - 90
-            });
-            tabData.view.setAutoResize({ width: true, height: true });
-            tabData.visible = true;
+        // Hide all other tabs first to prevent conflicts
+        for (const [id, data] of this.tabs.entries()) {
+            if (id !== tabId && data.visible) {
+                this.mainWindow.removeBrowserView(data.view);
+                data.visible = false;
+            }
         }
+
+        // Ensure the BrowserView is properly attached and visible
+        this.mainWindow.setBrowserView(tabData.view);
+        const bounds = this.mainWindow.getContentBounds();
+        tabData.view.setBounds({
+            x: 0,
+            y: 90,
+            width: bounds.width,
+            height: bounds.height - 90
+        });
+        tabData.view.setAutoResize({ width: true, height: true });
+        
+        // Force the BrowserView to be visible
+        tabData.view.webContents.focus();
+        tabData.visible = true;
+        
+        console.log(`✅ Firefox tab ${tabId} shown successfully`);
     }
 
     async hideTab(tabId) {

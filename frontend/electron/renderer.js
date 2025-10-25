@@ -17,67 +17,14 @@ let sleepingTabs = new Set(); // tabId -> boolean
 let isCreatingTab = false;
 // Initialization guard
 let isInitialized = false;
+// Start page showing guard
+let isShowingStartPage = false;
+// Tab switching debouncing
+let isSwitchingTab = false;
 
-// Performance monitoring
-let performanceMonitor = {
-    lastMemoryCheck: 0,
-    memoryThreshold: 100 * 1024 * 1024, // 100MB
-    heavySites: new Set(['youtube.com', 'netflix.com', 'twitch.tv', 'vimeo.com']),
-    performanceMode: false
-};
+// Removed complex performance monitoring - keeping it simple like real browsers
 
-// Performance monitoring and optimization
-function checkPerformanceAndOptimize(tab) {
-    const now = Date.now();
-    
-    // Check memory usage every 10 seconds
-    if (now - performanceMonitor.lastMemoryCheck > 10000) {
-        performanceMonitor.lastMemoryCheck = now;
-        
-        // Get memory usage from performance API
-        if (performance.memory) {
-            const usedMemory = performance.memory.usedJSHeapSize;
-            const totalMemory = performance.memory.totalJSHeapSize;
-            const memoryPressure = usedMemory / totalMemory;
-            
-            if (memoryPressure > 0.8) {
-                console.log('🚨 High memory pressure detected in renderer');
-                performanceMonitor.performanceMode = true;
-                // Trigger garbage collection if available
-                if (window.gc) {
-                    window.gc();
-                }
-            } else if (memoryPressure < 0.5) {
-                performanceMonitor.performanceMode = false;
-            }
-        }
-    }
-    
-    // Check if this is a heavy site and optimize
-    if (tab.url) {
-        const url = tab.url.toLowerCase();
-        const isHeavySite = Array.from(performanceMonitor.heavySites).some(site => 
-            url.includes(site)
-        );
-        
-        if (isHeavySite) {
-            console.log(`🚀 Detected heavy site: ${tab.url}, applying optimizations`);
-            optimizeHeavySite(tab);
-        }
-    }
-}
-
-// Optimize heavy sites for better performance
-function optimizeHeavySite(tab) {
-    try {
-        // Request performance optimizations from main process
-        ipcRenderer.invoke('engine:optimizeHeavySite', tab.id).catch(err => 
-            console.error('Failed to optimize heavy site:', err)
-        );
-    } catch (error) {
-        console.error('Error optimizing heavy site:', error);
-    }
-}
+// Removed heavy site optimization - keeping it simple like real browsers
 
 // DOM Elements
 const tabBar = document.getElementById('tabBar');
@@ -93,8 +40,10 @@ const walletModal = document.getElementById('walletModal');
 const closeWallet = document.getElementById('closeWallet');
 const engineSelector = document.getElementById('engineSelector');
 const engineBadge = document.getElementById('engineBadge');
+const engineIndicator = document.getElementById('engineIndicator');
 const securityIndicator = document.getElementById('securityIndicator');
 const loadingSpinner = document.getElementById('loadingSpinner');
+const newTabBtn = document.getElementById('newTabBtn');
 
 // History Elements
 const historyModal = document.getElementById('historyModal');
@@ -116,6 +65,10 @@ const aiTabMessages = document.getElementById('aiTabMessages');
 const aiTabInput = document.getElementById('aiTabInput');
 const aiTabSendBtn = document.getElementById('aiTabSendBtn');
 const aiWelcome = document.getElementById('aiWelcome');
+
+// No Internet Page Elements
+const noInternetPage = document.getElementById('noInternetPage');
+const retryButton = document.getElementById('retryButton');
 
 // Start Page Search Elements
 const searchModeToggle = document.getElementById('searchModeToggle');
@@ -263,6 +216,25 @@ function setupEventListeners() {
             showStartPage();
         }
     });
+
+    // New tab button
+    if (newTabBtn) {
+        newTabBtn.addEventListener('click', () => {
+            createNewTab();
+        });
+    }
+    
+    // No internet retry button
+    if (retryButton) {
+        retryButton.addEventListener('click', () => {
+            hideNoInternetPage();
+            // Try to reload the current tab
+            const activeTab = tabs.find(t => t.id === activeTabId);
+            if (activeTab && activeTab.url) {
+                navigateTo(activeTab.url);
+            }
+        });
+    }
 
     // Engine selector
     engineSelector.addEventListener('change', async (e) => {
@@ -461,49 +433,68 @@ function setupEventListeners() {
 }
 
 function setupQuickLinks() {
-    const quickLinks = document.querySelectorAll('.quick-link');
-    console.log('Setting up quick links:', quickLinks.length);
-    
-    quickLinks.forEach(item => {
-        // Remove any existing listeners
-        const newItem = item.cloneNode(true);
-        item.parentNode.replaceChild(newItem, item);
+    try {
+        const quickLinks = document.querySelectorAll('.quick-link');
+        console.log('🔗 Setting up quick links:', quickLinks.length);
         
-        newItem.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const url = newItem.getAttribute('data-url');
-            console.log('Quick link clicked:', url, 'Current tabs:', tabs.length, 'Active:', activeTabId);
-            
-            if (url) {
-                try {
-                    // Ensure we have a valid active tab
-                    const activeTab = tabs.find(t => t.id === activeTabId);
-                    
-                    if (!activeTab || activeTab.isAITab || activeTab.isExtensionsTab || activeTab.url) {
-                        // Create a new tab if no valid tab exists or current tab is special or already has content
-                        console.log('Creating new tab for quick link');
-                        await createNewTab();
-                        // Wait a bit for tab to be fully created
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    
-                    // Navigate to the URL
-                    await navigateTo(url);
-                } catch (error) {
-                    console.error('Quick link navigation error:', error);
-                    alert('Failed to open link: ' + error.message);
-                }
+        quickLinks.forEach((item, index) => {
+            // Check if already has event listener to prevent duplicates
+            if (item.dataset.listenerAdded === 'true') {
+                console.log(`Quick link ${index} already has listener, skipping`);
+                return;
             }
+            
+            // Mark as having listener
+            item.dataset.listenerAdded = 'true';
+            
+            item.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const url = item.getAttribute('data-url');
+                console.log('🔗 Quick link clicked:', url, 'Current tabs:', tabs.length, 'Active:', activeTabId);
+                
+                if (url) {
+                    try {
+                        // Ensure we have a valid active tab
+                        const activeTab = tabs.find(t => t.id === activeTabId);
+                        
+                        if (!activeTab || activeTab.isAITab || activeTab.isExtensionsTab || activeTab.url) {
+                            // Create a new tab if no valid tab exists or current tab is special or already has content
+                            console.log('🆕 Creating new tab for quick link');
+                            await createNewTab();
+                            // Wait a bit for tab to be fully created
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+                        
+                        // Navigate to the URL
+                        console.log('🌐 Navigating to:', url);
+                        await navigateTo(url);
+                    } catch (error) {
+                        console.error('❌ Quick link navigation error:', error);
+                        alert('Failed to open link: ' + error.message);
+                    }
+                }
+            });
         });
-    });
+        
+        console.log('✅ Quick links setup completed');
+    } catch (error) {
+        console.error('❌ Failed to setup quick links:', error);
+    }
+}
 
     // Haven Service Cards - Removed from home page but keep modal functionality
 
     // Listen for engine events
     ipcRenderer.on('engine-event', (event, { event: eventName, data }) => {
         handleEngineEvent(eventName, data);
+    });
+
+    // Listen for network errors
+    ipcRenderer.on('network-error', (event, { tabId, error, errorCode }) => {
+        console.log('Network error:', error, 'for tab:', tabId);
+        showNoInternetPage();
     });
 
     // Menu shortcuts - remove existing listeners first to prevent duplicates
@@ -586,76 +577,251 @@ function setupQuickLinks() {
             showDependencyStatus(result);
         });
     }
-}
 
 // Tab Management
-async function createNewTab() {
+// ===== GLOBAL MASTER TAB HANDLER =====
+// Centralized tab management - engines only activated when needed
+
+let masterTabs = new Map(); // Global tab registry
+let activeTabId = null;
+let tabIdCounter = 0;
+
+// Tab states
+const TAB_STATES = {
+    CREATED: 'created',      // Tab exists but no engine
+    LOADING: 'loading',     // Engine active, loading content
+    LOADED: 'loaded',       // Engine active, content loaded
+    HIDDEN: 'hidden'        // Engine hidden but active
+};
+
+function createNewTab() {
     const tabId = `tab-${tabIdCounter++}`;
+    
+    // Create tab in master registry
     const tab = {
         id: tabId,
         title: 'New Tab',
         url: '',
         engine: defaultEngine,
+        state: TAB_STATES.CREATED,
         isLoading: false,
-        // Keep tab rendered in memory like real browsers
-        rendered: false,
-        view: null
+        visible: false,
+        view: null,
+        engineTabId: null
     };
-
-    tabs.push(tab);
-    console.log('Creating new tab:', tabId);
     
-    // Initialize loading state for this tab
-    setTabLoading(tabId, false);
-    
-    // Set as active tab
+    masterTabs.set(tabId, tab);
+    tabs.push(tab); // Keep compatibility with existing code
     activeTabId = tabId;
     
     // Update UI immediately
     renderTabs();
     updateEngineBadge();
     
-    // IMMEDIATELY hide all views and show start page for new tab
-    await hideAllViews();
-    await showStartPage();
+    // Hide all other tabs immediately
+    hideAllOtherTabs(tabId);
     
-    // Create tab in native engine in background (don't block UI)
-    try {
-        const result = await ipcRenderer.invoke('engine:createTab', tabId, defaultEngine, {});
-        console.log(`✅ Native tab ${tabId} created with ${defaultEngine}`);
-        
-        // Store the view reference for instant switching
-        tab.view = result.view;
-        tab.rendered = true;
-        
-    } catch (error) {
-        console.error('Failed to create tab:', error);
-        // Remove tab if creation failed
-        const index = tabs.findIndex(t => t.id === tabId);
-        if (index > -1) {
-            tabs.splice(index, 1);
-            tabLoadingStates.delete(tabId);
-            sleepingTabs.delete(tabId);
-            renderTabs();
-            // Switch to another tab if available
-            if (tabs.length > 0) {
-                await switchToTab(tabs[tabs.length - 1].id);
-            } else {
-                activeTabId = null;
-                await showStartPage();
+    // Show start page
+    startPage.classList.remove('hidden');
+    addressBar.value = '';
+    
+    console.log('✅ Master tab created:', tabId);
+}
+
+function hideAllOtherTabs(currentTabId) {
+    console.log('🔒 Master: Hiding all other tabs');
+    for (const [tabId, tab] of masterTabs.entries()) {
+        if (tabId !== currentTabId && tab.state !== TAB_STATES.CREATED) {
+            if (tab.view) {
+                // Hide the BrowserView
+                ipcRenderer.invoke('engine:hideTab', tab.engineTabId).catch(err => {
+                    console.error('Failed to hide tab:', err);
+                });
             }
+            tab.state = TAB_STATES.HIDDEN;
+            tab.visible = false;
+        }
+    }
+}
+
+function switchToTab(tabId) {
+    const tab = masterTabs.get(tabId);
+    if (!tab) return;
+    
+    const oldActiveTabId = activeTabId;
+    activeTabId = tabId;
+    
+    // Hide all other tabs
+    hideAllOtherTabs(tabId);
+    
+    // Update UI
+    updateTabUI(tab);
+    
+    // Activate engine if needed
+    if (tab.state === TAB_STATES.CREATED) {
+        activateTabEngine(tab);
+    } else if (tab.state === TAB_STATES.HIDDEN) {
+        showTabEngine(tab);
+    }
+}
+
+function updateTabUI(tab) {
+    // Update active tab styling
+    const allTabs = tabBar.querySelectorAll('.tab');
+    allTabs.forEach(tabEl => {
+        if (tabEl.dataset.tabId === tab.id) {
+            tabEl.classList.add('active');
+        } else {
+            tabEl.classList.remove('active');
+        }
+    });
+    
+    updateEngineBadge();
+    
+    // Handle special tabs
+    if (tab.isAITab) {
+        aiPage.style.display = 'flex';
+        startPage.classList.add('hidden');
+        addressBar.value = 'prism://ai';
+        return;
+    }
+    
+    if (tab.isExtensionsTab) {
+        const extensionsPage = document.getElementById('extensionsPage');
+        if (extensionsPage) extensionsPage.style.display = 'flex';
+        startPage.classList.add('hidden');
+        addressBar.value = 'prism://extensions';
+        return;
+    }
+    
+    // Update address bar
+    if (tab.url) {
+        addressBar.value = tab.url;
+        updateSecurityIndicator(tab.url);
+        startPage.classList.add('hidden');
+    } else {
+        addressBar.value = '';
+        updateSecurityIndicator('');
+        startPage.classList.remove('hidden');
+    }
+    
+    updateNavButtons();
+}
+
+async function activateTabEngine(tab) {
+    console.log('🚀 Master: Activating engine for tab:', tab.id);
+    try {
+        const result = await ipcRenderer.invoke('engine:createTab', tab.id, tab.engine, {});
+        tab.view = result.view;
+        tab.engineTabId = tab.id;
+        tab.state = TAB_STATES.LOADING;
+        tab.visible = true;
+        
+        // Show the tab
+        await ipcRenderer.invoke('engine:showTab', tab.id);
+        console.log('✅ Master: Engine activated for tab:', tab.id);
+    } catch (error) {
+        console.error('Failed to activate engine:', error);
+        tab.state = TAB_STATES.CREATED;
+    }
+}
+
+async function showTabEngine(tab) {
+    console.log('👁️ Master: Showing engine for tab:', tab.id);
+    try {
+        await ipcRenderer.invoke('engine:showTab', tab.id);
+        tab.state = TAB_STATES.LOADED;
+        tab.visible = true;
+        console.log('✅ Master: Engine shown for tab:', tab.id);
+    } catch (error) {
+        console.error('Failed to show engine:', error);
+    }
+}
+
+async function navigateTo(input) {
+    if (!input) return;
+    
+    let url = input.trim();
+    const tab = masterTabs.get(activeTabId);
+    if (!tab) return;
+    
+    // Don't navigate in special tabs
+    if (tab.isAITab || tab.isExtensionsTab) return;
+    
+    // Handle prism:// protocol
+    if (url.startsWith('prism://')) {
+        handlePrismProtocol(url);
+        return;
+    }
+    
+    // Use the tab's engine
+    const tabEngine = tab.engine || defaultEngine;
+    
+    // Check if it's a URL or search query
+    const isSearch = !url.includes('.') || url.includes(' ');
+    
+    if (tabEngine === 'prism' && isSearch) {
+        performPrismSearch(url);
+        return;
+    } else if (isSearch) {
+        // Use engine-specific search engines
+        if (tabEngine === 'tor') {
+            url = `https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/?q=${encodeURIComponent(url)}`;
+        } else if (tabEngine === 'firefox') {
+            url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
+        } else if (tabEngine === 'chromium') {
+            url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+        } else {
+            url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+        }
+    } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    
+    // Update tab state
+    tab.url = url;
+    tab.isLoading = true;
+    tab.state = TAB_STATES.LOADING;
+    
+    // Update UI immediately
+    addressBar.value = url;
+    updateSecurityIndicator(url);
+    startPage.classList.add('hidden');
+    renderTabs();
+    
+    // Activate engine if needed
+    if (tab.state === TAB_STATES.CREATED) {
+        await activateTabEngine(tab);
+    }
+    
+    // Navigate
+    try {
+        await ipcRenderer.invoke('engine:navigate', tab.id, url);
+        await ipcRenderer.invoke('engine:showTab', tab.id);
+    } catch (error) {
+        console.error('Navigation failed:', error);
+        tab.isLoading = false;
+        tab.state = TAB_STATES.LOADED;
+        
+        // Check if it's a network error
+        if (error.message && (
+            error.message.includes('net::') ||
+            error.message.includes('ERR_INTERNET_DISCONNECTED') ||
+            error.message.includes('ERR_NETWORK_CHANGED')
+        )) {
+            showNoInternetPage();
         }
     }
 }
 
 async function closeTab(tabId) {
-    const index = tabs.findIndex(t => t.id === tabId);
-    if (index === -1) return;
-
-    const tab = tabs[index];
+    const tab = masterTabs.get(tabId);
+    if (!tab) return;
+    
+    console.log('🗑️ Master: Closing tab:', tabId);
     
     // Close tab in native engine (skip for AI tabs and extensions tabs)
-    if (!tab.isAITab && !tab.isExtensionsTab) {
+    if (!tab.isAITab && !tab.isExtensionsTab && tab.state !== TAB_STATES.CREATED) {
         try {
             await ipcRenderer.invoke('engine:closeTab', tab.id);
         } catch (error) {
@@ -674,145 +840,120 @@ async function closeTab(tabId) {
             extensionsPage.style.display = 'none';
         }
     }
-
-    tabs.splice(index, 1);
     
-    // Clean up loading state and sleeping tabs
+    // Remove from master registry
+    masterTabs.delete(tabId);
+    
+    // Remove from compatibility array
+    const index = tabs.findIndex(t => t.id === tabId);
+    if (index > -1) {
+        tabs.splice(index, 1);
+    }
+    
+    // Clean up loading state
     tabLoadingStates.delete(tabId);
     sleepingTabs.delete(tabId);
-
+    
     if (tabs.length === 0) {
         // Show start page instead of creating a new tab
         showStartPage();
         activeTabId = null;
         renderTabs();
     } else if (activeTabId === tabId) {
+        // Calculate new active index AFTER splicing
         const newActiveIndex = Math.min(index, tabs.length - 1);
-        await switchToTab(tabs[newActiveIndex].id);
+        const newActiveTab = tabs[newActiveIndex];
+        if (newActiveTab) {
+            await switchToTab(newActiveTab.id);
+        }
         renderTabs();
     } else {
         renderTabs();
     }
+    
+    console.log('✅ Master: Tab closed:', tabId);
 }
 
-async function switchToTab(tabId) {
-    console.log(`🔄 Switching to tab ${tabId} from ${activeTabId}`);
-    const oldActiveTabId = activeTabId;
-    activeTabId = tabId;
-    const tab = tabs.find(t => t.id === tabId);
-    if (!tab) return;
-    
-    console.log(`📄 Tab details:`, { id: tab.id, url: tab.url, title: tab.title, engine: tab.engine });
-    
-    // Performance monitoring
-    checkPerformanceAndOptimize(tab);
+// Removed old broken switchToTab function - replaced with master handler
 
-    // IMMEDIATE UI updates - like real browsers
-    const extensionsPage = document.getElementById('extensionsPage');
-
-    // Check if it's an AI tab
-    if (tab.isAITab) {
-        // Hide all OTHER views first to prevent content bleeding
-        await hideOtherViews(tabId);
-        
-        // Show AI page IMMEDIATELY
-        aiPage.style.display = 'flex';
-        startPage.classList.add('hidden');
-        if (extensionsPage) extensionsPage.style.display = 'none';
-        addressBar.value = 'prism://ai';
-        updateEngineBadge();
-        renderTabs();
-        
-        return;
-    } else {
-        // Hide AI page IMMEDIATELY
-        aiPage.style.display = 'none';
-    }
-
-    // Check if it's an extensions tab
-    if (tab.isExtensionsTab) {
-        // Hide all OTHER views first to prevent content bleeding
-        await hideOtherViews(tabId);
-        
-        // Show extensions page IMMEDIATELY
-        if (extensionsPage) extensionsPage.style.display = 'flex';
-        startPage.classList.add('hidden');
-        aiPage.style.display = 'none';
-        addressBar.value = 'prism://extensions';
-        updateEngineBadge();
-        renderTabs();
-        
-        return;
-    } else {
-        // Hide extensions page IMMEDIATELY
-        if (extensionsPage) extensionsPage.style.display = 'none';
-    }
-
-    // Hide all OTHER views first to prevent content bleeding (but not current tab)
-    await hideOtherViews(tabId);
-    
-    // Update address bar and security indicator IMMEDIATELY
-    if (tab.url) {
-        addressBar.value = tab.url;
-        updateSecurityIndicator(tab.url);
-        startPage.classList.add('hidden');
-    } else {
-        addressBar.value = '';
-        updateSecurityIndicator('');
-        showStartPage();
-    }
-
-    // Update UI immediately - NO DELAYS
-    updateEngineBadge();
-    renderTabs();
-    
-    // Update loading spinner for this tab
-    const loadingState = getTabLoadingState(tabId);
-    updateLoadingSpinner(loadingState.loading);
-
-    // Check if tab is sleeping and wake it if needed
-    const isSleeping = await checkTabSleeping(tabId);
-    if (isSleeping) {
-        console.log(`🌅 Waking sleeping tab ${tabId}...`);
-        const woke = await wakeSleepingTab(tabId);
-        if (!woke) {
-            console.error('Failed to wake sleeping tab');
-            return;
-        }
-        // Update tab info after waking - find the updated tab
-        const updatedTab = tabs.find(t => t.id === tabId);
-        if (updatedTab) {
-            // Update the tab reference
-            Object.assign(tab, updatedTab);
-        }
-    }
-
-    // Show this tab, hide others (async in background - NON-BLOCKING)
-    try {
-        console.log(`🎯 Calling engine:showTab for tab ${tabId}`);
-        await ipcRenderer.invoke('engine:showTab', tabId);
-        console.log(`✅ engine:showTab completed for tab ${tabId}`);
-        await updateNavButtons();
-    } catch (error) {
-        console.error('Failed to switch tab:', error);
-        // Revert if switch failed
-        activeTabId = oldActiveTabId;
-        const oldTab = tabs.find(t => t.id === oldActiveTabId);
-        if (oldTab) {
-            addressBar.value = oldTab.url || '';
-            updateEngineBadge();
-            renderTabs();
-        }
-    }
-}
-
-// Cache for rendered tab elements to avoid recreating them
-const tabElementCache = new Map();
+// Removed tab element caching - keeping it simple like real browsers
 
 // PROPER BROWSER-LIKE TAB RENDERING - Keep everything in memory
 function renderTabs() {
-    // IMMEDIATE rendering - no delays like real browsers
-    renderTabsImmediate();
+    if (!tabBar) return;
+    
+    // Get existing tab elements
+    const existingTabs = Array.from(tabBar.querySelectorAll('.tab'));
+    const existingTabIds = new Set(existingTabs.map(el => el.dataset.tabId));
+    const currentTabIds = new Set(tabs.map(tab => tab.id));
+    
+    // Remove tabs that no longer exist
+    existingTabs.forEach(tabEl => {
+        if (!currentTabIds.has(tabEl.dataset.tabId)) {
+            tabEl.remove();
+        }
+    });
+    
+    // Update or create tabs
+    tabs.forEach((tab, index) => {
+        let tabElement = tabBar.querySelector(`[data-tab-id="${tab.id}"]`);
+        
+        if (!tabElement) {
+            // Create new tab element
+            tabElement = document.createElement('div');
+            tabElement.className = 'tab';
+            tabElement.dataset.tabId = tab.id;
+            
+            tabElement.innerHTML = `
+                <div class="tab-favicon">
+                    <div class="favicon-placeholder"></div>
+                    <div class="tab-loading"></div>
+                </div>
+                <div class="tab-engine-indicator"></div>
+                <div class="tab-title"></div>
+                <div class="tab-close" data-tab-id="${tab.id}">×</div>
+            `;
+            
+            // Add event listeners only once
+            tabElement.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('tab-close')) {
+                    switchToTabDebounced(tab.id);
+                }
+            });
+            
+            const closeButton = tabElement.querySelector('.tab-close');
+            closeButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
+            });
+            
+            // Mark as having listeners to prevent duplicates
+            tabElement.dataset.listenersAdded = 'true';
+            
+            // Insert before the new tab button
+            tabBar.insertBefore(tabElement, newTabBtn);
+        }
+        
+        // Update tab content
+        const titleEl = tabElement.querySelector('.tab-title');
+        const loadingEl = tabElement.querySelector('.tab-loading');
+        const indicatorEl = tabElement.querySelector('.tab-engine-indicator');
+        
+        if (titleEl) titleEl.textContent = tab.title || 'New Tab';
+        if (loadingEl) {
+            loadingEl.className = `tab-loading ${tab.isLoading ? 'loading' : ''}`;
+        }
+        if (indicatorEl) {
+            indicatorEl.className = `tab-engine-indicator ${tab.engine || 'firefox'}`;
+        }
+        
+        // Update active state
+        if (tab.id === activeTabId) {
+            tabElement.classList.add('active');
+        } else {
+            tabElement.classList.remove('active');
+        }
+    });
 }
 
 // Smooth scrolling optimization for AI messages
@@ -843,11 +984,13 @@ function setTabLoading(tabId, loading, progress = 0) {
 }
 
 function updateLoadingSpinner(loading) {
-    if (loading) {
-        loadingSpinner.style.display = 'block';
-    } else {
-        loadingSpinner.style.display = 'none';
-    }
+    // Disabled address bar loading spinner to prevent white screen issues
+    // Loading state is now only shown in tab bar indicators
+    // if (loading) {
+    //     loadingSpinner.style.display = 'block';
+    // } else {
+    //     loadingSpinner.style.display = 'none';
+    // }
 }
 
 function getTabLoadingState(tabId) {
@@ -910,6 +1053,39 @@ async function createNewTabDebounced() {
     } finally {
         // Reset flag immediately after creation completes
         isCreatingTab = false;
+    }
+}
+
+// Debounced tab switching to prevent race conditions
+async function switchToTabDebounced(tabId) {
+    if (isSwitchingTab) {
+        console.log('Tab switching already in progress, skipping...');
+        return;
+    }
+    
+    isSwitchingTab = true;
+    
+    // Add timeout to prevent getting stuck
+    const timeout = setTimeout(() => {
+        console.warn('Tab switching timeout, resetting flag');
+        isSwitchingTab = false;
+        // Force update UI in case it got stuck
+        updateNavButtons();
+    }, 2000);
+    
+    try {
+        await switchToTab(tabId);
+    } catch (error) {
+        console.error('Failed to switch tab in debounced function:', error);
+        // Force recovery
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab) {
+            tab.visible = true;
+        }
+        updateNavButtons();
+    } finally {
+        clearTimeout(timeout);
+        isSwitchingTab = false;
     }
 }
 
@@ -1056,6 +1232,9 @@ function handleTabDragStart(e) {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', draggedTab.innerHTML);
     
+    // Add dragging class for cursor
+    draggedTab.classList.add('dragging');
+    
     // Add dragging visual feedback
     setTimeout(() => {
         draggedTab.style.opacity = '0.4';
@@ -1111,9 +1290,10 @@ function handleTabDrop(e) {
 }
 
 function handleTabDragEnd(e) {
-    // Reset opacity
+    // Reset opacity and remove dragging class
     if (draggedTab) {
         draggedTab.style.opacity = '1';
+        draggedTab.classList.remove('dragging');
     }
     
     // Clear all drag indicators
@@ -1130,28 +1310,23 @@ async function navigateTo(input) {
     if (!input) return;
 
     let url = input.trim();
-    console.log('Navigate requested to:', url);
     
     // Get current active tab
     let tab = tabs.find(t => t.id === activeTabId);
     
-    // ONLY create new tab if we have no tabs at all
+    // Create new tab if none exists
     if (!tab) {
-        console.log('No tabs exist, creating first tab');
         await createNewTab();
         tab = tabs.find(t => t.id === activeTabId);
         if (!tab) return;
     }
     
-    // If on AI tab or extensions tab, don't navigate - they're not web tabs
-    if (tab.isAITab || tab.isExtensionsTab) {
-        console.log('Cannot navigate in AI or extensions tab');
-        return;
-    }
+    // Don't navigate in special tabs
+    if (tab.isAITab || tab.isExtensionsTab) return;
 
     // Handle prism:// protocol
     if (url.startsWith('prism://')) {
-        await handlePrismProtocol(url);
+        handlePrismProtocol(url);
         return;
     }
 
@@ -1162,7 +1337,7 @@ async function navigateTo(input) {
     const isSearch = !url.includes('.') || url.includes(' ');
     
     if (tabEngine === 'prism' && isSearch) {
-        await performPrismSearch(url);
+        performPrismSearch(url);
         return;
     } else if (isSearch) {
         // Use engine-specific search engines
@@ -1179,47 +1354,44 @@ async function navigateTo(input) {
         url = 'https://' + url;
     }
 
-    console.log('Navigating to:', url, 'in existing tab:', tab.id);
-
-    // Set loading state for this tab
-    setTabLoading(tab.id, true);
-    
-    // Update tab state
+    // Update tab state immediately
     tab.url = url;
     tab.isLoading = true;
     
-    // Update address bar and security indicator
-    if (activeTabId === tab.id) {
-        addressBar.value = url;
-        updateSecurityIndicator(url);
-    }
+    // Update UI immediately
+    addressBar.value = url;
+    updateSecurityIndicator(url);
+    startPage.classList.add('hidden');
+    renderTabs();
 
-    try {
-        await ipcRenderer.invoke('engine:navigate', tab.id, url);
-        
-        // Hide start page and show the BrowserView
-        if (activeTabId === tab.id) {
-            startPage.classList.add('hidden');
-            // Show the active tab's BrowserView
-            await ipcRenderer.invoke('engine:showTab', tab.id);
-        }
-        
-        // Clear loading state
-        setTabLoading(tab.id, false);
-        tab.isLoading = false;
-        renderTabs();
-    } catch (error) {
-        console.error('Navigation failed:', error);
-        
-        // Clear loading state on error
-        setTabLoading(tab.id, false);
-        tab.isLoading = false;
-        
-        if (activeTabId === tab.id) {
-            alert('Failed to navigate: ' + error.message);
-        }
-        renderTabs();
-    }
+    // Navigate and ensure BrowserView is visible
+    ipcRenderer.invoke('engine:navigate', tab.id, url)
+        .then(() => {
+            // Ensure the tab is visible after navigation
+            return ipcRenderer.invoke('engine:showTab', tab.id);
+        })
+        .then(() => {
+            // Don't set isLoading = false here - let the engine events handle it
+            // This prevents premature loading state clearing that causes white screens
+            hideNoInternetPage(); // Hide no internet page on successful navigation
+        })
+        .catch(error => {
+            console.error('Navigation failed:', error);
+            tab.isLoading = false;
+            
+            // Check if it's a network error
+            if (error.message && (
+                error.message.includes('net::') ||
+                error.message.includes('ERR_INTERNET_DISCONNECTED') ||
+                error.message.includes('ERR_NETWORK_CHANGED') ||
+                error.message.includes('ERR_CONNECTION_REFUSED') ||
+                error.message.includes('ERR_NAME_NOT_RESOLVED')
+            )) {
+                showNoInternetPage();
+            }
+            
+            renderTabs();
+        });
 }
 
 // Prism Search
@@ -1281,15 +1453,53 @@ async function hideOtherViews(currentTabId) {
 }
 
 async function showStartPage() {
-    // Hide all views first to prevent content bleeding
-    await hideAllViews();
+    // Prevent multiple simultaneous calls
+    if (isShowingStartPage) {
+        console.log('🏠 Start page already being shown, skipping...');
+        return;
+    }
     
-    // Show start page
-    startPage.classList.remove('hidden');
-    addressBar.value = '';
+    isShowingStartPage = true;
     
-    // Re-setup quick links to ensure they work
-    setupQuickLinks();
+    try {
+        console.log('🏠 Showing start page...');
+        
+        // Don't hide all views - let background tabs continue loading
+        // hideAllViews().catch(err => console.error('Failed to hide views:', err));
+        
+        // Show start page IMMEDIATELY
+        startPage.classList.remove('hidden');
+        addressBar.value = '';
+        
+        // Re-setup quick links to ensure they work (NON-BLOCKING)
+        setupQuickLinks();
+        
+        console.log('✅ Start page shown successfully');
+    } catch (error) {
+        console.error('❌ Failed to show start page:', error);
+        // Fallback: just show the page even if other operations fail
+        startPage.classList.remove('hidden');
+        addressBar.value = '';
+    } finally {
+        isShowingStartPage = false;
+    }
+}
+
+// No internet page management
+function showNoInternetPage() {
+    if (noInternetPage) {
+        noInternetPage.classList.remove('hidden');
+        startPage.classList.add('hidden');
+        aiPage.style.display = 'none';
+        const extensionsPage = document.getElementById('extensionsPage');
+        if (extensionsPage) extensionsPage.style.display = 'none';
+    }
+}
+
+function hideNoInternetPage() {
+    if (noInternetPage) {
+        noInternetPage.classList.add('hidden');
+    }
 }
 
 async function updateNavButtons() {
@@ -1328,7 +1538,26 @@ function updateEngineBadge() {
     if (engineSelector.value !== engine) {
         engineSelector.value = engine;
     }
+    
+    // Update engine indicator
+    updateEngineIndicator(engine);
 }
+
+function updateEngineIndicator(engine) {
+    if (!engineIndicator) return;
+    
+    // Remove all engine classes
+    engineIndicator.className = 'engine-indicator';
+    
+    // Add the appropriate engine class
+    if (engine === 'prism' || engine === 'chromium' || engine === 'firefox' || engine === 'tor') {
+        engineIndicator.classList.add(engine);
+    } else {
+        // Default to firefox if unknown engine
+        engineIndicator.classList.add('firefox');
+    }
+}
+
 
 // Loading Bar Functions
 // Loading bar removed - was causing issues
@@ -1392,10 +1621,19 @@ function handleEngineEvent(eventName, data) {
             break;
         case 'loading-start':
             tab.isLoading = true;
-            renderTabs();
+            // Update loading spinner if this is the active tab
+            if (tab.id === activeTabId) {
+                updateLoadingSpinner(true);
+            }
+            // Only update tab bar, don't call full renderTabs() to prevent interference
+            // renderTabs();
             break;
         case 'loading-stop':
             tab.isLoading = false;
+            // Update loading spinner if this is the active tab
+            if (tab.id === activeTabId) {
+                updateLoadingSpinner(false);
+            }
             // Add to browsing history when page finishes loading
             // NEVER track Tor browsing - complete amnesia mode
             if (data.url && data.url !== 'about:blank' && !data.url.startsWith('prism://') && tab.engine !== 'tor') {
@@ -1404,7 +1642,8 @@ function handleEngineEvent(eventName, data) {
                 });
             }
             updateNavButtons();
-            renderTabs();
+            // Don't call renderTabs() here to prevent interference with web content
+            // renderTabs();
             break;
         case 'favicon-updated':
             // TODO: Handle favicon
@@ -1531,12 +1770,12 @@ async function openExtensionsPage() {
     startPage.classList.add('hidden');
     aiPage.style.display = 'none';
     
-    // Hide BrowserViews
-    try {
-        await ipcRenderer.invoke('engine:hideAllViews');
-    } catch (error) {
-        console.error('Failed to hide views:', error);
-    }
+    // Don't hide BrowserViews - let background tabs continue loading
+    // try {
+    //     await ipcRenderer.invoke('engine:hideAllViews');
+    // } catch (error) {
+    //     console.error('Failed to hide views:', error);
+    // }
     
     // Load featured extensions
     await loadFeaturedExtensions();
@@ -1850,7 +2089,7 @@ function generateSimulatedAIResponse(query) {
     } else if (lowerQuery.includes('security') || lowerQuery.includes('privacy')) {
         return '🔒 Key web security tips:\n\n1. Use strong, unique passwords with a password manager\n2. Enable 2FA on all accounts\n3. Browse with HTTPS-only mode\n4. Use a VPN for public WiFi\n5. Clear cookies regularly\n6. Keep software updated\n7. Use privacy-focused browsers like Prism with Tor\n8. Avoid clicking suspicious links';
     } else if (lowerQuery.includes('prism') || lowerQuery.includes('haven')) {
-        return '🌟 You\'re using Prism, part of the Haven family! We offer:\n\n• Multi-engine browsing (Chromium, Firefox, Tor, Prism)\n• HavenWallet for secure crypto management\n• HavenPay for safe online shopping\n• This AI assistant for instant help\n\nAll designed with privacy and security as top priorities!';
+        return '🌟 You\'re using Prism, Built by Hamish Leahy - Privacy First Browsing! We offer:\n\n• Multi-engine browsing (Chromium, Firefox, Tor, Prism)\n• HavenWallet for secure crypto management\n• HavenPay for safe online shopping\n• This AI assistant for instant help\n\nAll designed with privacy and security as top priorities!';
     } else {
         return `💡 That's an interesting question about "${query}"! While I'm currently a demo AI assistant, I can help with:\n\n• General knowledge questions\n• Web research assistance\n• Code explanations\n• Privacy and security tips\n\nIn the full version, I'll be powered by advanced AI models with real-time web access and deep integration with your browsing experience!`;
     }
@@ -1865,12 +2104,12 @@ window.importWallet = importWallet;
 async function openHistory() {
     console.log('Opening history...');
     
-    // Hide BrowserViews so modal is on top
-    try {
-        await ipcRenderer.invoke('engine:hideAllViews');
-    } catch (error) {
-        console.error('Failed to hide views:', error);
-    }
+    // Don't hide BrowserViews - let background tabs continue loading
+    // try {
+    //     await ipcRenderer.invoke('engine:hideAllViews');
+    // } catch (error) {
+    //     console.error('Failed to hide views:', error);
+    // }
     
     // Load and show history
     await loadHistory();

@@ -33,12 +33,15 @@ app.commandLine.appendSwitch('disable-setuid-sandbox')
 app.commandLine.appendSwitch('disable-web-security', false)
 
 // ===== Performance Optimizations =====
-// GPU acceleration for better performance
+// GPU acceleration for better performance (reduced to prevent multi-tab conflicts)
+// NOTE: Aggressive GPU optimizations can cause conflicts when multiple tabs are loading
+// heavy content like Netflix/YouTube simultaneously. Reduced to prevent tab breaking.
 app.commandLine.appendSwitch('enable-gpu-rasterization')
-app.commandLine.appendSwitch('enable-accelerated-video-decode')
+// Disabled aggressive video acceleration to prevent multi-tab conflicts
+// app.commandLine.appendSwitch('enable-accelerated-video-decode')
 app.commandLine.appendSwitch('enable-accelerated-2d-canvas')
 app.commandLine.appendSwitch('ignore-gpu-blacklist')
-app.commandLine.appendSwitch('num-raster-threads', '4')
+app.commandLine.appendSwitch('num-raster-threads', '2') // Reduced from 4 to 2
 
 // Frame synchronization to reduce jitter
 app.commandLine.appendSwitch('enable-begin-frame-scheduling')
@@ -48,8 +51,59 @@ app.commandLine.appendSwitch('disable-features', 'TouchpadOverscrollHistoryNavig
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 
+// Additional speed optimizations (reduced to prevent multi-tab conflicts)
+// Disabled aggressive video encoding to prevent multi-tab conflicts
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncoder')
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeLinux')
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeIntel')
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeAMD')
+// app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeNVIDIA')
+
+// Memory and CPU optimization for heavy websites
+app.commandLine.appendSwitch('max-old-space-size', '8192') // 8GB heap
+app.commandLine.appendSwitch('max-semi-space-size', '128') // Larger semi-space
+app.commandLine.appendSwitch('max-http-header-size', '32768') // Larger headers
+app.commandLine.appendSwitch('max-http-post-size', '104857600') // 100MB POST
+
+// Smooth scrolling and rendering
+app.commandLine.appendSwitch('enable-smooth-scrolling')
+app.commandLine.appendSwitch('enable-features', 'SmoothScrolling')
+app.commandLine.appendSwitch('enable-features', 'ScrollAnchorSerialization')
+app.commandLine.appendSwitch('enable-features', 'ScrollUnification')
+
+// Disable problematic features that cause lag
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor')
+app.commandLine.appendSwitch('disable-features', 'VizHitTestSurfaceLayer')
+app.commandLine.appendSwitch('disable-features', 'VizServiceDisplayCompositor')
+app.commandLine.appendSwitch('disable-features', 'VizServiceNonBlockingMove')
+
+// Background processing optimization
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-ipc-flooding-protection')
+
+// Network and resource optimization
+app.commandLine.appendSwitch('enable-features', 'NetworkService')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceLogging')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceSandbox')
+
+// Memory pressure handling
+app.commandLine.appendSwitch('enable-features', 'MemoryPressure')
+app.commandLine.appendSwitch('enable-features', 'MemoryPressureInRenderer')
+app.commandLine.appendSwitch('enable-features', 'MemoryPressureInGPU')
+
+// Force high priority rendering
+// app.commandLine.appendSwitch('enable-features', 'HighPriorityInProcessGPU') // Disabled to prevent multi-tab conflicts
+app.commandLine.appendSwitch('enable-features', 'UseSkiaRenderer')
+app.commandLine.appendSwitch('enable-features', 'UseDnsApiInProc')
+
 // Memory optimization
 app.commandLine.appendSwitch('renderer-process-limit', '100')
+
+// Multi-tab stability optimizations (already disabled above)
 
 // High DPI support for better rendering
 app.commandLine.appendSwitch('force-device-scale-factor', '1')
@@ -112,7 +166,7 @@ app.commandLine.appendSwitch('enable-features', 'MemoryPressureInRenderer')
 app.commandLine.appendSwitch('enable-features', 'MemoryPressureInGPU')
 
 // Force high priority rendering
-app.commandLine.appendSwitch('enable-features', 'HighPriorityInProcessGPU')
+// app.commandLine.appendSwitch('enable-features', 'HighPriorityInProcessGPU') // Disabled to prevent multi-tab conflicts
 app.commandLine.appendSwitch('enable-features', 'UseSkiaRenderer')
 app.commandLine.appendSwitch('enable-features', 'UseDnsApiInProc')
 

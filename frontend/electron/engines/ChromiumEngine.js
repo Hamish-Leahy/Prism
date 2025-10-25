@@ -85,6 +85,10 @@ class ChromiumEngine extends EngineInterface {
 
         this.tabs.set(tabId, tabData);
 
+        // Don't attach BrowserView immediately to prevent interfering with other tabs
+        // The BrowserView will be attached when the tab is first shown
+        tabData.visible = false;
+
         // Set up event listeners
         this.setupEventListeners(tabId, tabData);
         
@@ -437,21 +441,33 @@ class ChromiumEngine extends EngineInterface {
             throw new Error('Tab not found: ' + tabId);
         }
 
-        if (!tabData.visible) {
-            this.mainWindow.setBrowserView(tabData.view);
-            const bounds = this.mainWindow.getContentBounds();
-            tabData.view.setBounds({
-                x: 0,
-                y: 90, // Below toolbar
-                width: bounds.width,
-                height: bounds.height - 90
-            });
-            tabData.view.setAutoResize({
-                width: true,
-                height: true
-            });
-            tabData.visible = true;
+        // Hide all other tabs first to prevent conflicts
+        for (const [id, data] of this.tabs.entries()) {
+            if (id !== tabId && data.visible) {
+                this.mainWindow.removeBrowserView(data.view);
+                data.visible = false;
+            }
         }
+
+        // Always show the tab to ensure proper visibility
+        this.mainWindow.setBrowserView(tabData.view);
+        const bounds = this.mainWindow.getContentBounds();
+        tabData.view.setBounds({
+            x: 0,
+            y: 90, // Below toolbar
+            width: bounds.width,
+            height: bounds.height - 90
+        });
+        tabData.view.setAutoResize({
+            width: true,
+            height: true
+        });
+        
+        // Force the BrowserView to be visible
+        tabData.view.webContents.focus();
+        tabData.visible = true;
+        
+        console.log(`✅ Chromium tab ${tabId} shown successfully`);
     }
 
     async hideTab(tabId) {

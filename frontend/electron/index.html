@@ -75,19 +75,22 @@
             align-items: center;
             justify-content: center;
             font-size: 16px;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .nav-btn svg {
-            transition: transform 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .nav-btn:hover {
             background: rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
         }
 
         .nav-btn:active {
             background: rgba(0, 0, 0, 0.12);
+            transform: translateY(0);
+            transition: all 0.1s ease;
         }
 
         .nav-btn:disabled {
@@ -97,10 +100,12 @@
         
         .nav-btn:hover svg {
             transform: scale(1.05);
+            color: #007AFF;
         }
-        
+
         #refreshBtn:hover svg {
             transform: rotate(90deg) scale(1.05);
+            color: #007AFF;
         }
 
         .address-wrapper {
@@ -209,22 +214,45 @@
 
         .toolbar-actions {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             margin-left: auto;
             align-items: center;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: saturate(180%) blur(20px);
+            border: 0.5px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            padding: 4px 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            position: relative;
+            z-index: 100;
+        }
+
+        .toolbar-actions::before {
+            content: '';
+            position: absolute;
+            left: 130px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .engine-selector {
             position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
         }
 
         .engine-dropdown {
-            height: 28px;
-            padding: 0 24px 0 10px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 0.5px solid rgba(0, 0, 0, 0.1);
-            border-radius: 6px;
-            font-size: 12px;
+            height: 36px;
+            padding: 0 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            font-size: 13px;
             font-weight: 500;
             color: #1d1d1f;
             cursor: pointer;
@@ -232,40 +260,117 @@
             appearance: none;
             -webkit-appearance: none;
             -moz-appearance: none;
-            background-image: url('data:image/svg+xml;utf8,<svg fill="%231d1d1f" height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/></svg>');
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%23666" height="12" viewBox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5"/></svg>');
             background-repeat: no-repeat;
-            background-position: right 6px center;
+            background-position: right 8px center;
             background-size: 12px;
             transition: all 0.2s ease;
+            min-width: 120px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .engine-dropdown:hover {
-            background-color: #ffffff;
+            background: #ffffff;
             border-color: #007AFF;
+            box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
         }
 
         .engine-dropdown:focus {
-            background-color: #ffffff;
+            background: #ffffff;
             border-color: #007AFF;
-            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 2px 8px rgba(0, 122, 255, 0.15);
+        }
+
+        .engine-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #FF9500; /* Default to Firefox */
+            box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        }
+
+        .engine-indicator.prism {
+            background: #34C759;
+            box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2);
+        }
+
+        .engine-indicator.chromium {
+            background: #007AFF;
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+        }
+
+        .engine-indicator.firefox {
+            background: #FF9500;
+            box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.2);
+        }
+
+        .engine-indicator.tor {
+            background: #7C3AED;
+            box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+        }
+
+
+        /* Engine-specific styling */
+        .engine-dropdown option[value="prism"] {
+            background: #34C759;
+            color: white;
+        }
+
+        .engine-dropdown option[value="chromium"] {
+            background: #007AFF;
+            color: white;
+        }
+
+        .engine-dropdown option[value="firefox"] {
+            background: #FF9500;
+            color: white;
+        }
+
+        .engine-dropdown option[value="tor"] {
+            background: #7C3AED;
+            color: white;
         }
 
         .toolbar-btn {
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             background: transparent;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 16px;
-            transition: background 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #1d1d1f;
+            position: relative;
         }
 
         .toolbar-btn:hover {
             background: rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .toolbar-btn:active {
+            background: rgba(0, 0, 0, 0.1);
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.1s ease;
+        }
+
+        .toolbar-btn svg {
+            width: 18px;
+            height: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .toolbar-btn:hover svg {
+            transform: scale(1.05);
+            color: #007AFF;
         }
 
         /* Tab Bar - Apple Style */
@@ -292,8 +397,8 @@
         }
 
         .tab {
-            min-width: 160px;
-            max-width: 240px;
+            min-width: 120px;
+            max-width: 200px;
             height: 32px;
             background: #d4d4d4;
             border: none;
@@ -302,7 +407,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            cursor: grab;
+            cursor: pointer;
             transition: all 0.15s ease;
             flex-shrink: 0;
             position: relative;
@@ -310,6 +415,14 @@
 
         .tab:active {
             cursor: grabbing;
+        }
+
+        .tab.dragging {
+            cursor: grabbing;
+        }
+
+        .tab:hover {
+            background: #c8c8c8;
         }
 
         .tab:first-child {
@@ -344,6 +457,25 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            position: relative;
+        }
+
+        .tab-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #007AFF;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .tab-loading.loading {
+            opacity: 1;
         }
 
         .tab-title {
@@ -354,6 +486,56 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            max-width: 120px;
+        }
+
+        .tab-engine-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-right: 6px;
+        }
+
+        .tab-engine-indicator.prism {
+            background: #34C759;
+        }
+
+        .tab-engine-indicator.chromium {
+            background: #007AFF;
+        }
+
+        .tab-engine-indicator.firefox {
+            background: #FF9500;
+        }
+
+        .tab-engine-indicator.tor {
+            background: #7C3AED;
+        }
+
+        .new-tab-btn {
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-left: 2px;
+            flex-shrink: 0;
+            color: #666;
+        }
+
+        .new-tab-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #333;
+        }
+
+        .new-tab-btn:active {
+            background: rgba(0, 0, 0, 0.2);
         }
 
         .tab.active .tab-title {
@@ -449,6 +631,73 @@
 
         .start-page.hidden {
             display: none !important;
+        }
+
+        /* No Internet Page */
+        .no-internet-page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f5f5f7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .no-internet-page.hidden {
+            display: none !important;
+        }
+
+        .no-internet-icon {
+            width: 80px;
+            height: 80px;
+            background: #ff3b30;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .no-internet-icon svg {
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+
+        .no-internet-title {
+            font-size: 32px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .no-internet-subtitle {
+            font-size: 17px;
+            color: #86868b;
+            margin-bottom: 32px;
+            max-width: 400px;
+        }
+
+        .retry-button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 17px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .retry-button:hover {
+            background: #0056CC;
         }
 
         .start-header {
@@ -822,6 +1071,7 @@
             
             <div class="toolbar-actions">
                 <div class="engine-selector">
+                    <div class="engine-indicator" id="engineIndicator"></div>
                     <select class="engine-dropdown" id="engineSelector">
                         <option value="prism">Prism Engine</option>
                         <option value="chromium">Chromium</option>
@@ -829,23 +1079,52 @@
                         <option value="tor">Tor</option>
                     </select>
                 </div>
+                
                 <button class="toolbar-btn" id="walletBtn" title="HavenWallet">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+                        <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+                    </svg>
                 </button>
+                
                 <button class="toolbar-btn" id="havenPayBtn" title="HavenPay">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
                 </button>
+                
                 <button class="toolbar-btn" id="aiBtn" title="AI Assistant">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 12l2 2 4-4"/>
+                        <path d="M21 12c.552 0 1-.448 1-1V5c0-.552-.448-1-1-1H3c-.552 0-1 .448-1 1v6c0 .552.448 1 1 1h18z"/>
+                        <path d="M3 12h18"/>
+                    </svg>
                 </button>
+                
                 <button class="toolbar-btn" id="historyBtn" title="History (⌘Y)">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M12 7v5l4 2"/>
+                    </svg>
                 </button>
+                
                 <button class="toolbar-btn" id="extensionsBtn" title="Extensions">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
                 </button>
+                
                 <button class="toolbar-btn" id="settingsBtn" title="Settings">
-                    <span class="icon"></span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
                 </button>
             </div>
         </div>
@@ -853,6 +1132,12 @@
         <!-- Tab Bar -->
         <div class="tab-bar" id="tabBar">
             <!-- Tabs will be added here -->
+            <button class="new-tab-btn" id="newTabBtn" title="New Tab (⌘T)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </button>
         </div>
 
         <!-- Content Area -->
@@ -1030,6 +1315,23 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- No Internet Page -->
+    <div class="no-internet-page hidden" id="noInternetPage">
+        <div class="no-internet-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="2" y1="2" x2="22" y2="22"/>
+                <path d="M8.5 16.429a5 5 0 0 1 7 0"/>
+                <path d="M5 12.859a10 10 0 0 1 5.17-2.69"/>
+                <path d="M19 12.859a10 10 0 0 0-2.636-3.538"/>
+                <path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                <path d="M10.34 5.88a10 10 0 0 1 3.66 3.66"/>
+            </svg>
+        </div>
+        <div class="no-internet-title">No Internet Connection</div>
+        <div class="no-internet-subtitle">Check your internet connection and try again.</div>
+        <button class="retry-button" id="retryButton">Try Again</button>
     </div>
 
     <!-- AI Assistant Page (renders as tab content) -->

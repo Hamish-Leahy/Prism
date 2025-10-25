@@ -18,10 +18,10 @@ class EngineManager {
         this.eventListeners = new Map();
         this.initialized = false;
         
-        // Deep sleep management - DISABLED for now to prevent reloads
-        this.maxActiveTabs = 999; // Effectively disable deep sleep
-        this.tabAccessOrder = []; // LRU order for tab management
-        this.sleepingTabs = new Map(); // tabId -> { url, title, engine, timestamp }
+        // Deep sleep management - COMPLETELY DISABLED
+        this.maxActiveTabs = 999999; // Completely disable deep sleep
+        this.tabAccessOrder = []; // Not used
+        this.sleepingTabs = new Map(); // Not used
         
         // Advanced resource management
         this.resourceMonitor = {
@@ -298,46 +298,18 @@ class EngineManager {
     }
 
     async showTab(tabId) {
-        // DISABLED: Deep sleep check to prevent reloads
-        // if (this.isTabSleeping(tabId)) {
-        //     console.log(`🌅 Waking sleeping tab ${tabId}...`);
-        //     const wakeResult = await this.wakeTabFromSleep(tabId);
-        //     if (!wakeResult.success) {
-        //         throw new Error('Failed to wake sleeping tab: ' + wakeResult.error);
-        //     }
-        // }
-
         const tabInfo = this.tabs.get(tabId);
         if (!tabInfo) {
             throw new Error('Tab not found: ' + tabId);
         }
 
-        // Update access order (LRU)
-        this.updateTabAccess(tabId);
-
-        // Only hide other tabs that are currently visible, don't freeze background tabs
-        for (const [otherTabId, otherTabInfo] of this.tabs.entries()) {
-            if (otherTabId !== tabId) {
-                const engine = this.engines.get(otherTabInfo.engine);
-                const engineTab = engine.tabs.get(otherTabInfo.engineTabId);
-                // Only hide if it's currently visible (not frozen)
-                if (engineTab && engineTab.visible) {
-                    await engine.hideTab(otherTabInfo.engineTabId);
-                }
-            }
+        const engine = this.engines.get(tabInfo.engine);
+        if (!engine) {
+            throw new Error('Engine not found: ' + tabInfo.engine);
         }
 
-        // Show requested tab and ensure it's properly maintained
-        const engine = this.engines.get(tabInfo.engine);
+        // Simple: just show the tab, no complex management
         await engine.showTab(tabInfo.engineTabId);
-        
-        // CRITICAL: Keep background tabs alive by refreshing their state
-        this.maintainBackgroundTabs();
-        
-        // DISABLED: Deep sleep system completely to prevent reloads
-        // if (Math.random() < 0.001) { // 0.1% chance to check deep sleep (almost never)
-        //     await this.manageTabSleep();
-        // }
         
         return { success: true };
     }
@@ -862,6 +834,19 @@ class EngineManager {
     }
 
     handleEngineEvent(event, data) {
+        // Handle network errors specifically
+        if (event === 'load-error' && data.isNetworkError) {
+            console.log('🌐 Network error detected:', data.error);
+            // Send network error to renderer
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                this.mainWindow.webContents.send('network-error', { 
+                    tabId: data.tabId, 
+                    error: data.error,
+                    errorCode: data.errorCode 
+                });
+            }
+        }
+
         // Forward engine events to renderer process
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.webContents.send('engine-event', { event, data });
@@ -924,11 +909,13 @@ class EngineManager {
     async hideOtherViews(currentTabId) {
         // Hide all OTHER BrowserViews except the current one to prevent content bleeding
         // This prevents the current tab from refreshing when switching
+        console.log('EngineManager: Hiding other views, current tab:', currentTabId);
         for (const [tabId, tabInfo] of this.tabs.entries()) {
             if (tabId !== currentTabId) {
                 const engine = this.engines.get(tabInfo.engine);
                 const engineTab = engine.tabs.get(tabInfo.engineTabId);
                 if (engineTab && engineTab.visible) {
+                    console.log('EngineManager: Hiding tab:', tabId);
                     await engine.hideTab(tabInfo.engineTabId);
                 }
             }
