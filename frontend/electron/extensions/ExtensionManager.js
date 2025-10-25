@@ -27,12 +27,52 @@ class ExtensionManager {
             // Load all installed extensions
             await this.loadInstalledExtensions();
             
+            // Auto-install uBlock Origin if not already installed
+            await this.autoInstallEssentialExtensions();
+            
             this.initialized = true;
             console.log(`✅ Extension Manager initialized with ${this.extensions.size} extensions`);
             return true;
         } catch (error) {
             console.error('❌ Extension Manager initialization failed:', error);
             return false;
+        }
+    }
+
+    /**
+     * Auto-install essential privacy and security extensions
+     */
+    async autoInstallEssentialExtensions() {
+        const essentialExtensions = [
+            {
+                name: 'uBlock Origin',
+                slug: 'ublock-origin',
+                reason: 'Ad blocking and privacy protection'
+            }
+        ];
+
+        for (const ext of essentialExtensions) {
+            // Check if already installed
+            const isInstalled = Array.from(this.extensions.values()).some(
+                e => e.name.toLowerCase().includes(ext.slug.replace('-', ' '))
+            );
+
+            if (!isInstalled) {
+                console.log(`📦 Auto-installing ${ext.name} (${ext.reason})...`);
+                try {
+                    // Import ExtensionDownloader
+                    const ExtensionDownloader = require('./ExtensionDownloader');
+                    const downloader = new ExtensionDownloader(this);
+                    
+                    const addonUrl = `https://addons.mozilla.org/firefox/addon/${ext.slug}/`;
+                    await downloader.installFromMozilla(addonUrl);
+                    console.log(`✅ ${ext.name} installed successfully`);
+                } catch (error) {
+                    console.warn(`⚠️ Failed to auto-install ${ext.name}:`, error.message);
+                }
+            } else {
+                console.log(`✓ ${ext.name} already installed`);
+            }
         }
     }
 
@@ -191,6 +231,30 @@ class ExtensionManager {
         }
 
         console.log(`✅ Enabled extension: ${ext.name} in [${sessions.join(', ')}]`);
+    }
+
+    /**
+     * Load all installed extensions into a specific session partition
+     * Useful for dynamic sessions like per-tab Tor circuits
+     */
+    async loadExtensionsIntoSession(sessionPartition) {
+        const sess = require('electron').session.fromPartition(sessionPartition);
+        const loadedCount = [];
+
+        for (const [extensionId, ext] of this.extensions) {
+            try {
+                await sess.loadExtension(ext.path);
+                loadedCount.push(ext.name);
+            } catch (error) {
+                console.warn(`Failed to load ${ext.name} into ${sessionPartition}:`, error.message);
+            }
+        }
+
+        if (loadedCount.length > 0) {
+            console.log(`✅ Loaded ${loadedCount.length} extension(s) into ${sessionPartition}: ${loadedCount.join(', ')}`);
+        }
+        
+        return loadedCount.length;
     }
 
     async disableExtension(extensionId, sessionName = null) {

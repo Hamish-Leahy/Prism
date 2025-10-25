@@ -1,7 +1,7 @@
 {
-  "name": "Prism",
-  "productName": "Prism",
-  "version": "1.0.0",
+  "name": "prism-browser",
+  "productName": "Prism Browser",
+  "version": "0.1.0",
   "description": "Prism Browser - Multi-Engine Web Browser",
   "main": "electron/main.js",
   "homepage": "./",
@@ -65,22 +65,21 @@
       "output": "dist-electron"
     },
     "files": [
-      "dist/**/*",
       "electron/**/*",
+      "!electron/node_modules",
       "node_modules/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
         {
-          "target": "dmg",
+          "target": "dir",
           "arch": [
-            "x64",
-            "arm64"
+            "arm64",
+            "x64"
           ]
         }
-      ],
-      "icon": "assets/icon.icns"
+      ]
     },
     "win": {
       "target": "nsis",

@@ -145,8 +145,12 @@ function createWindow() {
     hiddenInsetTitleBarButtonsOnBlur: false
   })
 
+  // Create Extension Manager first (extensions need to be ready for engines)
+  extensionManager = new ExtensionManager()
+  
   // Create Engine Manager immediately (IPC handlers register in constructor)
-  engineManager = new EngineManager(mainWindow)
+  // Pass extensionManager so Tor tabs can load extensions
+  engineManager = new EngineManager(mainWindow, extensionManager)
 
   // Load the native HTML app
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
@@ -158,14 +162,14 @@ function createWindow() {
 
   // Initialize engines and extensions after window is shown
   mainWindow.webContents.once('did-finish-load', async () => {
-    await engineManager.initialize()
-    
-    // Initialize extension manager
-    extensionManager = new ExtensionManager()
+    // Initialize extension manager first (loads and auto-installs uBlock Origin)
     await extensionManager.initialize()
     
     // Initialize extension downloader
     extensionDownloader = new ExtensionDownloader(extensionManager)
+    
+    // Initialize engines (will have access to loaded extensions)
+    await engineManager.initialize()
     
     console.log('✅ Prism Browser ready with native engines and extensions')
     

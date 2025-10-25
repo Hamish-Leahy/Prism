@@ -10,8 +10,9 @@ const PrismEngine = require('./PrismEngine');
 const { ipcMain } = require('electron');
 
 class EngineManager {
-    constructor(mainWindow) {
+    constructor(mainWindow, extensionManager = null) {
         this.mainWindow = mainWindow;
+        this.extensionManager = extensionManager;
         this.engines = new Map();
         this.tabs = new Map(); // tabId -> { engine, engineTabId }
         this.eventListeners = new Map();
@@ -38,7 +39,8 @@ class EngineManager {
             
             const tor = new TorEngine({ 
                 mainWindow: this.mainWindow,
-                eventHandler: (event, data) => this.handleEngineEvent(event, data)
+                eventHandler: (event, data) => this.handleEngineEvent(event, data),
+                extensionManager: this.extensionManager
             });
             
             const prism = new PrismEngine({ 

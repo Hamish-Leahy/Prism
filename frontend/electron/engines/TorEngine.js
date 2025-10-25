@@ -244,6 +244,15 @@ class TorEngine extends EngineInterface {
         // Set Tor Browser user agent for this tab's session
         tabSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
         
+        // Load extensions into this Tor tab's session
+        if (this.options.extensionManager) {
+            try {
+                await this.options.extensionManager.loadExtensionsIntoSession(uniquePartition);
+            } catch (error) {
+                console.warn('Failed to load extensions into Tor tab:', error);
+            }
+        }
+        
         // Maximum privacy settings for this tab's session
         tabSession.setPermissionRequestHandler((webContents, permission, callback) => {
             // Deny ALL permissions for maximum privacy
