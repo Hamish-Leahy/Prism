@@ -1451,8 +1451,8 @@ async function showStartPage() {
     try {
         console.log('🏠 Showing start page...');
         
-        // Don't hide all views - let background tabs continue loading
-        // hideAllViews().catch(err => console.error('Failed to hide views:', err));
+        // CRITICAL: Hide all views to prevent content bleeding
+        hideAllViews().catch(err => console.error('Failed to hide views:', err));
         
         // Show start page IMMEDIATELY
         startPage.classList.remove('hidden');
