@@ -61,8 +61,10 @@ class ChromiumEngine extends EngineInterface {
                 webgl: true,
                 plugins: true, // Enable for Widevine DRM
                 // DRM Support (Widevine for Netflix, Spotify, Disney+)
-                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions',
+                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential',
                 hardwareAcceleration: true,
+                // WebAuthn / Passkeys / iCloud Keychain support
+                enableWebAuthn: true,
                 // Security features
                 enableWebSQL: false,
                 webviewTag: false

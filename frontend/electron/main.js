@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron')
 const path = require('path')
 const EngineManager = require('./engines/EngineManager')
+const ExtensionManager = require('./extensions/ExtensionManager')
+const ExtensionDownloader = require('./extensions/ExtensionDownloader')
 
 // Set app name and dock behavior
 app.setName('Prism')
@@ -8,6 +10,8 @@ app.name = 'Prism'
 
 let mainWindow
 let engineManager
+let extensionManager
+let extensionDownloader
 
 // Configure engine-specific sessions
 function setupEngineSessions() {
@@ -17,12 +21,18 @@ function setupEngineSessions() {
   
   // Enable Widevine DRM (for Netflix, Spotify, Disney+, etc.)
   chromiumSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    // Allow protected media (DRM)
-    if (permission === 'media' || permission === 'protectedMedia') {
+    // Allow protected media (DRM), publickey-credentials (Passkeys/WebAuthn)
+    if (permission === 'media' || permission === 'protectedMedia' || permission === 'publickey-credentials-get' || permission === 'publickey-credentials-create') {
       return callback(true)
     }
     // Default: prompt for other permissions
     callback(false)
+  })
+  
+  // Enable iCloud Keychain / Passkey support
+  chromiumSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    // Allow WebAuthn/Passkey requests
+    callback({ requestHeaders: details.requestHeaders })
   })
   
   // Firefox session with DRM support
@@ -30,12 +40,17 @@ function setupEngineSessions() {
   firefoxSession.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0')
   firefoxSession.setPreloads([])
   
-  // Enable DRM for Firefox session
+  // Enable DRM and Passkeys for Firefox session
   firefoxSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media' || permission === 'protectedMedia') {
+    if (permission === 'media' || permission === 'protectedMedia' || permission === 'publickey-credentials-get' || permission === 'publickey-credentials-create') {
       return callback(true)
     }
     callback(false)
+  })
+  
+  // Enable iCloud Keychain / Passkey support for Firefox
+  firefoxSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    callback({ requestHeaders: details.requestHeaders })
   })
   
   // Tor session with proxy
@@ -113,9 +128,11 @@ function createWindow() {
       experimentalFeatures: true,
       enableWebSQL: false, // Deprecated, disable for security
       // Media features
-      enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions',
+      enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential',
       // Hardware acceleration
-      hardwareAcceleration: true
+      hardwareAcceleration: true,
+      // WebAuthn / Passkeys support
+      enableWebAuthn: true
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
@@ -139,11 +156,18 @@ function createWindow() {
     mainWindow.show()
   })
 
-  // Initialize engines after window is shown
+  // Initialize engines and extensions after window is shown
   mainWindow.webContents.once('did-finish-load', async () => {
     await engineManager.initialize()
     
-    console.log('✅ Prism Browser ready with native engines')
+    // Initialize extension manager
+    extensionManager = new ExtensionManager()
+    await extensionManager.initialize()
+    
+    // Initialize extension downloader
+    extensionDownloader = new ExtensionDownloader(extensionManager)
+    
+    console.log('✅ Prism Browser ready with native engines and extensions')
     
     // Notify renderer that engines are ready
     mainWindow.webContents.send('engines-ready')
@@ -154,6 +178,10 @@ function createWindow() {
     if (engineManager) {
       await engineManager.shutdown()
       engineManager = null
+    }
+    if (extensionManager) {
+      await extensionManager.shutdown()
+      extensionManager = null
     }
     mainWindow = null
   })
@@ -366,4 +394,69 @@ ipcMain.handle('maximize-window', () => {
   } else {
     mainWindow.maximize()
   }
+})
+
+// Extension management handlers
+ipcMain.handle('extensions:list', () => {
+  return extensionManager ? extensionManager.getExtensions() : []
+})
+
+ipcMain.handle('extensions:install', async (event, xpiPath) => {
+  if (!extensionManager) throw new Error('Extension manager not initialized')
+  return await extensionManager.installExtension(xpiPath)
+})
+
+ipcMain.handle('extensions:uninstall', async (event, extensionId) => {
+  if (!extensionManager) throw new Error('Extension manager not initialized')
+  return await extensionManager.uninstallExtension(extensionId)
+})
+
+ipcMain.handle('extensions:enable', async (event, extensionId, sessionName) => {
+  if (!extensionManager) throw new Error('Extension manager not initialized')
+  return await extensionManager.enableExtension(extensionId, sessionName)
+})
+
+ipcMain.handle('extensions:disable', async (event, extensionId, sessionName) => {
+  if (!extensionManager) throw new Error('Extension manager not initialized')
+  return await extensionManager.disableExtension(extensionId, sessionName)
+})
+
+ipcMain.handle('extensions:get', (event, extensionId) => {
+  return extensionManager ? extensionManager.getExtension(extensionId) : null
+})
+
+ipcMain.handle('extensions:stats', () => {
+  return extensionManager ? extensionManager.getStats() : { totalExtensions: 0, extensions: [] }
+})
+
+// Extension downloader handlers
+ipcMain.handle('extensions:search', async (event, query, limit) => {
+  if (!extensionDownloader) throw new Error('Extension downloader not initialized')
+  return await extensionDownloader.searchAddons(query, limit)
+})
+
+ipcMain.handle('extensions:featured', async (event, limit) => {
+  if (!extensionDownloader) throw new Error('Extension downloader not initialized')
+  return await extensionDownloader.getFeaturedAddons(limit)
+})
+
+ipcMain.handle('extensions:installFromUrl', async (event, url, progressCallback) => {
+  if (!extensionDownloader) throw new Error('Extension downloader not initialized')
+  
+  // Create progress handler
+  const onProgress = (progress, downloaded, total) => {
+    mainWindow.webContents.send('extension-download-progress', { url, progress, downloaded, total })
+  }
+  
+  return await extensionDownloader.installFromMozilla(url, onProgress)
+})
+
+ipcMain.handle('extensions:download', async (event, url) => {
+  if (!extensionDownloader) throw new Error('Extension downloader not initialized')
+  
+  const onProgress = (progress, downloaded, total) => {
+    mainWindow.webContents.send('extension-download-progress', { url, progress, downloaded, total })
+  }
+  
+  return await extensionDownloader.downloadExtension(url, onProgress)
 })

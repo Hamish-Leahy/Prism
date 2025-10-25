@@ -20,6 +20,18 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* Icon Styles */
+        .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+        }
+
+        .icon svg {
+            display: block;
+        }
+
         .app {
             height: 100vh;
             display: flex;
@@ -888,6 +900,30 @@
             .ai-header {
                 text-align: center;
                 margin-bottom: 32px;
+                position: relative;
+            }
+
+            .ai-close-btn {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: rgba(0, 0, 0, 0.05);
+                border: none;
+                color: #86868b;
+                font-size: 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+            }
+
+            .ai-close-btn:hover {
+                background: rgba(0, 0, 0, 0.1);
+                color: #1d1d1f;
             }
 
             .ai-title {
@@ -1057,14 +1093,15 @@
 
         <div class="ai-container">
             <div class="ai-header">
-                <div class="ai-title">✨ AI Assistant</div>
+                <button class="ai-close-btn" id="aiCloseBtn" title="Close AI Assistant">×</button>
+                <div class="ai-title">AI Assistant</div>
                 <div class="ai-subtitle">Ask me anything - powered by advanced AI</div>
             </div>
 
             <div class="ai-chat-area">
                 <div class="ai-messages" id="aiTabMessages">
                     <div class="ai-welcome" id="aiWelcome">
-                        <div class="ai-welcome-icon">🤖</div>
+                        <div class="ai-welcome-icon"></div>
                         <div class="ai-welcome-title">How can I help you today?</div>
                         <p>I can answer questions, explain concepts, help with research, and more.</p>
                         
@@ -1097,6 +1134,293 @@
         </div>
     </div>
 
+    <!-- Extensions Page (renders as tab content) -->
+    <div class="extensions-page" id="extensionsPage" style="display: none;">
+        <style>
+            .extensions-page {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #f5f5f7;
+                display: flex;
+                flex-direction: column;
+                z-index: 50;
+                overflow-y: auto;
+            }
+
+            .extensions-container {
+                max-width: 1200px;
+                width: 100%;
+                margin: 0 auto;
+                padding: 40px 20px;
+            }
+
+            .extensions-header {
+                margin-bottom: 32px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+
+            .extensions-header-content {
+                flex: 1;
+            }
+
+            .extensions-title {
+                font-size: 42px;
+                font-weight: 700;
+                color: #1d1d1f;
+                margin-bottom: 8px;
+            }
+
+            .extensions-subtitle {
+                font-size: 15px;
+                color: #86868b;
+            }
+
+            .extensions-close-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: rgba(0, 0, 0, 0.05);
+                border: none;
+                color: #86868b;
+                font-size: 24px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }
+
+            .extensions-close-btn:hover {
+                background: rgba(0, 0, 0, 0.1);
+                color: #1d1d1f;
+            }
+
+            .extensions-search {
+                margin-bottom: 32px;
+            }
+
+            .search-box-large {
+                width: 100%;
+                padding: 16px 24px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 12px;
+                font-size: 16px;
+                outline: none;
+                background: #ffffff;
+                transition: all 0.2s ease;
+            }
+
+            .search-box-large:focus {
+                border-color: #007AFF;
+                box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+            }
+
+            .extensions-tabs {
+                display: flex;
+                gap: 16px;
+                margin-bottom: 24px;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            }
+
+            .extensions-tab {
+                padding: 12px 24px;
+                background: transparent;
+                border: none;
+                border-bottom: 2px solid transparent;
+                font-size: 15px;
+                font-weight: 500;
+                color: #86868b;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .extensions-tab.active {
+                color: #007AFF;
+                border-bottom-color: #007AFF;
+            }
+
+            .extensions-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                gap: 20px;
+                margin-bottom: 40px;
+            }
+
+            .extension-card {
+                background: #ffffff;
+                border: 1px solid rgba(0, 0, 0, 0.06);
+                border-radius: 14px;
+                padding: 20px;
+                display: flex;
+                gap: 16px;
+                transition: all 0.2s ease;
+            }
+
+            .extension-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            }
+
+            .extension-icon {
+                width: 64px;
+                height: 64px;
+                border-radius: 12px;
+                background: #f5f5f7;
+                flex-shrink: 0;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .extension-icon img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .extension-info {
+                flex: 1;
+            }
+
+            .extension-name {
+                font-size: 16px;
+                font-weight: 600;
+                color: #1d1d1f;
+                margin-bottom: 4px;
+            }
+
+            .extension-author {
+                font-size: 13px;
+                color: #86868b;
+                margin-bottom: 8px;
+            }
+
+            .extension-description {
+                font-size: 13px;
+                color: #515154;
+                margin-bottom: 12px;
+                line-height: 1.4;
+            }
+
+            .extension-stats {
+                display: flex;
+                gap: 16px;
+                font-size: 12px;
+                color: #86868b;
+                margin-bottom: 12px;
+            }
+
+            .extension-actions {
+                display: flex;
+                gap: 8px;
+            }
+
+            .extension-btn {
+                padding: 10px 20px;
+                border-radius: 10px;
+                border: none;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                flex: 1;
+            }
+
+            .extension-btn-install {
+                background: linear-gradient(135deg, #007AFF 0%, #0051d5 100%);
+                color: white;
+                box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+            }
+
+            .extension-btn-install:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
+            }
+
+            .extension-btn-install:active {
+                transform: translateY(0);
+            }
+
+            .extension-btn-uninstall {
+                background: linear-gradient(135deg, #FF3B30 0%, #d32f2f 100%);
+                color: white;
+                box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
+            }
+
+            .extension-btn-uninstall:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(255, 59, 48, 0.4);
+            }
+
+            .extension-btn-disable {
+                background: #f5f5f7;
+                color: #1d1d1f;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+            }
+
+            .extension-btn-disable:hover {
+                background: #e8e8ed;
+            }
+
+            .loading-spinner {
+                text-align: center;
+                padding: 40px;
+                font-size: 32px;
+                color: #007AFF;
+            }
+
+            .no-results {
+                text-align: center;
+                padding: 60px 20px;
+                color: #86868b;
+            }
+
+            .installed-badge {
+                display: inline-block;
+                padding: 4px 8px;
+                background: #34C759;
+                color: white;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                margin-left: 8px;
+            }
+        </style>
+
+        <div class="extensions-container">
+            <div class="extensions-header">
+                <div class="extensions-header-content">
+                    <div class="extensions-title">Extensions</div>
+                    <div class="extensions-subtitle">Enhance your browser with Firefox extensions</div>
+                </div>
+                <button class="extensions-close-btn" id="extensionsCloseBtn" title="Close Extensions">×</button>
+            </div>
+
+            <div class="extensions-search">
+                <input type="text" class="search-box-large" id="extensionSearchInput" placeholder="Search Firefox extensions...">
+            </div>
+
+            <div class="extensions-tabs">
+                <button class="extensions-tab active" data-tab="featured">Featured</button>
+                <button class="extensions-tab" data-tab="installed">Installed</button>
+                <button class="extensions-tab" data-tab="search">Search Results</button>
+            </div>
+
+            <div id="extensionsContent" class="extensions-grid">
+                <div class="loading-spinner">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load icons module first -->
+    <script src="icons.js"></script>
     <!-- Load renderer script that connects to native engines -->
     <script src="renderer.js"></script>
 </body>

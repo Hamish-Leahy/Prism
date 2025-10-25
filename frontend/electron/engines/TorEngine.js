@@ -225,15 +225,35 @@ class TorEngine extends EngineInterface {
             }
         }
 
-        // Create a new circuit for this tab
+        // Create a new circuit for this tab with UNIQUE session partition
         const circuitId = `circuit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const uniquePartition = `persist:tor-${tabId}`; // Each tab gets its own isolated session
         this.tabCircuits.set(tabId, circuitId);
         console.log(`🔒 New Tor circuit for tab ${tabId}: ${circuitId}`);
+        console.log(`   🔐 Isolated session: ${uniquePartition}`);
 
-        // Create BrowserView with maximum privacy
+        // Create isolated session for this specific Tor tab
+        const tabSession = session.fromPartition(uniquePartition);
+        
+        // Configure Tor proxy for this tab's session
+        await tabSession.setProxy({
+            proxyRules: `socks5://127.0.0.1:${this.torSocksPort}`,
+            proxyBypassRules: '<local>'
+        });
+        
+        // Set Tor Browser user agent for this tab's session
+        tabSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
+        
+        // Maximum privacy settings for this tab's session
+        tabSession.setPermissionRequestHandler((webContents, permission, callback) => {
+            // Deny ALL permissions for maximum privacy
+            callback(false);
+        });
+
+        // Create BrowserView with maximum privacy using unique partition
         const view = new BrowserView({
             webPreferences: {
-                partition: this.partition,
+                partition: uniquePartition, // Unique partition for circuit isolation
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: true,
@@ -261,7 +281,8 @@ class TorEngine extends EngineInterface {
             canGoBack: false,
             canGoForward: false,
             visible: false,
-            torCircuitId: null
+            torCircuitId: circuitId,
+            partition: uniquePartition // Store partition for cleanup
         };
 
         this.tabs.set(tabId, tabData);
@@ -614,6 +635,22 @@ class TorEngine extends EngineInterface {
         if (!tabData) throw new Error('Tab not found: ' + tabId);
 
         if (tabData.visible) await this.hideTab(tabId);
+        
+        // Clean up the isolated session for this tab
+        if (tabData.partition) {
+            try {
+                const tabSession = session.fromPartition(tabData.partition);
+                // Clear all data for this isolated circuit
+                await tabSession.clearCache();
+                await tabSession.clearStorageData({
+                    storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage']
+                });
+                console.log(`   🧹 Cleared isolated session: ${tabData.partition}`);
+            } catch (error) {
+                console.warn('Failed to clear session:', error.message);
+            }
+        }
+        
         tabData.view.webContents.destroy();
         
         // Remove circuit tracking

@@ -60,8 +60,8 @@ async function init() {
 // Listen for engines ready event
 ipcRenderer.once('engines-ready', async () => {
     console.log('✅ Engines ready');
-    // Don't create a tab automatically - show start page instead
-    showStartPage();
+    // Create an initial empty tab and show start page
+    await createNewTab();
 });
 
 // Event Listeners
@@ -79,7 +79,7 @@ function setupEventListeners() {
         
         if (isAIMode) {
             searchModeToggle.classList.add('ai-mode');
-            searchModeIndicator.textContent = '✨';
+            searchModeIndicator.innerHTML = Icons.sparkles;
             document.querySelector('.search-input-wrapper').classList.add('ai-mode');
             startSearch.placeholder = 'Ask AI anything...';
             searchHint.textContent = 'AI Mode Active';
@@ -87,10 +87,10 @@ function setupEventListeners() {
             searchHint.style.color = '#007AFF';
         } else {
             searchModeToggle.classList.remove('ai-mode');
-            searchModeIndicator.textContent = '🔍';
+            searchModeIndicator.innerHTML = Icons.search;
             document.querySelector('.search-input-wrapper').classList.remove('ai-mode');
             startSearch.placeholder = 'Search the web...';
-            searchHint.textContent = 'Click 🔍 to toggle AI mode';
+            searchHint.innerHTML = `Click ${Icons.search} to toggle AI mode`;
             searchHint.style.background = 'rgba(0, 122, 255, 0.05)';
             searchHint.style.color = '#86868b';
         }
@@ -115,10 +115,10 @@ function setupEventListeners() {
                 // Reset AI mode after search
                 isAIMode = false;
                 searchModeToggle.classList.remove('ai-mode');
-                searchModeIndicator.textContent = '🔍';
+                searchModeIndicator.innerHTML = Icons.search;
                 document.querySelector('.search-input-wrapper').classList.remove('ai-mode');
                 startSearch.placeholder = 'Search the web...';
-                searchHint.textContent = 'Click 🔍 to toggle AI mode';
+                searchHint.innerHTML = `Click ${Icons.search} to toggle AI mode`;
                 searchHint.style.background = 'rgba(0, 122, 255, 0.05)';
                 searchHint.style.color = '#86868b';
             } else {
@@ -200,8 +200,36 @@ function setupEventListeners() {
     });
 
     // Extensions
-    extensionsBtn.addEventListener('click', () => {
-        alert('Extensions\n\nComing soon:\n• Ad blockers\n• Privacy tools\n• Themes\n• Developer tools');
+    extensionsBtn.addEventListener('click', async () => {
+        // Open extensions page as a special tab
+        await openExtensionsPage();
+    });
+
+    // Extensions close button
+    const extensionsCloseBtn = document.getElementById('extensionsCloseBtn');
+    if (extensionsCloseBtn) {
+        extensionsCloseBtn.addEventListener('click', () => {
+            const extensionsTab = tabs.find(t => t.isExtensionsTab && t.id === activeTabId);
+            if (extensionsTab) {
+                closeTab(extensionsTab.id);
+            }
+        });
+    }
+
+    // Extensions tabs switching
+    document.querySelectorAll('.extensions-tab').forEach(tabBtn => {
+        tabBtn.addEventListener('click', async () => {
+            // Remove active from all tabs
+            document.querySelectorAll('.extensions-tab').forEach(btn => btn.classList.remove('active'));
+            tabBtn.classList.add('active');
+            
+            const tabType = tabBtn.dataset.tab;
+            if (tabType === 'featured') {
+                await loadFeaturedExtensions();
+            } else if (tabType === 'installed') {
+                await loadInstalledExtensions();
+            }
+        });
     });
 
     // HavenWallet modal
@@ -281,6 +309,16 @@ function setupEventListeners() {
         if (query) {
             await sendAIMessage(query);
             aiTabInput.value = '';
+        }
+    });
+    
+    // AI Close button
+    const aiCloseBtn = document.getElementById('aiCloseBtn');
+    aiCloseBtn.addEventListener('click', () => {
+        // Find and close the AI tab
+        const aiTab = tabs.find(t => t.isAITab && t.id === activeTabId);
+        if (aiTab) {
+            closeTab(aiTab.id);
         }
     });
 
@@ -410,18 +448,24 @@ async function closeTab(tabId) {
 
     const tab = tabs[index];
     
-    // Close tab in native engine (skip for AI tabs)
-    if (!tab.isAITab) {
+    // Close tab in native engine (skip for AI tabs and extensions tabs)
+    if (!tab.isAITab && !tab.isExtensionsTab) {
         try {
             await ipcRenderer.invoke('engine:closeTab', tab.id);
         } catch (error) {
             console.error('Failed to close tab:', error);
         }
-    } else {
+    } else if (tab.isAITab) {
         // Hide AI page if closing AI tab
         if (tabId === currentAITabId) {
             aiPage.style.display = 'none';
             currentAITabId = null;
+        }
+    } else if (tab.isExtensionsTab) {
+        // Hide extensions page if closing extensions tab
+        const extensionsPage = document.getElementById('extensionsPage');
+        if (extensionsPage) {
+            extensionsPage.style.display = 'none';
         }
     }
 
@@ -447,18 +491,50 @@ async function switchToTab(tabId) {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
 
+    const extensionsPage = document.getElementById('extensionsPage');
+
     // Check if it's an AI tab
     if (tab.isAITab) {
         // Show AI page
         aiPage.style.display = 'flex';
         startPage.classList.add('hidden');
+        if (extensionsPage) extensionsPage.style.display = 'none';
         addressBar.value = 'prism://ai';
         updateEngineBadge();
         renderTabs();
+        
+        // Hide BrowserViews
+        try {
+            await ipcRenderer.invoke('engine:hideAllViews');
+        } catch (error) {
+            console.error('Failed to hide views:', error);
+        }
         return;
     } else {
         // Hide AI page
         aiPage.style.display = 'none';
+    }
+
+    // Check if it's an extensions tab
+    if (tab.isExtensionsTab) {
+        // Show extensions page
+        if (extensionsPage) extensionsPage.style.display = 'flex';
+        startPage.classList.add('hidden');
+        aiPage.style.display = 'none';
+        addressBar.value = 'prism://extensions';
+        updateEngineBadge();
+        renderTabs();
+        
+        // Hide BrowserViews
+        try {
+            await ipcRenderer.invoke('engine:hideAllViews');
+        } catch (error) {
+            console.error('Failed to hide views:', error);
+        }
+        return;
+    } else {
+        // Hide extensions page
+        if (extensionsPage) extensionsPage.style.display = 'none';
     }
 
     // Update address bar IMMEDIATELY to prevent wrong URL showing
@@ -938,13 +1014,251 @@ function displayWallets(wallets) {
     });
 }
 
+// Extensions Page Functions
+async function openExtensionsPage() {
+    // Create a special extensions tab
+    const tabId = `extensions-tab-${tabIdCounter++}`;
+    const tab = {
+        id: tabId,
+        title: 'Extensions',
+        url: 'prism://extensions',
+        engine: 'prism',
+        isLoading: false,
+        isExtensionsTab: true
+    };
+
+    tabs.push(tab);
+    
+    // Update UI
+    renderTabs();
+    await switchToTab(tabId);
+    
+    // Show extensions page
+    const extensionsPage = document.getElementById('extensionsPage');
+    extensionsPage.style.display = 'flex';
+    startPage.classList.add('hidden');
+    aiPage.style.display = 'none';
+    
+    // Hide BrowserViews
+    try {
+        await ipcRenderer.invoke('engine:hideAllViews');
+    } catch (error) {
+        console.error('Failed to hide views:', error);
+    }
+    
+    // Load featured extensions
+    await loadFeaturedExtensions();
+}
+
+async function loadFeaturedExtensions() {
+    try {
+        const extensionsGrid = document.getElementById('extensionsContent');
+        
+        if (!extensionsGrid) {
+            console.error('Extensions grid not found');
+            return;
+        }
+        
+        extensionsGrid.innerHTML = `<div class="loading-spinner">${Icons.loader} Loading featured extensions...</div>`;
+        
+        const featured = await ipcRenderer.invoke('extensions:featured');
+        extensionsGrid.innerHTML = '';
+        
+        if (featured && featured.length > 0) {
+            featured.forEach(ext => {
+                const card = createExtensionCard(ext, false);
+                extensionsGrid.appendChild(card);
+            });
+        } else {
+            extensionsGrid.innerHTML = `<div class="no-results"><div style="font-size: 48px; margin-bottom: 16px; color: #007AFF;">${Icons.package}</div><div style="font-size: 18px; font-weight: 500;">No featured extensions available</div><div style="margin-top: 8px;">Check your internet connection</div></div>`;
+        }
+    } catch (error) {
+        console.error('Failed to load featured extensions:', error);
+        const extensionsGrid = document.getElementById('extensionsContent');
+        if (extensionsGrid) {
+            extensionsGrid.innerHTML = '<div class="no-results"><div style="font-size: 48px; margin-bottom: 16px;">❌</div><div style="font-size: 18px; font-weight: 500; color: #ff3b30;">Failed to load extensions</div><div style="margin-top: 8px;">' + error.message + '</div></div>';
+        }
+    }
+}
+
+async function loadInstalledExtensions() {
+    try {
+        const extensionsGrid = document.getElementById('extensionsContent');
+        
+        if (!extensionsGrid) {
+            console.error('Extensions grid not found');
+            return;
+        }
+        
+        extensionsGrid.innerHTML = `<div class="loading-spinner">${Icons.loader} Loading installed extensions...</div>`;
+        
+        const installed = await ipcRenderer.invoke('extensions:list');
+        extensionsGrid.innerHTML = '';
+        
+        if (installed && installed.length > 0) {
+            installed.forEach(ext => {
+                const card = createExtensionCard(ext, true);
+                extensionsGrid.appendChild(card);
+            });
+        } else {
+            extensionsGrid.innerHTML = `<div class="no-results"><div style="font-size: 48px; margin-bottom: 16px; color: #007AFF;">${Icons.puzzle}</div><div style="font-size: 18px; font-weight: 500;">No extensions installed yet</div><div style="margin-top: 8px;">Browse featured extensions to get started</div></div>`;
+        }
+    } catch (error) {
+        console.error('Failed to load installed extensions:', error);
+        const extensionsGrid = document.getElementById('extensionsContent');
+        if (extensionsGrid) {
+            extensionsGrid.innerHTML = '<div class="no-results"><div style="font-size: 48px; margin-bottom: 16px;">❌</div><div style="font-size: 18px; font-weight: 500; color: #ff3b30;">Failed to load extensions</div><div style="margin-top: 8px;">' + error.message + '</div></div>';
+        }
+    }
+}
+
+function createExtensionCard(ext, isInstalled = false) {
+    const card = document.createElement('div');
+    card.className = 'extension-card';
+    
+    // Extract icon URL - handle both Mozilla API format and installed format
+    let iconUrl = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🧩</text></svg>';
+    if (ext.icon && typeof ext.icon === 'string') {
+        iconUrl = ext.icon;
+    } else if (ext.icon && ext.icon['64']) {
+        iconUrl = ext.icon['64'];
+    } else if (ext.icons && ext.icons['64']) {
+        iconUrl = ext.icons['64'];
+    }
+    
+    // Extract name - handle both formats
+    const name = ext.name && typeof ext.name === 'object' ? (ext.name['en-US'] || Object.values(ext.name)[0]) : (ext.name || 'Unknown Extension');
+    
+    // Extract description
+    const description = ext.description && typeof ext.description === 'object' ? (ext.description['en-US'] || Object.values(ext.description)[0]) : (ext.description || 'No description available');
+    
+    // Extract stats
+    const rating = ext.ratings?.average ? ext.ratings.average.toFixed(1) : (ext.rating || 'N/A');
+    const users = ext.average_daily_users || ext.users || 0;
+    
+    // Get addon URL
+    const addonUrl = ext.url || (ext.slug ? `https://addons.mozilla.org/firefox/addon/${ext.slug}/` : '');
+    
+    card.innerHTML = `
+        <img class="extension-icon" src="${iconUrl}" alt="${name}" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot;><rect width=&quot;20&quot; height=&quot;20&quot; x=&quot;2&quot; y=&quot;2&quot; rx=&quot;2&quot; fill=&quot;%23007AFF&quot;/></svg>'">
+        <div class="extension-info">
+            <div class="extension-name">
+                ${name}
+                ${isInstalled ? '<span class="installed-badge">INSTALLED</span>' : ''}
+            </div>
+            <div class="extension-description">${description.length > 120 ? description.substring(0, 120) + '...' : description}</div>
+            <div class="extension-stats">
+                <span>${Icons.star} ${rating}</span>
+                <span>${Icons.users} ${formatNumber(users)} users</span>
+            </div>
+        </div>
+        <div class="extension-actions">
+            ${isInstalled ? 
+                `<button class="extension-btn extension-btn-uninstall" data-id="${ext.id}">Remove</button>` :
+                `<button class="extension-btn extension-btn-install" data-url="${addonUrl}">${Icons.download} Install</button>`
+            }
+        </div>
+    `;
+    
+    const button = card.querySelector('.extension-btn');
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = isInstalled ? 'Removing...' : 'Installing...';
+        
+        try {
+            if (isInstalled) {
+                await handleUninstallExtension(ext.id);
+            } else {
+                await handleInstallExtension(addonUrl, name);
+            }
+        } finally {
+            button.disabled = false;
+        }
+    });
+    
+    return card;
+}
+
+async function handleInstallExtension(url, name) {
+    try {
+        console.log('Installing extension:', name, url);
+        const result = await ipcRenderer.invoke('extensions:installFromUrl', url);
+        console.log('Extension installed:', result);
+        
+        // Show success notification
+        showNotification(`${Icons.check} ${name} installed successfully!`, 'success');
+        
+        // Reload current tab view
+        const activeTab = document.querySelector('.extensions-tab.active');
+        if (activeTab?.dataset.tab === 'featured') {
+            await loadFeaturedExtensions();
+        } else if (activeTab?.dataset.tab === 'installed') {
+            await loadInstalledExtensions();
+        }
+    } catch (error) {
+        console.error('Failed to install extension:', error);
+        showNotification(`${Icons.alertCircle} Failed to install ${name}: ${error.message}`, 'error');
+    }
+}
+
+async function handleUninstallExtension(id) {
+    try {
+        console.log('Uninstalling extension:', id);
+        await ipcRenderer.invoke('extensions:uninstall', id);
+        console.log('Extension uninstalled');
+        
+        // Show success notification
+        showNotification(`${Icons.check} Extension removed successfully!`, 'success');
+        
+        // Reload installed extensions view
+        await loadInstalledExtensions();
+    } catch (error) {
+        console.error('Failed to uninstall extension:', error);
+        showNotification(`${Icons.alertCircle} Failed to remove extension: ${error.message}`, 'error');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        background: ${type === 'error' ? '#FF3B30' : type === 'success' ? '#34C759' : '#007AFF'};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
 // AI Assistant Tab Functions
 async function openAITab(initialQuery = null) {
     // Create a special AI tab
     const tabId = `ai-tab-${tabIdCounter++}`;
     const tab = {
         id: tabId,
-        title: '✨ AI Assistant',
+        title: 'AI Assistant',
         url: 'prism://ai',
         engine: 'prism',
         isLoading: false,
