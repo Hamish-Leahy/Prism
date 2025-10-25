@@ -117,7 +117,12 @@ class FirefoxEngine extends EngineInterface {
                 enableWebAuthn: true,
                 // Security features
                 enableWebSQL: false,
-                webviewTag: false
+                webviewTag: false,
+                // Smooth scrolling optimizations
+                enableSmoothScrolling: true,
+                // Performance optimizations
+                offscreen: false,
+                backgroundThrottling: false
             }
         });
 
@@ -126,6 +131,15 @@ class FirefoxEngine extends EngineInterface {
         
         // Set Firefox user agent with more realistic details
         webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0');
+        
+        // Use standard browser smooth scrolling
+        webContents.on('did-finish-load', () => {
+            webContents.insertCSS(`
+                html, body {
+                    scroll-behavior: smooth;
+                }
+            `).catch(err => console.error('Failed to inject smooth scrolling CSS:', err));
+        });
 
         // Store view reference
         const tabData = {
@@ -537,10 +551,22 @@ class FirefoxEngine extends EngineInterface {
                     return originalNow.call(performance) - startTime;
                 };
                 
+                // ===== STANDARD BROWSER SMOOTH SCROLLING =====
+                
+                // Use standard browser smooth scrolling (like Chrome/Firefox)
+                const smoothScrollStyle = document.createElement('style');
+                smoothScrollStyle.textContent = \`
+                    html, body {
+                        scroll-behavior: smooth;
+                    }
+                \`;
+                document.head.appendChild(smoothScrollStyle);
+                
                 console.log('[Firefox Stealth Mode] ✓ All anti-detection measures active');
                 console.log('[Firefox Stealth Mode] ✓ Navigator.webdriver:', navigator.webdriver);
                 console.log('[Firefox Stealth Mode] ✓ User Agent:', navigator.userAgent);
                 console.log('[Firefox Stealth Mode] ✓ Platform:', navigator.platform);
+                console.log('[Firefox Stealth Mode] ✓ Standard smooth scrolling enabled');
                 
             })();
         `).catch(err => {

@@ -69,6 +69,13 @@
       "!electron/node_modules",
       "node_modules/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": ["**/*", "!tests/**", "!node_modules/**", "!.git/**"]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "electron/icon.icns",

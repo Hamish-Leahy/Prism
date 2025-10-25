@@ -8,6 +8,9 @@
 html, body {
   height: 100%;
   overflow: hidden;
+  /* Smooth scrolling optimizations */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 #root {
@@ -39,10 +42,18 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #4a4a4a;
   border-radius: 4px;
+  /* Smooth scrolling for scrollbar */
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #5a5a5a;
+}
+
+/* Smooth scrolling for all scrollable elements */
+* {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Focus styles */

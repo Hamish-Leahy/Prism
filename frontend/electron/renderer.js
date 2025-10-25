@@ -8,8 +8,15 @@ const { ipcRenderer } = require('electron');
 let tabs = [];
 let activeTabId = null;
 let tabIdCounter = 0;
-let defaultEngine = 'firefox';
-let loadingBarActive = false; // Track if loading bar is currently active
+let defaultEngine = 'firefox'; // Firefox is the default Prism engine
+// Per-tab loading states
+let tabLoadingStates = new Map(); // tabId -> { loading: boolean, progress: number }
+// Sleeping tabs tracking
+let sleepingTabs = new Set(); // tabId -> boolean
+// Tab creation debouncing
+let isCreatingTab = false;
+// Initialization guard
+let isInitialized = false;
 
 // DOM Elements
 const tabBar = document.getElementById('tabBar');
@@ -25,8 +32,8 @@ const walletModal = document.getElementById('walletModal');
 const closeWallet = document.getElementById('closeWallet');
 const engineSelector = document.getElementById('engineSelector');
 const engineBadge = document.getElementById('engineBadge');
-const loadingBar = document.getElementById('loadingBar');
 const securityIndicator = document.getElementById('securityIndicator');
+const loadingSpinner = document.getElementById('loadingSpinner');
 
 // History Elements
 const historyModal = document.getElementById('historyModal');
@@ -75,15 +82,25 @@ function initializeToolbarIcons() {
     const walletIcon = document.querySelector('#walletBtn .icon');
     const havenPayIcon = document.querySelector('#havenPayBtn .icon');
     const aiIcon = document.querySelector('#aiBtn .icon');
+    const historyIcon = document.querySelector('#historyBtn .icon');
     const extensionsIcon = document.querySelector('#extensionsBtn .icon');
+    const settingsIcon = document.querySelector('#settingsBtn .icon');
     const securityIcon = document.querySelector('#securityIndicator .icon');
     
     if (walletIcon) walletIcon.innerHTML = Icons.wallet;
     if (havenPayIcon) havenPayIcon.innerHTML = Icons.creditCard;
     if (aiIcon) aiIcon.innerHTML = Icons.bot;
+    if (historyIcon) historyIcon.innerHTML = Icons.history;
     if (extensionsIcon) extensionsIcon.innerHTML = Icons.puzzle;
+    if (settingsIcon) settingsIcon.innerHTML = Icons.settings;
     if (securityIcon) securityIcon.innerHTML = Icons.lock;
 }
+
+// Listen for dependency check results
+ipcRenderer.on('dependencies-checked', (event, result) => {
+    console.log('📋 Dependencies checked:', result);
+    showDependencyStatus(result);
+});
 
 // Listen for engines ready event
 ipcRenderer.once('engines-ready', async () => {
@@ -212,34 +229,64 @@ function setupEventListeners() {
                 }
             }
             
-            // Special tabs (AI, Extensions, Start) can't switch engines
-            if (tab.isAITab || tab.isExtensionsTab || !tab.url) {
-                console.log('Cannot switch engine for special tabs');
+            // Special tabs (AI, Extensions) can't switch engines, but start page can
+            if (tab.isAITab || tab.isExtensionsTab) {
+                console.log('Cannot switch engine for AI/Extension tabs');
                 engineSelector.value = tab.engine;
                 return;
             }
             
             try {
                 // Switch engine for this tab
-                await ipcRenderer.invoke('engine:switchTabEngine', tab.id, newEngine);
-                tab.engine = newEngine;
-                updateEngineBadge();
-                renderTabs();
-                console.log(`Tab "${tab.title}" switched to: ${newEngine}`);
+                const result = await ipcRenderer.invoke('engine:switchTabEngine', tab.id, newEngine);
+                
+                if (result.success) {
+                    // Update tab engine
+                    tab.engine = newEngine;
+                    
+                    // Update UI
+                    updateEngineBadge();
+                    renderTabs();
+                    
+                    // Show notification for Tor
+                    if (newEngine === 'tor') {
+                        console.log('🔒 Switched to Tor - Full amnesia mode: No history, no cache, no tracking');
+                    }
+                    
+                    console.log(`✅ Tab "${tab.title}" switched to: ${newEngine}`);
+                } else {
+                    throw new Error(result.message || 'Switch failed');
+                }
             } catch (error) {
-                console.error(`Failed to switch to ${newEngine}:`, error);
-                alert(`Failed to switch to ${newEngine}: ${error.message}`);
+                console.error(`❌ Failed to switch to ${newEngine}:`, error);
+                alert(`Failed to switch to ${newEngine}: ${error.message}\n\nPlease try:\n1. Refreshing the page\n2. Creating a new tab\n3. Restarting the browser`);
                 // Revert selector
                 engineSelector.value = tab.engine;
             }
         }
     });
 
+    // History
+    const historyBtn = document.getElementById('historyBtn');
+    if (historyBtn) {
+        historyBtn.addEventListener('click', async () => {
+            await openHistory();
+        });
+    }
+    
     // Extensions
     extensionsBtn.addEventListener('click', async () => {
         // Open extensions page as a special tab
         await openExtensionsPage();
     });
+    
+    // Settings (placeholder for now)
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            alert('Settings page coming soon! This is where you can:\n\n• Manage user accounts\n• Configure default engine\n• Manage saved passwords\n• Clear browsing data\n• Customize appearance\n• And more...');
+        });
+    }
 
     // Extensions close button
     const extensionsCloseBtn = document.getElementById('extensionsCloseBtn');
@@ -270,67 +317,37 @@ function setupEventListeners() {
 
     // HavenWallet modal
     walletBtn.addEventListener('click', async () => {
-        // Hide BrowserViews so modal is on top
-        try {
-            await ipcRenderer.invoke('engine:hideAllViews');
-        } catch (error) {
-            console.error('Failed to hide views:', error);
-        }
+        // Don't hide all views - just show modal on top
         walletModal.classList.add('show');
     });
 
     closeWallet.addEventListener('click', async () => {
         walletModal.classList.remove('show');
-        // Show active BrowserView again
-        try {
-            await ipcRenderer.invoke('engine:showActiveView');
-        } catch (error) {
-            console.error('Failed to show views:', error);
-        }
+        // No need to show active view - it's already there
     });
 
     walletModal.addEventListener('click', async (e) => {
         if (e.target === walletModal) {
             walletModal.classList.remove('show');
-            // Show active BrowserView again
-            try {
-                await ipcRenderer.invoke('engine:showActiveView');
-            } catch (error) {
-                console.error('Failed to show views:', error);
-            }
+            // No need to show active view - it's already there
         }
     });
 
     // HavenPay modal
     havenPayBtn.addEventListener('click', async () => {
-        // Hide BrowserViews so modal is on top
-        try {
-            await ipcRenderer.invoke('engine:hideAllViews');
-        } catch (error) {
-            console.error('Failed to hide views:', error);
-        }
+        // Don't hide all views - just show modal on top
         havenPayModal.classList.add('show');
     });
 
     closeHavenPay.addEventListener('click', async () => {
         havenPayModal.classList.remove('show');
-        // Show active BrowserView again
-        try {
-            await ipcRenderer.invoke('engine:showActiveView');
-        } catch (error) {
-            console.error('Failed to show views:', error);
-        }
+        // No need to show active view - it's already there
     });
 
     havenPayModal.addEventListener('click', async (e) => {
         if (e.target === havenPayModal) {
             havenPayModal.classList.remove('show');
-            // Show active BrowserView again
-            try {
-                await ipcRenderer.invoke('engine:showActiveView');
-            } catch (error) {
-                console.error('Failed to show views:', error);
-            }
+            // No need to show active view - it's already there
         }
     });
 
@@ -428,8 +445,16 @@ function setupQuickLinks() {
         handleEngineEvent(eventName, data);
     });
 
-    // Menu shortcuts
-    ipcRenderer.on('new-tab', async () => await createNewTab());
+    // Menu shortcuts - remove existing listeners first to prevent duplicates
+    ipcRenderer.removeAllListeners('new-tab');
+    ipcRenderer.removeAllListeners('close-tab');
+    ipcRenderer.removeAllListeners('navigate-back');
+    ipcRenderer.removeAllListeners('navigate-forward');
+    ipcRenderer.removeAllListeners('navigate-refresh');
+    ipcRenderer.removeAllListeners('navigate-home');
+    
+    // Register new listeners
+    ipcRenderer.on('new-tab', async () => await createNewTabDebounced());
     ipcRenderer.on('close-tab', async () => await closeTab(activeTabId));
     ipcRenderer.on('navigate-back', () => backBtn.click());
     ipcRenderer.on('navigate-forward', () => forwardBtn.click());
@@ -476,6 +501,30 @@ function setupQuickLinks() {
             await openHistory();
         }
     });
+    
+    // Dependency Modal
+    const closeDependencies = document.getElementById('closeDependencies');
+    if (closeDependencies) {
+        closeDependencies.addEventListener('click', () => {
+            const modal = document.getElementById('dependencyModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('active');
+            }
+        });
+    }
+    
+    const recheckDependencies = document.getElementById('recheckDependencies');
+    if (recheckDependencies) {
+        recheckDependencies.addEventListener('click', async () => {
+            const statusEl = document.getElementById('dependencyStatus');
+            if (statusEl) {
+                statusEl.innerHTML = '<div style="text-align: center; padding: 40px; color: #86868b;"><div style="font-size: 32px; margin-bottom: 16px;">⏳</div><div>Rechecking dependencies...</div></div>';
+            }
+            const result = await ipcRenderer.invoke('dependencies:check');
+            showDependencyStatus(result);
+        });
+    }
 }
 
 // Tab Management
@@ -486,11 +535,17 @@ async function createNewTab() {
         title: 'New Tab',
         url: '',
         engine: defaultEngine,
-        isLoading: false
+        isLoading: false,
+        // Keep tab rendered in memory like real browsers
+        rendered: false,
+        view: null
     };
 
     tabs.push(tab);
     console.log('Creating new tab:', tabId);
+    
+    // Initialize loading state for this tab
+    setTabLoading(tabId, false);
     
     // Set as active tab
     activeTabId = tabId;
@@ -499,22 +554,25 @@ async function createNewTab() {
     renderTabs();
     updateEngineBadge();
     
-    // Create tab in native engine in the background (don't switch to it yet)
+    // Show start page immediately for new tab
+    await showStartPage();
+    
+    // Create tab in native engine in background (don't block UI)
     try {
-        await ipcRenderer.invoke('engine:createTab', tabId, defaultEngine, {});
+        const result = await ipcRenderer.invoke('engine:createTab', tabId, defaultEngine, {});
         console.log(`✅ Native tab ${tabId} created with ${defaultEngine}`);
         
-        // DON'T call switchToTab here - let the user navigate first
-        // The BrowserView will be shown when they navigate somewhere
+        // Store the view reference for instant switching
+        tab.view = result.view;
+        tab.rendered = true;
         
-        // Show the start page for the new tab
-        await showStartPage();
     } catch (error) {
         console.error('Failed to create tab:', error);
         // Remove tab if creation failed
         const index = tabs.findIndex(t => t.id === tabId);
         if (index > -1) {
             tabs.splice(index, 1);
+            tabLoadingStates.delete(tabId);
             renderTabs();
             // Switch to another tab if available
             if (tabs.length > 0) {
@@ -555,6 +613,9 @@ async function closeTab(tabId) {
     }
 
     tabs.splice(index, 1);
+    
+    // Clean up loading state
+    tabLoadingStates.delete(tabId);
 
     if (tabs.length === 0) {
         // Show start page instead of creating a new tab
@@ -576,11 +637,12 @@ async function switchToTab(tabId) {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
 
+    // IMMEDIATE UI updates - like real browsers
     const extensionsPage = document.getElementById('extensionsPage');
 
     // Check if it's an AI tab
     if (tab.isAITab) {
-        // Show AI page
+        // Show AI page IMMEDIATELY
         aiPage.style.display = 'flex';
         startPage.classList.add('hidden');
         if (extensionsPage) extensionsPage.style.display = 'none';
@@ -588,21 +650,16 @@ async function switchToTab(tabId) {
         updateEngineBadge();
         renderTabs();
         
-        // Hide BrowserViews
-        try {
-            await ipcRenderer.invoke('engine:hideAllViews');
-        } catch (error) {
-            console.error('Failed to hide views:', error);
-        }
+        // Don't hide all views for AI tabs - just switch normally
         return;
     } else {
-        // Hide AI page
+        // Hide AI page IMMEDIATELY
         aiPage.style.display = 'none';
     }
 
     // Check if it's an extensions tab
     if (tab.isExtensionsTab) {
-        // Show extensions page
+        // Show extensions page IMMEDIATELY
         if (extensionsPage) extensionsPage.style.display = 'flex';
         startPage.classList.add('hidden');
         aiPage.style.display = 'none';
@@ -610,19 +667,14 @@ async function switchToTab(tabId) {
         updateEngineBadge();
         renderTabs();
         
-        // Hide BrowserViews
-        try {
-            await ipcRenderer.invoke('engine:hideAllViews');
-        } catch (error) {
-            console.error('Failed to hide views:', error);
-        }
+        // Don't hide all views for extensions tabs - just switch normally
         return;
     } else {
-        // Hide extensions page
+        // Hide extensions page IMMEDIATELY
         if (extensionsPage) extensionsPage.style.display = 'none';
     }
 
-    // Update address bar and security indicator IMMEDIATELY to prevent wrong URL showing
+    // Update address bar and security indicator IMMEDIATELY
     if (tab.url) {
         addressBar.value = tab.url;
         updateSecurityIndicator(tab.url);
@@ -633,90 +685,316 @@ async function switchToTab(tabId) {
         showStartPage();
     }
 
-    // Update UI immediately
+    // Update UI immediately - NO DELAYS
     updateEngineBadge();
     renderTabs();
+    
+    // Update loading spinner for this tab
+    const loadingState = getTabLoadingState(tabId);
+    updateLoadingSpinner(loadingState.loading);
 
-    // Show this tab, hide others (async in background)
-    try {
-        await ipcRenderer.invoke('engine:showTab', tabId);
-        await updateNavButtons();
-    } catch (error) {
-        console.error('Failed to switch tab:', error);
-        // Revert if switch failed
-        activeTabId = oldActiveTabId;
-        const oldTab = tabs.find(t => t.id === oldActiveTabId);
-        if (oldTab) {
-            addressBar.value = oldTab.url || '';
-            updateEngineBadge();
-            renderTabs();
+    // Check if tab is sleeping and wake it if needed
+    const isSleeping = await checkTabSleeping(tabId);
+    if (isSleeping) {
+        console.log(`🌅 Waking sleeping tab ${tabId}...`);
+        const woke = await wakeSleepingTab(tabId);
+        if (!woke) {
+            console.error('Failed to wake sleeping tab');
+            return;
         }
+        // Update tab info after waking - find the updated tab
+        const updatedTab = tabs.find(t => t.id === tabId);
+        if (updatedTab) {
+            // Update the tab reference
+            Object.assign(tab, updatedTab);
+        }
+    }
+
+    // INSTANT tab switching using pre-rendered views
+    if (tab.rendered && tab.view) {
+        // Use the pre-rendered view for instant switching
+        try {
+            await ipcRenderer.invoke('engine:showPreRenderedTab', tabId, tab.view);
+            await updateNavButtons();
+        } catch (error) {
+            console.error('Failed to switch to pre-rendered tab:', error);
+            // Fallback to normal switching
+            ipcRenderer.invoke('engine:showTab', tabId)
+                .then(() => updateNavButtons())
+                .catch(err => {
+                    console.error('Failed to switch tab:', err);
+                    // Revert if switch failed
+                    activeTabId = oldActiveTabId;
+                    const oldTab = tabs.find(t => t.id === oldActiveTabId);
+                    if (oldTab) {
+                        addressBar.value = oldTab.url || '';
+                        updateEngineBadge();
+                        renderTabs();
+                    }
+                });
+        }
+    } else {
+        // Show this tab, hide others (async in background - NON-BLOCKING)
+        ipcRenderer.invoke('engine:showTab', tabId)
+            .then(() => updateNavButtons())
+            .catch(error => {
+                console.error('Failed to switch tab:', error);
+                // Revert if switch failed
+                activeTabId = oldActiveTabId;
+                const oldTab = tabs.find(t => t.id === oldActiveTabId);
+                if (oldTab) {
+                    addressBar.value = oldTab.url || '';
+                    updateEngineBadge();
+                    renderTabs();
+                }
+            });
     }
 }
 
-function renderTabs() {
-    tabBar.innerHTML = '';
+// Cache for rendered tab elements to avoid recreating them
+const tabElementCache = new Map();
 
+// PROPER BROWSER-LIKE TAB RENDERING - Keep everything in memory
+let renderTabsTimeout = null;
+function renderTabs() {
+    // Clear any pending render
+    if (renderTabsTimeout) {
+        clearTimeout(renderTabsTimeout);
+    }
+    
+    // IMMEDIATE rendering - no delays like real browsers
+    renderTabsImmediate();
+}
+
+// Smooth scrolling optimization for AI messages
+function smoothScrollToBottom(element) {
+    if (!element) return;
+
+    // Use requestAnimationFrame for smooth scrolling
+    requestAnimationFrame(() => {
+        element.scrollTo({
+            top: element.scrollHeight,
+            behavior: 'smooth'
+        });
+    });
+}
+
+// Per-tab loading state management
+function setTabLoading(tabId, loading, progress = 0) {
+    if (loading) {
+        tabLoadingStates.set(tabId, { loading: true, progress });
+    } else {
+        tabLoadingStates.set(tabId, { loading: false, progress: 0 });
+    }
+    
+    // Update UI if this is the active tab
+    if (tabId === activeTabId) {
+        updateLoadingSpinner(loading);
+    }
+}
+
+function updateLoadingSpinner(loading) {
+    if (loading) {
+        loadingSpinner.style.display = 'block';
+    } else {
+        loadingSpinner.style.display = 'none';
+    }
+}
+
+function getTabLoadingState(tabId) {
+    return tabLoadingStates.get(tabId) || { loading: false, progress: 0 };
+}
+
+// Sleeping tab management
+async function checkTabSleeping(tabId) {
+    try {
+        const isSleeping = await ipcRenderer.invoke('engine:isTabSleeping', tabId);
+        if (isSleeping) {
+            sleepingTabs.add(tabId);
+            return true;
+        } else {
+            sleepingTabs.delete(tabId);
+            return false;
+        }
+    } catch (error) {
+        console.error('Failed to check tab sleeping state:', error);
+        return false;
+    }
+}
+
+async function wakeSleepingTab(tabId) {
+    try {
+        const result = await ipcRenderer.invoke('engine:wakeTabFromSleep', tabId);
+        if (result.success) {
+            sleepingTabs.delete(tabId);
+            // Update tab info with restored data
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && result.url) {
+                tab.url = result.url;
+                tab.title = result.title || 'Restored Tab';
+            }
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to wake sleeping tab:', error);
+        return false;
+    }
+}
+
+function isTabSleeping(tabId) {
+    return sleepingTabs.has(tabId);
+}
+
+// Debounced tab creation to prevent multiple tabs from Cmd+T
+async function createNewTabDebounced() {
+    if (isCreatingTab) {
+        console.log('Tab creation already in progress, ignoring...');
+        return;
+    }
+    
+    isCreatingTab = true;
+    try {
+        await createNewTab();
+    } finally {
+        // Reset flag after a short delay to prevent rapid creation
+        setTimeout(() => {
+            isCreatingTab = false;
+        }, 500);
+    }
+}
+
+// Immediate render without debouncing (for initial load)
+function renderTabsImmediate() {
+    // Performance: Only update changed tabs instead of rebuilding everything
+    const currentTabIds = new Set(tabs.map(t => t.id));
+    
+    // Remove deleted tabs from cache
+    for (const [tabId, element] of tabElementCache.entries()) {
+        if (!currentTabIds.has(tabId)) {
+            element.remove();
+            tabElementCache.delete(tabId);
+        }
+    }
+    
+    // Update or create tabs
     tabs.forEach((tab, index) => {
-        const tabEl = document.createElement('div');
-        tabEl.className = `tab ${tab.id === activeTabId ? 'active' : ''}`;
-        tabEl.setAttribute('draggable', 'true');
-        tabEl.dataset.tabId = tab.id;
+        let tabEl = tabElementCache.get(tab.id);
+        const isActive = tab.id === activeTabId;
+        
+        if (!tabEl) {
+            // Create new tab element
+            tabEl = document.createElement('div');
+            tabEl.setAttribute('draggable', 'true');
+            tabEl.dataset.tabId = tab.id;
+            tabElementCache.set(tab.id, tabEl);
+        }
+        
+        // Update tab state (minimal DOM manipulation)
+        tabEl.className = `tab ${isActive ? 'active' : ''}`;
         tabEl.dataset.tabIndex = index;
         
-        // Favicon with engine indicator
-        const faviconEl = document.createElement('div');
-        faviconEl.className = 'tab-favicon';
-        
-        // Color-coded by engine
-        const engineColors = {
-            'tor': '#7C3AED',
-            'prism': '#34C759',
-            'chromium': '#007AFF',
-            'firefox': '#FF9500'
-        };
-        
-        faviconEl.textContent = tab.url ? '●' : '○';
-        faviconEl.style.color = engineColors[tab.engine] || '#86868b';
-        
-        const titleEl = document.createElement('div');
-        titleEl.className = 'tab-title';
-        titleEl.textContent = tab.title;
-        
-        const closeEl = document.createElement('button');
-        closeEl.className = 'tab-close';
-        closeEl.textContent = '×';
-        closeEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeTab(tab.id);
-        });
+        // Performance: Only rebuild tab content if it doesn't exist
+        if (!tabEl.hasChildNodes()) {
+            // Color-coded by engine
+            const engineColors = {
+                'tor': '#7C3AED',
+                'prism': '#34C759',
+                'chromium': '#007AFF',
+                'firefox': '#FF9500'
+            };
+            
+            const faviconEl = document.createElement('div');
+            faviconEl.className = 'tab-favicon';
+            faviconEl.textContent = tab.url ? '●' : '○';
+            faviconEl.style.color = engineColors[tab.engine] || '#86868b';
+            
+            const titleEl = document.createElement('div');
+            titleEl.className = 'tab-title';
+            
+            // Check if tab is sleeping and add indicator
+            const isSleeping = sleepingTabs.has(tab.id);
+            if (isSleeping) {
+                titleEl.innerHTML = `😴 ${tab.title || 'Sleeping Tab'}`;
+                titleEl.title = `${tab.title || 'Sleeping Tab'} (Sleeping - Click to wake)`;
+            } else {
+                titleEl.textContent = tab.title || 'New Tab';
+                titleEl.title = tab.title || 'New Tab';
+            }
+            
+            const closeEl = document.createElement('button');
+            closeEl.className = 'tab-close';
+            closeEl.textContent = '×';
+            closeEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
+            });
 
-        tabEl.appendChild(faviconEl);
-        tabEl.appendChild(titleEl);
-        tabEl.appendChild(closeEl);
-        
-        // Click to switch
-        tabEl.addEventListener('click', () => {
-            switchToTab(tab.id);
-        });
+            tabEl.appendChild(faviconEl);
+            tabEl.appendChild(titleEl);
+            tabEl.appendChild(closeEl);
+            
+            // Click to switch
+            tabEl.addEventListener('click', () => {
+                switchToTab(tab.id);
+            });
 
-        // Drag and drop functionality
-        tabEl.addEventListener('dragstart', handleTabDragStart);
-        tabEl.addEventListener('dragover', handleTabDragOver);
-        tabEl.addEventListener('drop', handleTabDrop);
-        tabEl.addEventListener('dragend', handleTabDragEnd);
-        tabEl.addEventListener('dragenter', handleTabDragEnter);
-        tabEl.addEventListener('dragleave', handleTabDragLeave);
+            // Drag and drop functionality
+            tabEl.addEventListener('dragstart', handleTabDragStart);
+            tabEl.addEventListener('dragover', handleTabDragOver);
+            tabEl.addEventListener('drop', handleTabDrop);
+            tabEl.addEventListener('dragend', handleTabDragEnd);
+            tabEl.addEventListener('dragenter', handleTabDragEnter);
+            tabEl.addEventListener('dragleave', handleTabDragLeave);
+        } else {
+            // Just update title and favicon if already built
+            const titleEl = tabEl.querySelector('.tab-title');
+            const faviconEl = tabEl.querySelector('.tab-favicon');
+            
+            // Check if tab is sleeping and update accordingly
+            const isSleeping = sleepingTabs.has(tab.id);
+            if (titleEl) {
+                if (isSleeping) {
+                    titleEl.innerHTML = `😴 ${tab.title || 'Sleeping Tab'}`;
+                    titleEl.title = `${tab.title || 'Sleeping Tab'} (Sleeping - Click to wake)`;
+                } else {
+                    titleEl.textContent = tab.title || 'New Tab';
+                    titleEl.title = tab.title || 'New Tab';
+                }
+            }
+            
+            if (faviconEl) {
+                faviconEl.textContent = tab.url ? '●' : '○';
+                const engineColors = {
+                    'tor': '#7C3AED',
+                    'prism': '#34C759',
+                    'chromium': '#007AFF',
+                    'firefox': '#FF9500'
+                };
+                faviconEl.style.color = engineColors[tab.engine] || '#86868b';
+            }
+        }
 
-        tabBar.appendChild(tabEl);
+        // Ensure correct position in DOM
+        const currentIndex = Array.from(tabBar.children).indexOf(tabEl);
+        if (currentIndex !== index) {
+            if (index >= tabBar.children.length - 1) {
+                tabBar.insertBefore(tabEl, tabBar.lastChild); // Before new tab button
+            } else {
+                tabBar.insertBefore(tabEl, tabBar.children[index]);
+            }
+        }
     });
 
-    // Add new tab button
-    const newTabBtn = document.createElement('button');
-    newTabBtn.className = 'tab-new';
-    newTabBtn.textContent = '+';
-    newTabBtn.addEventListener('click', createNewTab);
-    tabBar.appendChild(newTabBtn);
+    // Add new tab button if it doesn't exist
+    let newTabBtn = tabBar.querySelector('.tab-new');
+    if (!newTabBtn) {
+        newTabBtn = document.createElement('button');
+        newTabBtn.className = 'tab-new';
+        newTabBtn.textContent = '+';
+        newTabBtn.addEventListener('click', createNewTab);
+        tabBar.appendChild(newTabBtn);
+    }
 }
 
 // Tab drag and drop handlers
@@ -854,6 +1132,9 @@ async function navigateTo(input) {
 
     console.log('Navigating to:', url, 'in existing tab:', tab.id);
 
+    // Set loading state for this tab
+    setTabLoading(tab.id, true);
+    
     // Update tab state
     tab.url = url;
     tab.isLoading = true;
@@ -874,10 +1155,15 @@ async function navigateTo(input) {
             await ipcRenderer.invoke('engine:showTab', tab.id);
         }
         
+        // Clear loading state
+        setTabLoading(tab.id, false);
         tab.isLoading = false;
         renderTabs();
     } catch (error) {
         console.error('Navigation failed:', error);
+        
+        // Clear loading state on error
+        setTabLoading(tab.id, false);
         tab.isLoading = false;
         
         if (activeTabId === tab.id) {
@@ -928,13 +1214,7 @@ async function handlePrismProtocol(url) {
 }
 
 async function showStartPage() {
-    // Hide all BrowserViews so start page is interactive
-    try {
-        await ipcRenderer.invoke('engine:hideAllViews');
-    } catch (error) {
-        console.error('Failed to hide views:', error);
-    }
-    
+    // Don't hide all views - just show start page
     startPage.classList.remove('hidden');
     addressBar.value = '';
     
@@ -981,29 +1261,7 @@ function updateEngineBadge() {
 }
 
 // Loading Bar Functions
-function showLoadingBar() {
-    if (loadingBar && !loadingBarActive) {
-        loadingBarActive = true;
-        loadingBar.classList.remove('complete', 'fade-out');
-        loadingBar.classList.add('loading');
-    }
-}
-
-function hideLoadingBar() {
-    if (loadingBar && loadingBarActive) {
-        loadingBarActive = false;
-        loadingBar.classList.remove('loading');
-        loadingBar.classList.add('complete');
-        // Fade out after animation completes
-        setTimeout(() => {
-            loadingBar.classList.add('fade-out');
-            // Reset after fade out
-            setTimeout(() => {
-                loadingBar.classList.remove('complete', 'fade-out');
-            }, 300);
-        }, 200);
-    }
-}
+// Loading bar removed - was causing issues
 
 // Security Indicator Functions
 function updateSecurityIndicator(url) {
@@ -1042,7 +1300,7 @@ function updateSecurityIndicator(url) {
 
 // Handle engine events (title updates, loading state, etc.)
 function handleEngineEvent(eventName, data) {
-    console.log('Engine event:', eventName, data);
+    // Removed console.log for performance - causes jitter
     
     const tab = tabs.find(t => t.id === data.tabId);
     if (!tab) return;
@@ -1064,18 +1322,13 @@ function handleEngineEvent(eventName, data) {
             break;
         case 'loading-start':
             tab.isLoading = true;
-            if (tab.id === activeTabId) {
-                showLoadingBar();
-            }
             renderTabs();
             break;
         case 'loading-stop':
             tab.isLoading = false;
-            if (tab.id === activeTabId) {
-                hideLoadingBar();
-            }
             // Add to browsing history when page finishes loading
-            if (data.url && data.url !== 'about:blank' && !data.url.startsWith('prism://')) {
+            // NEVER track Tor browsing - complete amnesia mode
+            if (data.url && data.url !== 'about:blank' && !data.url.startsWith('prism://') && tab.engine !== 'tor') {
                 ipcRenderer.invoke('data:addToHistory', data.url, data.title || tab.title, tab.engine).catch(err => {
                     console.error('Failed to add to history:', err);
                 });
@@ -1501,8 +1754,8 @@ function addAITabMessage(role, content) {
     messageEl.appendChild(bubbleEl);
     aiTabMessages.appendChild(messageEl);
     
-    // Scroll to bottom
-    aiTabMessages.scrollTop = aiTabMessages.scrollHeight;
+    // Scroll to bottom with smooth animation
+    smoothScrollToBottom(aiTabMessages);
     
     return messageEl;
 }
@@ -1527,6 +1780,267 @@ function generateSimulatedAIResponse(query) {
 window.createWallet = createWallet;
 window.importWallet = importWallet;
 
+// ===== HISTORY FUNCTIONS =====
+
+async function openHistory() {
+    console.log('Opening history...');
+    
+    // Hide BrowserViews so modal is on top
+    try {
+        await ipcRenderer.invoke('engine:hideAllViews');
+    } catch (error) {
+        console.error('Failed to hide views:', error);
+    }
+    
+    // Load and show history
+    await loadHistory();
+    historyModal.classList.add('active');
+}
+
+async function loadHistory(limit = 100, searchQuery = '') {
+    try {
+        const history = await ipcRenderer.invoke('data:getHistory', limit, searchQuery);
+        
+        // Update count
+        historyCount.textContent = `${history.length} item${history.length !== 1 ? 's' : ''}`;
+        
+        // Clear list
+        historyList.innerHTML = '';
+        
+        if (history.length === 0) {
+            historyList.innerHTML = '<div style="text-align: center; padding: 40px; color: #86868b;">No history found</div>';
+            return;
+        }
+        
+        // Group history by date
+        const grouped = groupHistoryByDate(history);
+        
+        // Render grouped history
+        for (const [date, items] of Object.entries(grouped)) {
+            // Date header
+            const dateHeader = document.createElement('div');
+            dateHeader.style.cssText = 'padding: 12px 16px; font-weight: 600; font-size: 14px; color: #1d1d1f; background: #f5f5f7; border-bottom: 1px solid #d2d2d7;';
+            dateHeader.textContent = date;
+            historyList.appendChild(dateHeader);
+            
+            // History items
+            items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid #f5f5f7; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s;';
+                itemEl.addEventListener('mouseenter', () => {
+                    itemEl.style.background = '#f5f5f7';
+                });
+                itemEl.addEventListener('mouseleave', () => {
+                    itemEl.style.background = 'transparent';
+                });
+                
+                // Engine badge
+                const engineBadge = document.createElement('span');
+                engineBadge.style.cssText = 'font-size: 10px; padding: 2px 6px; border-radius: 4px; color: white; flex-shrink: 0;';
+                engineBadge.textContent = item.engine || 'unknown';
+                
+                // Set engine color
+                const engineColors = {
+                    'firefox': '#FF9500',
+                    'chromium': '#007AFF',
+                    'tor': '#5856D6',
+                    'prism': '#34C759'
+                };
+                engineBadge.style.background = engineColors[item.engine] || '#86868b';
+                
+                // Content
+                const contentEl = document.createElement('div');
+                contentEl.style.cssText = 'flex: 1; min-width: 0;';
+                
+                const titleEl = document.createElement('div');
+                titleEl.style.cssText = 'font-size: 14px; font-weight: 500; color: #1d1d1f; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                titleEl.textContent = item.title;
+                
+                const urlEl = document.createElement('div');
+                urlEl.style.cssText = 'font-size: 12px; color: #86868b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                urlEl.textContent = item.url;
+                
+                contentEl.appendChild(titleEl);
+                contentEl.appendChild(urlEl);
+                
+                // Time and visit count
+                const metaEl = document.createElement('div');
+                metaEl.style.cssText = 'text-align: right; font-size: 12px; color: #86868b; flex-shrink: 0;';
+                const timeStr = formatTime(item.timestamp);
+                const visitStr = item.visitCount > 1 ? `${item.visitCount} visits` : '1 visit';
+                metaEl.innerHTML = `${timeStr}<br>${visitStr}`;
+                
+                itemEl.appendChild(engineBadge);
+                itemEl.appendChild(contentEl);
+                itemEl.appendChild(metaEl);
+                
+                // Click to navigate
+                itemEl.addEventListener('click', async () => {
+                    historyModal.classList.remove('active');
+                    await navigateTo(item.url);
+                });
+                
+                historyList.appendChild(itemEl);
+            });
+        }
+        
+    } catch (error) {
+        console.error('Failed to load history:', error);
+        historyList.innerHTML = `<div style="text-align: center; padding: 40px; color: #FF3B30;">Failed to load history: ${error.message}</div>`;
+    }
+}
+
+function groupHistoryByDate(history) {
+    const groups = {};
+    const now = new Date();
+    
+    history.forEach(item => {
+        const itemDate = new Date(item.timestamp);
+        const daysDiff = Math.floor((now - itemDate) / (1000 * 60 * 60 * 24));
+        
+        let label;
+        if (daysDiff === 0) {
+            label = 'Today';
+        } else if (daysDiff === 1) {
+            label = 'Yesterday';
+        } else if (daysDiff < 7) {
+            label = `${daysDiff} days ago`;
+        } else {
+            label = itemDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        
+        if (!groups[label]) {
+            groups[label] = [];
+        }
+        groups[label].push(item);
+    });
+    
+    return groups;
+}
+
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+// ===== DEPENDENCY STATUS =====
+
+function showDependencyStatus(result) {
+    const modal = document.getElementById('dependencyModal');
+    const statusEl = document.getElementById('dependencyStatus');
+    const actionsEl = document.getElementById('dependencyActions');
+    
+    if (!modal || !statusEl) return;
+    
+    const { dependencies, allInstalled } = result;
+    
+    let html = '<div style="margin-bottom: 16px;">';
+    
+    // Summary
+    if (allInstalled) {
+        html += `
+            <div style="text-align: center; padding: 20px; background: #e8f5e9; border-radius: 8px; margin-bottom: 20px;">
+                <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                <div style="font-weight: 600; color: #2e7d32;">All Required Dependencies Installed!</div>
+                <div style="font-size: 13px; color: #66bb6a; margin-top: 4px;">Prism Browser is fully operational</div>
+            </div>
+        `;
+    } else {
+        html += `
+            <div style="text-align: center; padding: 20px; background: #fff3cd; border-radius: 8px; margin-bottom: 20px;">
+                <div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+                <div style="font-weight: 600; color: #856404;">Some Dependencies Missing</div>
+                <div style="font-size: 13px; color: #856404; margin-top: 4px;">Install missing dependencies for full functionality</div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    // Dependency list
+    html += '<div style="display: flex; flex-direction: column; gap: 12px;">';
+    
+    for (const [name, dep] of Object.entries(dependencies)) {
+        const status = dep.installed ? '✅' : '❌';
+        const statusColor = dep.installed ? '#34C759' : '#FF3B30';
+        const statusText = dep.installed ? 'Installed' : 'Not Installed';
+        const required = dep.required ? 'REQUIRED' : 'OPTIONAL';
+        const requiredColor = dep.required ? '#FF3B30' : '#86868b';
+        
+        html += `
+            <div style="padding: 16px; background: #f5f5f7; border-radius: 8px; border-left: 4px solid ${statusColor};">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">
+                            ${status} ${name.toUpperCase()}
+                            <span style="font-size: 11px; padding: 2px 6px; background: ${dep.installed ? '#e8f5e9' : '#ffebee'}; color: ${statusColor}; border-radius: 4px; margin-left: 8px;">${statusText}</span>
+                            <span style="font-size: 11px; padding: 2px 6px; background: white; color: ${requiredColor}; border-radius: 4px; margin-left: 4px;">${required}</span>
+                        </div>
+                        ${dep.version ? `<div style="font-size: 13px; color: #86868b;">Version: ${dep.version}</div>` : ''}
+                        ${dep.path && dep.path !== 'Built-in (Electron)' ? `<div style="font-size: 12px; color: #86868b; margin-top: 4px;">📍 ${dep.path}</div>` : ''}
+                    </div>
+                </div>
+                
+                ${!dep.installed ? `
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #d2d2d7;">
+                        <div style="font-size: 13px; margin-bottom: 8px;">
+                            ${getDepDescription(name)}
+                        </div>
+                        <button onclick="installDependency('${name}')" style="padding: 8px 16px; background: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+                            📥 Install ${name.toUpperCase()}
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    statusEl.innerHTML = html;
+    
+    // Show actions
+    if (actionsEl) {
+        actionsEl.style.display = 'block';
+    }
+    
+    // Show modal if there are missing dependencies
+    if (!allInstalled) {
+        modal.style.display = 'block';
+        modal.classList.add('active');
+    } else {
+        // Auto-close after 3 seconds if all installed
+        setTimeout(() => {
+            modal.style.display = 'none';
+            modal.classList.remove('active');
+        }, 3000);
+    }
+}
+
+function getDepDescription(name) {
+    const descriptions = {
+        php: '🖥️ <strong>Required for backend features:</strong> HavenPay, AI services, advanced features',
+        tor: '🔒 <strong>Enable anonymous browsing:</strong> Connect to Tor network for maximum privacy',
+        firefox: '🦊 <strong>Native Firefox engine:</strong> Use real Firefox rendering for best compatibility',
+        chromium: '⚡ <strong>Built-in engine:</strong> Already available via Electron'
+    };
+    return descriptions[name] || 'Optional dependency for enhanced functionality';
+}
+
+// Global function for install buttons
+window.installDependency = async function(name) {
+    const instructions = await ipcRenderer.invoke('dependencies:getInstructions', name);
+    const confirmed = confirm(`Install ${name.toUpperCase()}?\n\n${instructions}\n\nClick OK to open the download page.`);
+    
+    if (confirmed) {
+        await ipcRenderer.invoke('dependencies:openInstallPage', name);
+        alert(`Opening ${name} download page in your browser.\n\nAfter installing, click "Recheck Dependencies" below.`);
+    }
+};
+
 // Start the app
-init();
+if (!isInitialized) {
+    init();
+    isInitialized = true;
+}
 

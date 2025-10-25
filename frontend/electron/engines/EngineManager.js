@@ -18,6 +18,11 @@ class EngineManager {
         this.eventListeners = new Map();
         this.initialized = false;
         
+        // Deep sleep management
+        this.maxActiveTabs = 15; // Maximum web tabs before deep sleep (increased from 10)
+        this.tabAccessOrder = []; // LRU order for tab management
+        this.sleepingTabs = new Map(); // tabId -> { url, title, engine, timestamp }
+        
         // Register IPC handlers immediately so they're available before initialization completes
         this.setupIPC();
     }
@@ -25,6 +30,7 @@ class EngineManager {
     async initialize() {
         try {
             console.log('🚀 Initializing Engine Manager...');
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
             // Initialize all engines
             const chromium = new ChromiumEngine({ 
@@ -39,8 +45,8 @@ class EngineManager {
             
             const tor = new TorEngine({ 
                 mainWindow: this.mainWindow,
-                eventHandler: (event, data) => this.handleEngineEvent(event, data),
-                extensionManager: this.extensionManager
+                eventHandler: (event, data) => this.handleEngineEvent(event, data)
+                // NO extensionManager - Tor runs with no extensions for maximum privacy
             });
             
             const prism = new PrismEngine({ 
@@ -49,23 +55,55 @@ class EngineManager {
                 eventHandler: (event, data) => this.handleEngineEvent(event, data)
             });
 
-            // Initialize engines
-            await Promise.all([
-                chromium.initialize(),
-                firefox.initialize(),
-                tor.initialize(),
-                prism.initialize()
-            ]);
-
-            // Store engines
+            // Store engines immediately (before initialization)
             this.engines.set('chromium', chromium);
             this.engines.set('firefox', firefox);
             this.engines.set('tor', tor);
             this.engines.set('prism', prism);
 
+            // Initialize engines one by one with detailed logging
+            console.log('\n📦 Initializing Chromium Engine...');
+            try {
+                await chromium.initialize();
+                console.log(`   ${chromium.ready ? '✅' : '❌'} Chromium: ${chromium.ready ? 'READY' : 'FAILED'}`);
+            } catch (err) {
+                console.error('   ❌ Chromium initialization error:', err.message);
+            }
+
+            console.log('\n🦊 Initializing Firefox Engine...');
+            try {
+                await firefox.initialize();
+                console.log(`   ${firefox.ready ? '✅' : '❌'} Firefox: ${firefox.ready ? 'READY' : 'FAILED'}`);
+            } catch (err) {
+                console.error('   ❌ Firefox initialization error:', err.message);
+            }
+
+            console.log('\n🧅 Initializing Tor Engine...');
+            try {
+                await tor.initialize();
+                console.log(`   ${tor.ready ? '✅' : '❌'} Tor: ${tor.ready ? 'READY' : 'FAILED'}`);
+            } catch (err) {
+                console.error('   ❌ Tor initialization error:', err.message);
+            }
+
+            console.log('\n🌈 Initializing Prism Engine...');
+            try {
+                await prism.initialize();
+                console.log(`   ${prism.ready ? '✅' : '❌'} Prism: ${prism.ready ? 'READY' : 'FAILED'}`);
+            } catch (err) {
+                console.error('   ❌ Prism initialization error:', err.message);
+            }
+
             this.initialized = true;
+            
+            console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             console.log('✅ Engine Manager initialized');
-            console.log('   Available engines:', Array.from(this.engines.keys()).join(', '));
+            console.log('📊 Engine Status Report:');
+            for (const [name, engine] of this.engines.entries()) {
+                const status = engine.ready ? '✅ READY' : '❌ NOT READY';
+                console.log(`   ${status} - ${name.toUpperCase()}`);
+            }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
             
             return true;
         } catch (error) {
@@ -121,6 +159,15 @@ class EngineManager {
             },
             'engine:getURL': async (event, tabId) => {
                 return await this.getURL(tabId);
+            },
+            'engine:isTabSleeping': async (event, tabId) => {
+                return this.isTabSleeping(tabId);
+            },
+            'engine:getSleepingTabInfo': async (event, tabId) => {
+                return this.getSleepingTabInfo(tabId);
+            },
+            'engine:wakeTabFromSleep': async (event, tabId) => {
+                return await this.wakeTabFromSleep(tabId);
             },
             'engine:canGoBack': async (event, tabId) => {
                 return await this.canGoBack(tabId);
@@ -189,6 +236,12 @@ class EngineManager {
             engineTabId: tabId
         });
 
+        // Update access order
+        this.updateTabAccess(tabId);
+
+        // Manage deep sleep after creating new tab
+        await this.manageTabSleep();
+
         console.log(`✅ Tab ${tabId} created with ${engineName} engine`);
         return result;
     }
@@ -212,24 +265,240 @@ class EngineManager {
     }
 
     async showTab(tabId) {
+        // Check if tab is sleeping first
+        if (this.isTabSleeping(tabId)) {
+            console.log(`🌅 Waking sleeping tab ${tabId}...`);
+            const wakeResult = await this.wakeTabFromSleep(tabId);
+            if (!wakeResult.success) {
+                throw new Error('Failed to wake sleeping tab: ' + wakeResult.error);
+            }
+        }
+
         const tabInfo = this.tabs.get(tabId);
         if (!tabInfo) {
             throw new Error('Tab not found: ' + tabId);
         }
 
-        // Hide all other tabs first
+        // Update access order (LRU)
+        this.updateTabAccess(tabId);
+
+        // Only hide other tabs that are currently visible, don't freeze background tabs
         for (const [otherTabId, otherTabInfo] of this.tabs.entries()) {
             if (otherTabId !== tabId) {
                 const engine = this.engines.get(otherTabInfo.engine);
-                await engine.hideTab(otherTabInfo.engineTabId);
+                const engineTab = engine.tabs.get(otherTabInfo.engineTabId);
+                // Only hide if it's currently visible (not frozen)
+                if (engineTab && engineTab.visible) {
+                    await engine.hideTab(otherTabInfo.engineTabId);
+                }
             }
         }
 
-        // Show requested tab
+        // Show requested tab and ensure it's properly maintained
         const engine = this.engines.get(tabInfo.engine);
         await engine.showTab(tabInfo.engineTabId);
         
+        // CRITICAL: Keep background tabs alive by refreshing their state
+        this.maintainBackgroundTabs();
+        
+        // Only manage deep sleep occasionally, not on every tab switch
+        // This prevents unnecessary deep sleep triggers
+        if (Math.random() < 0.1) { // 10% chance to check deep sleep
+            await this.manageTabSleep();
+        }
+        
         return { success: true };
+    }
+
+    // Keep background tabs alive to prevent freezing
+    maintainBackgroundTabs() {
+        for (const [tabId, tabInfo] of this.tabs.entries()) {
+            const engine = this.engines.get(tabInfo.engine);
+            const engineTab = engine.tabs.get(tabInfo.engineTabId);
+            
+            if (engineTab && !engineTab.visible) {
+                // Keep background tab alive by ensuring it's properly maintained
+                try {
+                    // Just check if the tab is still responsive
+                    engineTab.webContents.getTitle().catch(() => {
+                        // If tab is frozen, recreate it
+                        console.log(`🔄 Tab ${tabId} appears frozen, refreshing...`);
+                        this.refreshFrozenTab(tabId, tabInfo);
+                    });
+                } catch (error) {
+                    console.log(`🔄 Tab ${tabId} is frozen, refreshing...`);
+                    this.refreshFrozenTab(tabId, tabInfo);
+                }
+            }
+        }
+    }
+
+    async refreshFrozenTab(tabId, tabInfo) {
+        try {
+            const engine = this.engines.get(tabInfo.engine);
+            const oldTab = engine.tabs.get(tabInfo.engineTabId);
+            
+            if (oldTab) {
+                // Store the current URL before recreating
+                const currentUrl = oldTab.url || '';
+                
+                // Close the frozen tab
+                await engine.closeTab(tabInfo.engineTabId);
+                
+                // Recreate the tab with the same URL
+                const result = await engine.createTab(tabInfo.engineTabId, {});
+                
+                // Navigate to the same URL if it exists
+                if (currentUrl) {
+                    await engine.navigate(tabInfo.engineTabId, currentUrl);
+                }
+                
+                console.log(`✅ Tab ${tabId} refreshed successfully`);
+            }
+        } catch (error) {
+            console.error(`Failed to refresh frozen tab ${tabId}:`, error);
+        }
+    }
+
+    // Deep sleep management - put old tabs to sleep when we have too many
+    async manageTabSleep() {
+        const activeTabs = Array.from(this.tabs.keys());
+        
+        // Only count web tabs (not AI or extensions tabs) for deep sleep
+        const webTabs = activeTabs.filter(tabId => {
+            // Check if it's a web tab by seeing if it has an engine tab
+            const tabInfo = this.tabs.get(tabId);
+            if (!tabInfo) return false;
+            
+            const engine = this.engines.get(tabInfo.engine);
+            if (!engine) return false;
+            
+            const engineTab = engine.tabs.get(tabInfo.engineTabId);
+            return engineTab && engineTab.url && !engineTab.url.startsWith('prism://');
+        });
+        
+        // If we have more than maxActiveTabs WEB TABS, put oldest to sleep
+        if (webTabs.length > this.maxActiveTabs) {
+            const tabsToSleep = webTabs.length - this.maxActiveTabs;
+            const oldestTabs = this.tabAccessOrder.slice(0, tabsToSleep);
+            
+            for (const tabId of oldestTabs) {
+                // Only put web tabs to sleep
+                const tabInfo = this.tabs.get(tabId);
+                if (tabInfo) {
+                    const engine = this.engines.get(tabInfo.engine);
+                    if (engine) {
+                        const engineTab = engine.tabs.get(tabInfo.engineTabId);
+                        if (engineTab && engineTab.url && !engineTab.url.startsWith('prism://')) {
+                            await this.putTabToSleep(tabId);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Put a tab into deep sleep (freeze it but keep its state)
+    async putTabToSleep(tabId) {
+        const tabInfo = this.tabs.get(tabId);
+        if (!tabInfo) return;
+
+        try {
+            const engine = this.engines.get(tabInfo.engine);
+            const engineTab = engine.tabs.get(tabInfo.engineTabId);
+            
+            if (engineTab) {
+                // Store tab state before sleeping
+                this.sleepingTabs.set(tabId, {
+                    url: engineTab.url || '',
+                    title: engineTab.title || 'Sleeping Tab',
+                    engine: tabInfo.engine,
+                    timestamp: Date.now()
+                });
+                
+                // Hide the tab
+                await engine.hideTab(tabInfo.engineTabId);
+                
+                // Close the BrowserView to free memory
+                await engine.closeTab(tabInfo.engineTabId);
+                
+                // Remove from active tabs but keep in our tracking
+                this.tabs.delete(tabId);
+                
+                console.log(`😴 Tab ${tabId} put to deep sleep`);
+            }
+        } catch (error) {
+            console.error(`Failed to put tab ${tabId} to sleep:`, error);
+        }
+    }
+
+    // Wake a tab from deep sleep (refresh it)
+    async wakeTabFromSleep(tabId) {
+        const sleepingTab = this.sleepingTabs.get(tabId);
+        if (!sleepingTab) return;
+
+        try {
+            // Recreate the tab
+            const engine = this.engines.get(sleepingTab.engine);
+            const result = await engine.createTab(tabId, {});
+            
+            // Restore tab info
+            this.tabs.set(tabId, {
+                engine: sleepingTab.engine,
+                engineTabId: tabId
+            });
+            
+            // Navigate to the stored URL
+            if (sleepingTab.url) {
+                await engine.navigate(tabId, sleepingTab.url);
+            }
+            
+            // Remove from sleeping tabs
+            this.sleepingTabs.delete(tabId);
+            
+            // Update access order
+            this.updateTabAccess(tabId);
+            
+            console.log(`🌅 Tab ${tabId} woken from deep sleep`);
+            return { success: true, url: sleepingTab.url, title: sleepingTab.title };
+        } catch (error) {
+            console.error(`Failed to wake tab ${tabId} from sleep:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Update tab access order (LRU) - only for web tabs
+    updateTabAccess(tabId) {
+        // Only track web tabs in LRU order
+        const tabInfo = this.tabs.get(tabId);
+        if (!tabInfo) return;
+        
+        const engine = this.engines.get(tabInfo.engine);
+        if (!engine) return;
+        
+        const engineTab = engine.tabs.get(tabInfo.engineTabId);
+        if (!engineTab || !engineTab.url || engineTab.url.startsWith('prism://')) {
+            return; // Skip AI and extensions tabs
+        }
+        
+        // Remove from current position
+        const index = this.tabAccessOrder.indexOf(tabId);
+        if (index > -1) {
+            this.tabAccessOrder.splice(index, 1);
+        }
+        
+        // Add to end (most recently used)
+        this.tabAccessOrder.push(tabId);
+    }
+
+    // Check if tab is sleeping
+    isTabSleeping(tabId) {
+        return this.sleepingTabs.has(tabId);
+    }
+
+    // Get sleeping tab info
+    getSleepingTabInfo(tabId) {
+        return this.sleepingTabs.get(tabId);
     }
 
     async hideTab(tabId) {
@@ -355,34 +624,54 @@ class EngineManager {
     }
 
     async switchTabEngine(tabId, newEngineName) {
+        console.log(`\n🔄 ========== ENGINE SWITCH START ==========`);
+        console.log(`   Tab ID: ${tabId}`);
+        console.log(`   Target Engine: ${newEngineName}`);
+        
         const tabInfo = this.tabs.get(tabId);
         if (!tabInfo) {
-            throw new Error('Tab not found: ' + tabId);
+            console.error(`❌ Tab not found: ${tabId}`);
+            console.log(`   Available tabs:`, Array.from(this.tabs.keys()));
+            return { success: false, message: 'Tab not found' };
         }
 
         const oldEngineName = tabInfo.engine;
+        console.log(`   Current Engine: ${oldEngineName}`);
         
         if (oldEngineName === newEngineName) {
-            console.log(`Tab ${tabId} already using ${newEngineName}`);
+            console.log(`ℹ️ Tab ${tabId} already using ${newEngineName}`);
             return { success: true, message: 'Already using ' + newEngineName };
         }
 
         const oldEngine = this.engines.get(oldEngineName);
         const newEngine = this.engines.get(newEngineName);
         
+        console.log(`   Old Engine Ready: ${oldEngine?.ready || false}`);
+        console.log(`   New Engine Ready: ${newEngine?.ready || false}`);
+        
         if (!oldEngine) {
-            throw new Error('Old engine not found: ' + oldEngineName);
+            console.error(`❌ Old engine not found: ${oldEngineName}`);
+            console.log(`   Available engines:`, Array.from(this.engines.keys()));
+            return { success: false, message: 'Old engine not found' };
         }
         
         if (!newEngine) {
-            throw new Error('New engine not found: ' + newEngineName);
+            console.error(`❌ New engine not found: ${newEngineName}`);
+            console.log(`   Available engines:`, Array.from(this.engines.keys()));
+            return { success: false, message: 'New engine not found' };
+        }
+        
+        if (!newEngine.ready) {
+            console.error(`❌ Target engine not ready: ${newEngineName}`);
+            return { success: false, message: `${newEngineName} engine not ready` };
         }
 
         console.log(`🔄 Switching tab ${tabId} from ${oldEngineName} to ${newEngineName}...`);
 
+        let currentUrl = '';
         try {
             // Get current state before closing
-            const currentUrl = await oldEngine.getURL(tabInfo.engineTabId);
+            currentUrl = await oldEngine.getURL(tabInfo.engineTabId);
             const oldTab = oldEngine.tabs.get(tabInfo.engineTabId);
             const wasVisible = oldTab ? oldTab.visible : false;
 
@@ -413,12 +702,30 @@ class EngineManager {
             tabInfo.engineTabId = tabId;
 
             console.log(`✅ Tab ${tabId} successfully switched from ${oldEngineName} to ${newEngineName}`);
+            console.log(`========== ENGINE SWITCH END ==========\n`);
             return { success: true, oldEngine: oldEngineName, newEngine: newEngineName };
         } catch (error) {
-            console.error(`❌ Failed to switch tab ${tabId} from ${oldEngineName} to ${newEngineName}:`, error);
-            // Try to recover by keeping the old engine
-            tabInfo.engine = oldEngineName;
-            throw error;
+            console.error(`❌ Failed to switch tab ${tabId} from ${oldEngineName} to ${newEngineName}:`);
+            console.error(`   Error:`, error.message);
+            console.error(`   Stack:`, error.stack);
+            console.log(`========== ENGINE SWITCH FAILED ==========\n`);
+            
+            // Try to recover - recreate tab in old engine
+            try {
+                console.log(`🔄 Attempting to recover tab in ${oldEngineName}...`);
+                await newEngine.closeTab(tabId).catch(() => {});
+                await oldEngine.createTab(tabId, {});
+                if (currentUrl && currentUrl !== 'about:blank') {
+                    await oldEngine.navigate(tabId, currentUrl);
+                }
+                await oldEngine.showTab(tabId);
+                tabInfo.engine = oldEngineName;
+                console.log(`✅ Tab recovered in ${oldEngineName}`);
+            } catch (recoverError) {
+                console.error(`❌ Recovery failed:`, recoverError.message);
+            }
+            
+            return { success: false, message: error.message, oldEngine: oldEngineName };
         }
     }
 
@@ -470,8 +777,15 @@ class EngineManager {
     }
 
     async hideAllViews() {
-        // Remove all BrowserViews from the window (for modals/overlays)
-        this.mainWindow.setBrowserView(null);
+        // Hide all BrowserViews but keep them in memory (for modals/overlays)
+        // Don't remove them completely as it breaks the UI
+        for (const [tabId, tabInfo] of this.tabs.entries()) {
+            const engine = this.engines.get(tabInfo.engine);
+            const engineTab = engine.tabs.get(tabInfo.engineTabId);
+            if (engineTab && engineTab.visible) {
+                await engine.hideTab(tabInfo.engineTabId);
+            }
+        }
         return { success: true };
     }
 

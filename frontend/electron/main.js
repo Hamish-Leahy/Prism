@@ -4,6 +4,7 @@ const EngineManager = require('./engines/EngineManager')
 const ExtensionManager = require('./extensions/ExtensionManager')
 const ExtensionDownloader = require('./extensions/ExtensionDownloader')
 const DataManager = require('./storage/DataManager')
+const DependencyManager = require('./utils/DependencyManager')
 
 // Set app name and dock behavior
 app.setName('Prism')
@@ -31,13 +32,50 @@ app.commandLine.appendSwitch('disable-setuid-sandbox')
 // Make the renderer more like a normal browser
 app.commandLine.appendSwitch('disable-web-security', false)
 
+// ===== Performance Optimizations =====
+// GPU acceleration for better performance
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-accelerated-video-decode')
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas')
+app.commandLine.appendSwitch('ignore-gpu-blacklist')
+app.commandLine.appendSwitch('num-raster-threads', '4')
+
+// Frame synchronization to reduce jitter
+app.commandLine.appendSwitch('enable-begin-frame-scheduling')
+app.commandLine.appendSwitch('disable-features', 'TouchpadOverscrollHistoryNavigation')
+
+// Better performance without breaking rendering
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+
+// Memory optimization
+app.commandLine.appendSwitch('renderer-process-limit', '100')
+
+// High DPI support for better rendering
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
+
+// ===== STANDARD BROWSER SMOOTH SCROLLING =====
+// Use standard browser smooth scrolling (like Chrome/Firefox)
+app.commandLine.appendSwitch('enable-smooth-scrolling')
+app.commandLine.appendSwitch('enable-features', 'SmoothScrolling')
+
+// Standard performance optimizations
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncoder')
+
+// Disable background throttling for better performance
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+
 console.log('[Anti-Detection] Command line switches applied')
+console.log('[Performance] Hardware acceleration enabled')
 
 let mainWindow
 let engineManager
 let extensionManager
 let extensionDownloader
 let dataManager
+let dependencyManager
 
 // Configure engine-specific sessions
 function setupEngineSessions() {
@@ -132,7 +170,7 @@ function createWindow() {
     }
   }
   
-  // Create the main browser window
+  // Create the main browser window with AGGRESSIVE performance optimizations
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -145,7 +183,7 @@ function createWindow() {
       enableRemoteModule: true,
       webSecurity: false, // Needed for cross-origin content
       webviewTag: true,
-      preload: path.join(__dirname, 'preload.js'),
+      // preload: path.join(__dirname, 'preload.js'), // Not needed with nodeIntegration: true
       // DRM Support (Widevine for Netflix, Spotify, etc.)
       plugins: true,
       // Security features
@@ -155,10 +193,22 @@ function createWindow() {
       enableWebSQL: false, // Deprecated, disable for security
       // Media features
       enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential',
-      // Hardware acceleration
+      // Hardware acceleration - CRITICAL FOR MOTION SICKNESS
       hardwareAcceleration: true,
       // WebAuthn / Passkeys support
-      enableWebAuthn: true
+      enableWebAuthn: true,
+      // AGGRESSIVE performance optimizations
+      enableSmoothScrolling: true,
+      backgroundThrottling: false,
+      offscreen: false,
+      // Force 60fps rendering
+      enableLazyLoading: false,
+      // Disable problematic features
+      enableWebSQL: false,
+      // Force hardware acceleration
+      webgl: true,
+      // Optimize for smooth scrolling
+      enableSmoothScrolling: true
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
@@ -168,7 +218,11 @@ function createWindow() {
     transparent: false,
     vibrancy: 'light',
     // Keep traffic lights visible even when window is unfocused
-    hiddenInsetTitleBarButtonsOnBlur: false
+    hiddenInsetTitleBarButtonsOnBlur: false,
+    // CRITICAL: Force 60fps rendering
+    paintWhenInitiallyHidden: false,
+    // Disable background throttling
+    backgroundThrottling: false
   })
 
   // Create Extension Manager first (extensions need to be ready for engines)
@@ -178,9 +232,17 @@ function createWindow() {
   // Pass extensionManager so Tor tabs can load extensions
   engineManager = new EngineManager(mainWindow, extensionManager)
   
-  // Create Data Manager for local persistence
-  dataManager = new DataManager()
-  setupDataIPCHandlers()
+  // Create Data Manager for local persistence (only if not already created)
+  if (!dataManager) {
+    dataManager = new DataManager()
+    setupDataIPCHandlers()
+  }
+  
+  // Create Dependency Manager (only if not already created)
+  if (!dependencyManager) {
+    dependencyManager = new DependencyManager()
+    setupDependencyIPCHandlers()
+  }
 
   // Load the native HTML app
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
@@ -203,8 +265,29 @@ function createWindow() {
 
   // Initialize engines and extensions after window is shown
   mainWindow.webContents.once('did-finish-load', async () => {
-    console.log('📄 Window content loaded, initializing engines...')
+    console.log('📄 Window content loaded, checking dependencies...')
+    
     try {
+      // Check all dependencies first
+      const depCheck = await dependencyManager.checkAll()
+      
+      // Send dependency status to renderer
+      mainWindow.webContents.send('dependencies-checked', depCheck)
+      
+      // Start backend if PHP is available
+      if (depCheck.dependencies.php.installed) {
+        console.log('🚀 Starting backend server...')
+        const backendResult = await dependencyManager.startBackend()
+        if (backendResult.success) {
+          console.log('✅ Backend server started')
+        } else {
+          console.warn('⚠️ Backend server failed to start:', backendResult.error)
+        }
+      } else {
+        console.warn('⚠️ PHP not installed - backend server disabled')
+        console.log('   Install PHP to enable HavenPay, AI features, and more')
+      }
+      
       // Initialize extension manager first (loads and auto-installs uBlock Origin)
       await extensionManager.initialize()
       
@@ -227,6 +310,9 @@ function createWindow() {
 
   // Handle window closed
   mainWindow.on('closed', async () => {
+    if (dependencyManager) {
+      dependencyManager.stopBackend()
+    }
     if (engineManager) {
       await engineManager.shutdown()
       engineManager = null
@@ -463,6 +549,37 @@ function setupDataIPCHandlers() {
   })
 
   console.log('✅ Data IPC handlers registered')
+}
+
+// Dependency Management IPC handlers
+function setupDependencyIPCHandlers() {
+  ipcMain.handle('dependencies:check', async () => {
+    return await dependencyManager.checkAll()
+  })
+
+  ipcMain.handle('dependencies:getStatus', () => {
+    return dependencyManager.getStatus()
+  })
+
+  ipcMain.handle('dependencies:getInstructions', (event, dependency) => {
+    return dependencyManager.getInstallInstructions(dependency)
+  })
+
+  ipcMain.handle('dependencies:openInstallPage', (event, dependency) => {
+    dependencyManager.openInstallPage(dependency)
+    return { success: true }
+  })
+
+  ipcMain.handle('dependencies:startBackend', async () => {
+    return await dependencyManager.startBackend()
+  })
+
+  ipcMain.handle('dependencies:stopBackend', () => {
+    dependencyManager.stopBackend()
+    return { success: true }
+  })
+
+  console.log('✅ Dependency IPC handlers registered')
 }
 
 // IPC handlers

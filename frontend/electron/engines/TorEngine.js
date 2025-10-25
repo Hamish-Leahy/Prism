@@ -18,7 +18,9 @@ class TorEngine extends EngineInterface {
         this.version = '115.0'; // Tor Browser version
         this.session = null;
         this.mainWindow = config.mainWindow;
-        this.partition = 'persist:tor';
+        // NO extensions in Tor mode - maximum privacy, zero traces
+        // IMPORTANT: Use in-memory session for complete amnesia - NOTHING persists
+        this.partition = `tor-amnesia-${Date.now()}`;
         this.torProcess = null;
         this.torSocksPort = 9050;
         this.torControlPort = 9051;
@@ -26,6 +28,7 @@ class TorEngine extends EngineInterface {
         this.torDataDir = path.join(os.tmpdir(), 'prism-tor-data');
         this.torInitialized = false;
         this.tabCircuits = new Map(); // Track Tor circuits per tab
+        console.log('🔒 Tor Engine: Complete amnesia mode enabled - zero data persistence, no extensions');
     }
 
     async initialize() {
@@ -51,17 +54,26 @@ class TorEngine extends EngineInterface {
                 fs.mkdirSync(this.torDataDir, { recursive: true });
             }
 
-            // Create isolated session for Tor engine
+            // Create TEMPORARY in-memory session for Tor engine - NOTHING PERSISTS
             this.session = session.fromPartition(this.partition);
+            
+            // Immediately clear any potential existing data
+            await this.session.clearCache();
+            await this.session.clearStorageData({
+                storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage']
+            });
             
             // Set Tor Browser user agent
             this.session.setUserAgent('Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
             
-            // Maximum privacy settings
+            // Maximum privacy settings - DENY EVERYTHING
             this.session.setPermissionRequestHandler((webContents, permission, callback) => {
-                // Deny ALL permissions for maximum privacy
+                // Deny ALL permissions for maximum privacy in Tor mode
+                console.log(`🔒 Tor: Denied permission: ${permission}`);
                 callback(false);
             });
+            
+            console.log('🔒 Tor: In-memory session created - zero persistence mode active');
 
             // Configure Tor proxy
             await this.setupTorProxy();
@@ -244,14 +256,8 @@ class TorEngine extends EngineInterface {
         // Set Tor Browser user agent for this tab's session
         tabSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0');
         
-        // Load extensions into this Tor tab's session
-        if (this.options.extensionManager) {
-            try {
-                await this.options.extensionManager.loadExtensionsIntoSession(uniquePartition);
-            } catch (error) {
-                console.warn('Failed to load extensions into Tor tab:', error);
-            }
-        }
+        // NO extensions in Tor mode - maximum privacy and anonymity
+        // Extensions can leak identifying information
         
         // Maximum privacy settings for this tab's session
         tabSession.setPermissionRequestHandler((webContents, permission, callback) => {

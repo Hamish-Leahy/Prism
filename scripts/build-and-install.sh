@@ -17,6 +17,8 @@ echo "📦 Installing to Applications..."
 if [ -d "/Applications/Prism Browser.app" ]; then
     rm -rf "/Applications/Prism Browser.app"
     echo "   Removed old version"
+fi
+
 # Copy new version
 cp -R "dist-electron/mac-arm64/Prism Browser.app" /Applications/
 echo "   ✅ Copied to Applications"
