@@ -18,6 +18,67 @@ let isCreatingTab = false;
 // Initialization guard
 let isInitialized = false;
 
+// Performance monitoring
+let performanceMonitor = {
+    lastMemoryCheck: 0,
+    memoryThreshold: 100 * 1024 * 1024, // 100MB
+    heavySites: new Set(['youtube.com', 'netflix.com', 'twitch.tv', 'vimeo.com']),
+    performanceMode: false
+};
+
+// Performance monitoring and optimization
+function checkPerformanceAndOptimize(tab) {
+    const now = Date.now();
+    
+    // Check memory usage every 10 seconds
+    if (now - performanceMonitor.lastMemoryCheck > 10000) {
+        performanceMonitor.lastMemoryCheck = now;
+        
+        // Get memory usage from performance API
+        if (performance.memory) {
+            const usedMemory = performance.memory.usedJSHeapSize;
+            const totalMemory = performance.memory.totalJSHeapSize;
+            const memoryPressure = usedMemory / totalMemory;
+            
+            if (memoryPressure > 0.8) {
+                console.log('🚨 High memory pressure detected in renderer');
+                performanceMonitor.performanceMode = true;
+                // Trigger garbage collection if available
+                if (window.gc) {
+                    window.gc();
+                }
+            } else if (memoryPressure < 0.5) {
+                performanceMonitor.performanceMode = false;
+            }
+        }
+    }
+    
+    // Check if this is a heavy site and optimize
+    if (tab.url) {
+        const url = tab.url.toLowerCase();
+        const isHeavySite = Array.from(performanceMonitor.heavySites).some(site => 
+            url.includes(site)
+        );
+        
+        if (isHeavySite) {
+            console.log(`🚀 Detected heavy site: ${tab.url}, applying optimizations`);
+            optimizeHeavySite(tab);
+        }
+    }
+}
+
+// Optimize heavy sites for better performance
+function optimizeHeavySite(tab) {
+    try {
+        // Request performance optimizations from main process
+        ipcRenderer.invoke('engine:optimizeHeavySite', tab.id).catch(err => 
+            console.error('Failed to optimize heavy site:', err)
+        );
+    } catch (error) {
+        console.error('Error optimizing heavy site:', error);
+    }
+}
+
 // DOM Elements
 const tabBar = document.getElementById('tabBar');
 const addressBar = document.getElementById('addressBar');
@@ -554,7 +615,8 @@ async function createNewTab() {
     renderTabs();
     updateEngineBadge();
     
-    // Show start page immediately for new tab
+    // IMMEDIATELY hide all views and show start page for new tab
+    await hideAllViews();
     await showStartPage();
     
     // Create tab in native engine in background (don't block UI)
@@ -573,6 +635,7 @@ async function createNewTab() {
         if (index > -1) {
             tabs.splice(index, 1);
             tabLoadingStates.delete(tabId);
+            sleepingTabs.delete(tabId);
             renderTabs();
             // Switch to another tab if available
             if (tabs.length > 0) {
@@ -614,8 +677,9 @@ async function closeTab(tabId) {
 
     tabs.splice(index, 1);
     
-    // Clean up loading state
+    // Clean up loading state and sleeping tabs
     tabLoadingStates.delete(tabId);
+    sleepingTabs.delete(tabId);
 
     if (tabs.length === 0) {
         // Show start page instead of creating a new tab
@@ -632,16 +696,25 @@ async function closeTab(tabId) {
 }
 
 async function switchToTab(tabId) {
+    console.log(`🔄 Switching to tab ${tabId} from ${activeTabId}`);
     const oldActiveTabId = activeTabId;
     activeTabId = tabId;
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
+    
+    console.log(`📄 Tab details:`, { id: tab.id, url: tab.url, title: tab.title, engine: tab.engine });
+    
+    // Performance monitoring
+    checkPerformanceAndOptimize(tab);
 
     // IMMEDIATE UI updates - like real browsers
     const extensionsPage = document.getElementById('extensionsPage');
 
     // Check if it's an AI tab
     if (tab.isAITab) {
+        // Hide all OTHER views first to prevent content bleeding
+        await hideOtherViews(tabId);
+        
         // Show AI page IMMEDIATELY
         aiPage.style.display = 'flex';
         startPage.classList.add('hidden');
@@ -650,7 +723,6 @@ async function switchToTab(tabId) {
         updateEngineBadge();
         renderTabs();
         
-        // Don't hide all views for AI tabs - just switch normally
         return;
     } else {
         // Hide AI page IMMEDIATELY
@@ -659,6 +731,9 @@ async function switchToTab(tabId) {
 
     // Check if it's an extensions tab
     if (tab.isExtensionsTab) {
+        // Hide all OTHER views first to prevent content bleeding
+        await hideOtherViews(tabId);
+        
         // Show extensions page IMMEDIATELY
         if (extensionsPage) extensionsPage.style.display = 'flex';
         startPage.classList.add('hidden');
@@ -667,13 +742,15 @@ async function switchToTab(tabId) {
         updateEngineBadge();
         renderTabs();
         
-        // Don't hide all views for extensions tabs - just switch normally
         return;
     } else {
         // Hide extensions page IMMEDIATELY
         if (extensionsPage) extensionsPage.style.display = 'none';
     }
 
+    // Hide all OTHER views first to prevent content bleeding (but not current tab)
+    await hideOtherViews(tabId);
+    
     // Update address bar and security indicator IMMEDIATELY
     if (tab.url) {
         addressBar.value = tab.url;
@@ -712,7 +789,9 @@ async function switchToTab(tabId) {
 
     // Show this tab, hide others (async in background - NON-BLOCKING)
     try {
+        console.log(`🎯 Calling engine:showTab for tab ${tabId}`);
         await ipcRenderer.invoke('engine:showTab', tabId);
+        console.log(`✅ engine:showTab completed for tab ${tabId}`);
         await updateNavButtons();
     } catch (error) {
         console.error('Failed to switch tab:', error);
@@ -731,13 +810,7 @@ async function switchToTab(tabId) {
 const tabElementCache = new Map();
 
 // PROPER BROWSER-LIKE TAB RENDERING - Keep everything in memory
-let renderTabsTimeout = null;
 function renderTabs() {
-    // Clear any pending render
-    if (renderTabsTimeout) {
-        clearTimeout(renderTabsTimeout);
-    }
-    
     // IMMEDIATE rendering - no delays like real browsers
     renderTabsImmediate();
 }
@@ -832,11 +905,11 @@ async function createNewTabDebounced() {
     isCreatingTab = true;
     try {
         await createNewTab();
+    } catch (error) {
+        console.error('Failed to create tab in debounced function:', error);
     } finally {
-        // Reset flag after a short delay to prevent rapid creation
-        setTimeout(() => {
-            isCreatingTab = false;
-        }, 500);
+        // Reset flag immediately after creation completes
+        isCreatingTab = false;
     }
 }
 
@@ -968,7 +1041,7 @@ function renderTabsImmediate() {
         newTabBtn = document.createElement('button');
         newTabBtn.className = 'tab-new';
         newTabBtn.textContent = '+';
-        newTabBtn.addEventListener('click', createNewTab);
+        newTabBtn.addEventListener('click', createNewTabDebounced);
         tabBar.appendChild(newTabBtn);
     }
 }
@@ -1070,9 +1143,9 @@ async function navigateTo(input) {
         if (!tab) return;
     }
     
-    // If on AI tab, don't navigate - it's not a web tab
-    if (tab.isAITab) {
-        console.log('Cannot navigate in AI tab');
+    // If on AI tab or extensions tab, don't navigate - they're not web tabs
+    if (tab.isAITab || tab.isExtensionsTab) {
+        console.log('Cannot navigate in AI or extensions tab');
         return;
     }
 
@@ -1189,8 +1262,29 @@ async function handlePrismProtocol(url) {
     }
 }
 
+// Hide all views to prevent content bleeding
+async function hideAllViews() {
+    try {
+        await ipcRenderer.invoke('engine:hideAllViews');
+    } catch (error) {
+        console.error('Failed to hide all views:', error);
+    }
+}
+
+// Hide all OTHER views except the specified tab to prevent content bleeding
+async function hideOtherViews(currentTabId) {
+    try {
+        await ipcRenderer.invoke('engine:hideOtherViews', currentTabId);
+    } catch (error) {
+        console.error('Failed to hide other views:', error);
+    }
+}
+
 async function showStartPage() {
-    // Don't hide all views - just show start page
+    // Hide all views first to prevent content bleeding
+    await hideAllViews();
+    
+    // Show start page
     startPage.classList.remove('hidden');
     addressBar.value = '';
     
@@ -1652,6 +1746,13 @@ function formatNumber(num) {
 
 // AI Assistant Tab Functions
 async function openAITab(initialQuery = null) {
+    // Check if AI tab already exists
+    const existingAITab = tabs.find(t => t.isAITab);
+    if (existingAITab) {
+        await switchToTab(existingAITab.id);
+        return;
+    }
+    
     // Create a special AI tab
     const tabId = `ai-tab-${tabIdCounter++}`;
     const tab = {
@@ -1665,6 +1766,9 @@ async function openAITab(initialQuery = null) {
 
     tabs.push(tab);
     currentAITabId = tabId;
+    
+    // Initialize loading state
+    setTabLoading(tabId, false);
     
     // Update UI
     renderTabs();

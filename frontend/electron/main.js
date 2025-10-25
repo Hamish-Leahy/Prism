@@ -54,18 +54,67 @@ app.commandLine.appendSwitch('renderer-process-limit', '100')
 // High DPI support for better rendering
 app.commandLine.appendSwitch('force-device-scale-factor', '1')
 
-// ===== STANDARD BROWSER SMOOTH SCROLLING =====
-// Use standard browser smooth scrolling (like Chrome/Firefox)
-app.commandLine.appendSwitch('enable-smooth-scrolling')
-app.commandLine.appendSwitch('enable-features', 'SmoothScrolling')
+// ===== AGGRESSIVE PERFORMANCE OPTIMIZATIONS =====
+// Memory and CPU optimization for heavy websites
+app.commandLine.appendSwitch('max-old-space-size', '8192') // 8GB heap
+app.commandLine.appendSwitch('max-semi-space-size', '128') // Larger semi-space
+app.commandLine.appendSwitch('max-http-header-size', '32768') // Larger headers
+app.commandLine.appendSwitch('max-http-post-size', '104857600') // 100MB POST
 
-// Standard performance optimizations
+// GPU and hardware acceleration
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+app.commandLine.appendSwitch('enable-gpu-memory-buffer-video-frames')
+app.commandLine.appendSwitch('enable-gpu-memory-buffer-compositor-resources')
+app.commandLine.appendSwitch('enable-gpu-memory-buffer-vaapi-video-frames')
+
+// Video and media optimization
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncoder')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeLinux')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeIntel')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeAMD')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoEncodeNVIDIA')
 
-// Disable background throttling for better performance
+// YouTube and video streaming optimizations
+app.commandLine.appendSwitch('enable-features', 'WebRtcHideLocalIpsWithMdns')
+app.commandLine.appendSwitch('enable-features', 'WebRtcUseMinMaxVEADimensions')
+app.commandLine.appendSwitch('enable-features', 'WebRtcUseMinMaxVEADimensions')
+app.commandLine.appendSwitch('enable-features', 'WebRtcUseMinMaxVEADimensions')
+
+// Smooth scrolling and rendering
+app.commandLine.appendSwitch('enable-smooth-scrolling')
+app.commandLine.appendSwitch('enable-features', 'SmoothScrolling')
+app.commandLine.appendSwitch('enable-features', 'ScrollAnchorSerialization')
+app.commandLine.appendSwitch('enable-features', 'ScrollUnification')
+
+// Disable problematic features that cause lag
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor')
+app.commandLine.appendSwitch('disable-features', 'VizHitTestSurfaceLayer')
+app.commandLine.appendSwitch('disable-features', 'VizServiceDisplayCompositor')
+app.commandLine.appendSwitch('disable-features', 'VizServiceNonBlockingMove')
+
+// Background processing optimization
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-ipc-flooding-protection')
+
+// Network and resource optimization
+app.commandLine.appendSwitch('enable-features', 'NetworkService')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceLogging')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceSandbox')
+
+// Memory pressure handling
+app.commandLine.appendSwitch('enable-features', 'MemoryPressure')
+app.commandLine.appendSwitch('enable-features', 'MemoryPressureInRenderer')
+app.commandLine.appendSwitch('enable-features', 'MemoryPressureInGPU')
+
+// Force high priority rendering
+app.commandLine.appendSwitch('enable-features', 'HighPriorityInProcessGPU')
+app.commandLine.appendSwitch('enable-features', 'UseSkiaRenderer')
+app.commandLine.appendSwitch('enable-features', 'UseDnsApiInProc')
 
 console.log('[Anti-Detection] Command line switches applied')
 console.log('[Performance] Hardware acceleration enabled')
@@ -170,7 +219,7 @@ function createWindow() {
     }
   }
   
-  // Create the main browser window with AGGRESSIVE performance optimizations
+  // Create the main browser window with MAXIMUM performance optimizations
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -183,7 +232,6 @@ function createWindow() {
       enableRemoteModule: true,
       webSecurity: false, // Needed for cross-origin content
       webviewTag: true,
-      // preload: path.join(__dirname, 'preload.js'), // Not needed with nodeIntegration: true
       // DRM Support (Widevine for Netflix, Spotify, etc.)
       plugins: true,
       // Security features
@@ -192,8 +240,8 @@ function createWindow() {
       experimentalFeatures: true,
       enableWebSQL: false, // Deprecated, disable for security
       // Media features
-      enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential',
-      // Hardware acceleration - CRITICAL FOR MOTION SICKNESS
+      enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential,WebRTC,WebRTCUseMinMaxVEADimensions',
+      // Hardware acceleration - MAXIMUM PERFORMANCE
       hardwareAcceleration: true,
       // WebAuthn / Passkeys support
       enableWebAuthn: true,
@@ -203,12 +251,22 @@ function createWindow() {
       offscreen: false,
       // Force 60fps rendering
       enableLazyLoading: false,
-      // Disable problematic features
-      enableWebSQL: false,
       // Force hardware acceleration
       webgl: true,
-      // Optimize for smooth scrolling
-      enableSmoothScrolling: true
+      // Memory optimization
+      v8CacheOptions: 'code',
+      // GPU optimization
+      enableWebGL: true,
+      enableWebGL2: true,
+      // Video optimization
+      enableMediaStream: true,
+      enableMediaStreamTrack: true,
+      // Network optimization
+      enableNetworkService: true,
+      // Memory pressure handling
+      enableMemoryPressure: true,
+      // Force high priority
+      enableHighPriority: true
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 20 },
@@ -222,7 +280,22 @@ function createWindow() {
     // CRITICAL: Force 60fps rendering
     paintWhenInitiallyHidden: false,
     // Disable background throttling
-    backgroundThrottling: false
+    backgroundThrottling: false,
+    // Performance optimizations
+    skipTaskbar: false,
+    alwaysOnTop: false,
+    fullscreenable: true,
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
+    closable: true,
+    focusable: true,
+    hasShadow: true,
+    thickFrame: false,
+    // Memory optimization
+    webSecurity: false,
+    allowRunningInsecureContent: false,
+    experimentalFeatures: true
   })
 
   // Create Extension Manager first (extensions need to be ready for engines)

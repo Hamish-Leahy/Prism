@@ -18,10 +18,30 @@ class EngineManager {
         this.eventListeners = new Map();
         this.initialized = false;
         
-        // Deep sleep management
-        this.maxActiveTabs = 15; // Maximum web tabs before deep sleep (increased from 10)
+        // Deep sleep management - DISABLED for now to prevent reloads
+        this.maxActiveTabs = 999; // Effectively disable deep sleep
         this.tabAccessOrder = []; // LRU order for tab management
         this.sleepingTabs = new Map(); // tabId -> { url, title, engine, timestamp }
+        
+        // Advanced resource management
+        this.resourceMonitor = {
+            memoryThreshold: 1024 * 1024 * 1024, // 1GB memory threshold
+            cpuThreshold: 80, // 80% CPU threshold
+            lastCleanup: Date.now(),
+            cleanupInterval: 30000, // 30 seconds
+            heavySites: new Set(['youtube.com', 'netflix.com', 'twitch.tv', 'vimeo.com']),
+            performanceMode: false
+        };
+        
+        // Performance monitoring
+        this.performanceStats = {
+            totalMemory: 0,
+            usedMemory: 0,
+            cpuUsage: 0,
+            activeTabs: 0,
+            sleepingTabs: 0,
+            lastUpdate: Date.now()
+        };
         
         // Register IPC handlers immediately so they're available before initialization completes
         this.setupIPC();
@@ -136,6 +156,9 @@ class EngineManager {
             'engine:hideAllViews': async () => {
                 return await this.hideAllViews();
             },
+            'engine:hideOtherViews': async (event, currentTabId) => {
+                return await this.hideOtherViews(currentTabId);
+            },
             'engine:showActiveView': async () => {
                 return await this.showActiveView();
             },
@@ -168,6 +191,9 @@ class EngineManager {
             },
             'engine:wakeTabFromSleep': async (event, tabId) => {
                 return await this.wakeTabFromSleep(tabId);
+            },
+            'engine:optimizeHeavySite': async (event, tabId) => {
+                return await this.optimizeHeavySiteTab(tabId);
             },
             'engine:canGoBack': async (event, tabId) => {
                 return await this.canGoBack(tabId);
@@ -239,8 +265,8 @@ class EngineManager {
         // Update access order
         this.updateTabAccess(tabId);
 
-        // Manage deep sleep after creating new tab
-        await this.manageTabSleep();
+        // DISABLED: Deep sleep management after creating new tab to prevent reloads
+        // await this.manageTabSleep();
 
         console.log(`✅ Tab ${tabId} created with ${engineName} engine`);
         return result;
@@ -260,19 +286,26 @@ class EngineManager {
         await engine.closeTab(tabInfo.engineTabId);
         this.tabs.delete(tabId);
         
+        // Clean up from access order and sleeping tabs
+        const accessIndex = this.tabAccessOrder.indexOf(tabId);
+        if (accessIndex > -1) {
+            this.tabAccessOrder.splice(accessIndex, 1);
+        }
+        this.sleepingTabs.delete(tabId);
+        
         console.log(`✅ Tab ${tabId} closed`);
         return { success: true };
     }
 
     async showTab(tabId) {
-        // Check if tab is sleeping first
-        if (this.isTabSleeping(tabId)) {
-            console.log(`🌅 Waking sleeping tab ${tabId}...`);
-            const wakeResult = await this.wakeTabFromSleep(tabId);
-            if (!wakeResult.success) {
-                throw new Error('Failed to wake sleeping tab: ' + wakeResult.error);
-            }
-        }
+        // DISABLED: Deep sleep check to prevent reloads
+        // if (this.isTabSleeping(tabId)) {
+        //     console.log(`🌅 Waking sleeping tab ${tabId}...`);
+        //     const wakeResult = await this.wakeTabFromSleep(tabId);
+        //     if (!wakeResult.success) {
+        //         throw new Error('Failed to wake sleeping tab: ' + wakeResult.error);
+        //     }
+        // }
 
         const tabInfo = this.tabs.get(tabId);
         if (!tabInfo) {
@@ -301,11 +334,10 @@ class EngineManager {
         // CRITICAL: Keep background tabs alive by refreshing their state
         this.maintainBackgroundTabs();
         
-        // Only manage deep sleep occasionally, not on every tab switch
-        // This prevents unnecessary deep sleep triggers
-        if (Math.random() < 0.1) { // 10% chance to check deep sleep
-            await this.manageTabSleep();
-        }
+        // DISABLED: Deep sleep system completely to prevent reloads
+        // if (Math.random() < 0.001) { // 0.1% chance to check deep sleep (almost never)
+        //     await this.manageTabSleep();
+        // }
         
         return { success: true };
     }
@@ -330,6 +362,102 @@ class EngineManager {
                     this.refreshFrozenTab(tabId, tabInfo);
                 }
             }
+        }
+        
+        // Update performance stats
+        this.updatePerformanceStats();
+        
+        // Check if we need aggressive cleanup
+        this.checkResourcePressure();
+    }
+    
+    // Update performance statistics
+    updatePerformanceStats() {
+        const now = Date.now();
+        if (now - this.performanceStats.lastUpdate < 5000) return; // Update every 5 seconds
+        
+        this.performanceStats.activeTabs = this.tabs.size;
+        this.performanceStats.sleepingTabs = this.sleepingTabs.size;
+        this.performanceStats.lastUpdate = now;
+        
+        // Get memory usage from main process
+        const memUsage = process.memoryUsage();
+        this.performanceStats.usedMemory = memUsage.heapUsed;
+        this.performanceStats.totalMemory = memUsage.heapTotal;
+        
+        console.log(`📊 Performance: ${this.performanceStats.activeTabs} active, ${this.performanceStats.sleepingTabs} sleeping, ${Math.round(this.performanceStats.usedMemory / 1024 / 1024)}MB memory`);
+    }
+    
+    // Check resource pressure and optimize accordingly
+    checkResourcePressure() {
+        const memUsage = process.memoryUsage();
+        const memoryPressure = memUsage.heapUsed / memUsage.heapTotal;
+        
+        // If memory usage is high, be more aggressive with deep sleep
+        if (memoryPressure > 0.8) {
+            console.log('🚨 High memory pressure detected, triggering aggressive cleanup');
+            this.resourceMonitor.performanceMode = true;
+            this.maxActiveTabs = Math.max(5, this.maxActiveTabs - 2); // Reduce active tabs
+            this.manageTabSleep(); // Force deep sleep
+        } else if (memoryPressure < 0.5) {
+            // If memory usage is low, allow more tabs
+            this.resourceMonitor.performanceMode = false;
+            this.maxActiveTabs = Math.min(20, this.maxActiveTabs + 1); // Allow more tabs
+        }
+        
+        // Check for heavy sites and optimize them
+        this.optimizeHeavySites();
+    }
+    
+    // Optimize heavy sites like YouTube for better performance
+    optimizeHeavySites() {
+        for (const [tabId, tabInfo] of this.tabs.entries()) {
+            try {
+                const engine = this.engines.get(tabInfo.engine);
+                if (engine && engine.tabs.has(tabInfo.engineTabId)) {
+                    const engineTab = engine.tabs.get(tabInfo.engineTabId);
+                    if (engineTab && engineTab.webContents && engineTab.url) {
+                        const url = engineTab.url.toLowerCase();
+                        
+                        // Check if this is a heavy site
+                        const isHeavySite = Array.from(this.resourceMonitor.heavySites).some(site => 
+                            url.includes(site)
+                        );
+                        
+                        if (isHeavySite && !this.sleepingTabs.has(tabId)) {
+                            // Apply heavy site optimizations
+                            this.optimizeHeavySiteTab(tabId, engineTab);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error optimizing heavy site tab ${tabId}:`, error);
+            }
+        }
+    }
+    
+    // Apply specific optimizations for heavy sites
+    optimizeHeavySiteTab(tabId, engineTab) {
+        try {
+            // Only apply safe optimizations that don't interfere with site functionality
+            engineTab.webContents.executeJavaScript(`
+                // Safe performance optimizations only
+                if (window.location.hostname.includes('youtube.com')) {
+                    console.log('🎬 YouTube detected - applying safe optimizations');
+                    // Only add smooth scrolling, no video manipulation
+                    const style = document.createElement('style');
+                    style.textContent = \`
+                        html, body {
+                            scroll-behavior: smooth;
+                        }
+                    \`;
+                    document.head.appendChild(style);
+                }
+            `).catch(err => console.error('Failed to optimize heavy site:', err));
+            
+            console.log(`🚀 Applied safe heavy site optimizations to tab ${tabId}`);
+        } catch (error) {
+            console.error(`Error applying heavy site optimizations to tab ${tabId}:`, error);
         }
     }
 
@@ -377,23 +505,25 @@ class EngineManager {
             return engineTab && engineTab.url && !engineTab.url.startsWith('prism://');
         });
         
+        console.log(`🔍 Deep sleep check: ${webTabs.length} web tabs, max: ${this.maxActiveTabs}, access order:`, this.tabAccessOrder);
+        
         // If we have more than maxActiveTabs WEB TABS, put oldest to sleep
         if (webTabs.length > this.maxActiveTabs) {
             const tabsToSleep = webTabs.length - this.maxActiveTabs;
-            const oldestTabs = this.tabAccessOrder.slice(0, tabsToSleep);
+            
+            // Get the oldest tabs (first in access order) that are actually web tabs
+            const oldestTabs = [];
+            for (const tabId of this.tabAccessOrder) {
+                if (webTabs.includes(tabId) && !this.sleepingTabs.has(tabId)) {
+                    oldestTabs.push(tabId);
+                    if (oldestTabs.length >= tabsToSleep) break;
+                }
+            }
+            
+            console.log(`😴 Putting ${oldestTabs.length} oldest tabs to sleep:`, oldestTabs);
             
             for (const tabId of oldestTabs) {
-                // Only put web tabs to sleep
-                const tabInfo = this.tabs.get(tabId);
-                if (tabInfo) {
-                    const engine = this.engines.get(tabInfo.engine);
-                    if (engine) {
-                        const engineTab = engine.tabs.get(tabInfo.engineTabId);
-                        if (engineTab && engineTab.url && !engineTab.url.startsWith('prism://')) {
-                            await this.putTabToSleep(tabId);
-                        }
-                    }
-                }
+                await this.putTabToSleep(tabId);
             }
         }
     }
@@ -489,6 +619,8 @@ class EngineManager {
         
         // Add to end (most recently used)
         this.tabAccessOrder.push(tabId);
+        
+        console.log(`📝 Updated access order for tab ${tabId}, new order:`, this.tabAccessOrder);
     }
 
     // Check if tab is sleeping
@@ -784,6 +916,21 @@ class EngineManager {
             const engineTab = engine.tabs.get(tabInfo.engineTabId);
             if (engineTab && engineTab.visible) {
                 await engine.hideTab(tabInfo.engineTabId);
+            }
+        }
+        return { success: true };
+    }
+
+    async hideOtherViews(currentTabId) {
+        // Hide all OTHER BrowserViews except the current one to prevent content bleeding
+        // This prevents the current tab from refreshing when switching
+        for (const [tabId, tabInfo] of this.tabs.entries()) {
+            if (tabId !== currentTabId) {
+                const engine = this.engines.get(tabInfo.engine);
+                const engineTab = engine.tabs.get(tabInfo.engineTabId);
+                if (engineTab && engineTab.visible) {
+                    await engine.hideTab(tabInfo.engineTabId);
+                }
             }
         }
         return { success: true };

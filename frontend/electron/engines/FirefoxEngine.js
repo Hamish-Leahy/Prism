@@ -97,8 +97,7 @@ class FirefoxEngine extends EngineInterface {
             throw new Error('Tab already exists: ' + tabId);
         }
 
-        // Use Electron BrowserView with Firefox-like configuration and DRM support
-        // In a full implementation, this would use actual Gecko
+        // Use Electron BrowserView with MAXIMUM performance configuration
         const view = new BrowserView({
             webPreferences: {
                 partition: this.partition,
@@ -107,11 +106,11 @@ class FirefoxEngine extends EngineInterface {
                 sandbox: true,
                 webSecurity: true,
                 allowRunningInsecureContent: false,
-                experimentalFeatures: false, // Firefox doesn't enable experimental features by default
+                experimentalFeatures: true, // Enable for performance
                 webgl: true,
                 plugins: true, // Enable for Widevine DRM
                 // DRM Support
-                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential',
+                enableBlinkFeatures: 'MediaCapabilities,EncryptedMediaExtensions,PublicKeyCredential,WebRTC,WebRTCUseMinMaxVEADimensions',
                 hardwareAcceleration: true,
                 // WebAuthn / Passkeys / iCloud Keychain support
                 enableWebAuthn: true,
@@ -120,9 +119,26 @@ class FirefoxEngine extends EngineInterface {
                 webviewTag: false,
                 // Smooth scrolling optimizations
                 enableSmoothScrolling: true,
-                // Performance optimizations
+                // AGGRESSIVE performance optimizations
                 offscreen: false,
-                backgroundThrottling: false
+                backgroundThrottling: false,
+                // Memory optimization
+                v8CacheOptions: 'code',
+                // GPU optimization
+                enableWebGL: true,
+                enableWebGL2: true,
+                // Video optimization
+                enableMediaStream: true,
+                enableMediaStreamTrack: true,
+                // Network optimization
+                enableNetworkService: true,
+                // Memory pressure handling
+                enableMemoryPressure: true,
+                // Force high priority
+                enableHighPriority: true,
+                // YouTube and video optimizations
+                enableWebRTC: true,
+                enableWebRTCUseMinMaxVEADimensions: true
             }
         });
 
@@ -132,13 +148,41 @@ class FirefoxEngine extends EngineInterface {
         // Set Firefox user agent with more realistic details
         webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/131.0');
         
-        // Use standard browser smooth scrolling
+        // Essential performance CSS injection
         webContents.on('did-finish-load', () => {
+            // Inject ONLY essential smooth scrolling CSS
             webContents.insertCSS(`
                 html, body {
                     scroll-behavior: smooth;
                 }
             `).catch(err => console.error('Failed to inject smooth scrolling CSS:', err));
+            
+            // DISABLED: YouTube-specific optimizations causing reloads
+            // webContents.executeJavaScript(`
+            //     // Force hardware acceleration for video elements
+            //     document.addEventListener('DOMContentLoaded', function() {
+            //         const videos = document.querySelectorAll('video');
+            //         videos.forEach(video => {
+            //             video.style.willChange = 'transform';
+            //             video.style.transform = 'translateZ(0)';
+            //             video.style.backfaceVisibility = 'hidden';
+            //         });
+            //     });
+            //     
+            //     // Optimize YouTube player
+            //     if (window.location.hostname.includes('youtube.com')) {
+            //         // Force hardware acceleration
+            //         const style = document.createElement('style');
+            //         style.textContent = \`
+            //             #player, #movie_player, .html5-video-player {
+            //                 will-change: transform !important;
+            //                 transform: translateZ(0) !important;
+            //                 backface-visibility: hidden !important;
+            //             }
+            //         \`;
+            //         document.head.appendChild(style);
+            //     }
+            // `).catch(err => console.error('Failed to inject YouTube optimizations:', err));
         });
 
         // Store view reference
