@@ -656,6 +656,11 @@ function setupDataIPCHandlers() {
   ipcMain.handle('data:deletePassword', async (event, id) => {
     return dataManager.deletePassword(id)
   })
+  
+  // Test handler for module loader
+  ipcMain.handle('test:ping', async () => {
+    return { success: true, message: 'IPC communication working' }
+  })
 
   // Browsing History
   ipcMain.handle('data:addToHistory', async (event, url, title, engine) => {

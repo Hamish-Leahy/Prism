@@ -15,6 +15,12 @@ async function init() {
     console.log('🚀 Initializing Prism Browser...');
     
     try {
+        // Wait for modules to be loaded
+        if (window.moduleLoader && !window.moduleLoader.isLoaded()) {
+            console.log('⏳ Waiting for modules to load...');
+            await window.moduleLoader.loadAllModules();
+        }
+        
         // Initialize managers
         tabManager = new TabManager();
         navigationManager = new NavigationManager(tabManager);
@@ -29,7 +35,7 @@ async function init() {
         setupIPCListeners();
         
         // Wait for engines to be ready
-        console.log('⏳ Waiting for engines to initialize...');
+    console.log('⏳ Waiting for engines to initialize...');
         
     } catch (error) {
         console.error('❌ Failed to initialize:', error);
@@ -38,18 +44,18 @@ async function init() {
 
 // Setup IPC event listeners
 function setupIPCListeners() {
-    // Listen for engines ready event
-    ipcRenderer.once('engines-ready', async () => {
-        console.log('✅ Engines ready');
+// Listen for engines ready event
+ipcRenderer.once('engines-ready', async () => {
+    console.log('✅ Engines ready');
         // Create initial tab
         tabManager.createNewTab();
     });
-    
+
     // Listen for engine events
     ipcRenderer.on('engine-event', (event, { event: eventName, data }) => {
         handleEngineEvent(eventName, data);
     });
-    
+
     // Listen for network errors
     ipcRenderer.on('network-error', (event, { tabId, error, errorCode }) => {
         console.log('Network error:', error, 'for tab:', tabId);
@@ -75,9 +81,13 @@ function setupIPCListeners() {
 
 // Handle engine events
 function handleEngineEvent(eventName, data) {
+    console.log('Engine event:', eventName, 'for tab:', data.tabId);
     const tab = tabManager.getAllTabs().find(t => t.id === data.tabId);
-    if (!tab) return;
-    
+    if (!tab) {
+        console.log('Tab not found for engine event:', data.tabId);
+        return;
+    }
+
     switch (eventName) {
         case 'title-updated':
             tab.title = data.title || 'New Tab';
@@ -119,6 +129,6 @@ function handleEngineEvent(eventName, data) {
 // Start the application
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
-} else {
+        } else {
     init();
 }

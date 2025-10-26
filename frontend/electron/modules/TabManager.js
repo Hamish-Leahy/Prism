@@ -57,8 +57,17 @@ class TabManager {
         this.tabs.push(tab);
         this.activeTabId = tabId;
         
+        // CRITICAL: Hide ALL other tabs first to prevent overlay
+        this.tabs.forEach(otherTab => {
+            if (otherTab.id !== tabId && otherTab.visible && otherTab.view) {
+                ipcRenderer.invoke('engine:hideTab', otherTab.id);
+                otherTab.visible = false;
+            }
+        });
+        
         // Update UI immediately
         this.renderTabs();
+        this.updateEngineBadge(tab.engine);
         
         // Show start page immediately
         this.showStartPage();
@@ -95,19 +104,39 @@ class TabManager {
         
         const tab = this.tabs.find(t => t.id === tabId);
         if (!tab) {
+            console.log('Tab not found:', tabId);
             this.isSwitchingTab = false;
             return;
         }
+        
+        console.log('Switching to tab:', tabId, 'URL:', tab.url, 'Has view:', !!tab.view, 'Visible:', tab.visible);
         
         this.activeTabId = tabId;
         
         // Update UI immediately
         this.updateTabUI();
         
-        // Handle tab content
-        if (tab.url) {
+        // CRITICAL: Hide ALL other tabs first
+        this.tabs.forEach(t => {
+            if (t.id !== tabId && t.visible && t.view) {
+                console.log('Hiding other tab:', t.id);
+                ipcRenderer.invoke('engine:hideTab', t.id);
+                t.visible = false;
+            }
+        });
+        
+        // Handle tab content based on what it has
+        if (tab.url && tab.view) {
+            // Tab has content and view - show it
+            console.log('Tab has content and view, showing content');
             this.showTabContent(tab);
+        } else if (tab.url && !tab.view) {
+            // Tab has URL but no view yet - show start page until view is ready
+            console.log('Tab has URL but no view, showing start page');
+            this.showStartPage();
         } else {
+            // Tab is empty - show start page
+            console.log('Tab is empty, showing start page');
             this.showStartPage();
         }
         
@@ -121,25 +150,53 @@ class TabManager {
             tabEl.classList.toggle('active', tabEl.dataset.tabId === this.activeTabId);
         });
         
-        // Update address bar
+        // Update address bar and engine badge
         const tab = this.tabs.find(t => t.id === this.activeTabId);
         if (tab) {
             const addressBar = document.getElementById('addressBar');
             if (addressBar) {
                 addressBar.value = tab.url || '';
             }
+            
+            // Update engine badge
+            this.updateEngineBadge(tab.engine || 'firefox');
+        }
+    }
+    
+    updateEngineBadge(engine) {
+        const engineBadge = document.getElementById('engineBadge');
+        const engineSelector = document.getElementById('engineSelector');
+        
+        if (engineBadge) {
+            const engineNames = {
+                'prism': 'Prism',
+                'chromium': 'Chromium',
+                'firefox': 'Firefox',
+                'tor': 'Tor'
+            };
+            
+            engineBadge.textContent = engineNames[engine] || 'Firefox';
+            engineBadge.className = 'engine-badge ' + engine;
+        }
+        
+        if (engineSelector && engineSelector.value !== engine) {
+            engineSelector.value = engine;
         }
     }
     
     showTabContent(tab) {
+        console.log('Showing tab content for:', tab.id, 'URL:', tab.url, 'Has view:', !!tab.view);
+        
         // Hide start page
         const startPage = document.getElementById('startPage');
         if (startPage) startPage.classList.add('hidden');
         
         // Show tab content if view exists
         if (tab.view) {
+            console.log('Calling engine:showTab for:', tab.id);
             ipcRenderer.invoke('engine:showTab', tab.id)
                 .then(() => {
+                    console.log('Successfully showed tab:', tab.id);
                     tab.visible = true;
                 })
                 .catch(error => {
@@ -147,12 +204,13 @@ class TabManager {
                     this.showStartPage(); // Fallback
                 });
         } else {
+            console.log('No view for tab:', tab.id, 'showing start page');
             this.showStartPage(); // No view yet
         }
     }
     
     showStartPage() {
-        // Hide all web content
+        // Hide ALL web content first
         this.tabs.forEach(t => {
             if (t.view && t.visible) {
                 ipcRenderer.invoke('engine:hideTab', t.id);
@@ -160,17 +218,27 @@ class TabManager {
             }
         });
         
-        // Show start page
-        const startPage = document.getElementById('startPage');
-        if (startPage) {
-            startPage.classList.remove('hidden');
-        }
-        
-        // Clear address bar
-        const addressBar = document.getElementById('addressBar');
-        if (addressBar) {
-            addressBar.value = '';
-        }
+        // Force hide all views in Electron
+        ipcRenderer.invoke('engine:hideAllViews').then(() => {
+            // Show start page
+            const startPage = document.getElementById('startPage');
+            if (startPage) {
+                startPage.classList.remove('hidden');
+            }
+            
+            // Clear address bar
+            const addressBar = document.getElementById('addressBar');
+            if (addressBar) {
+                addressBar.value = '';
+            }
+        }).catch(error => {
+            console.error('Failed to hide all views:', error);
+            // Still show start page even if hiding fails
+            const startPage = document.getElementById('startPage');
+            if (startPage) {
+                startPage.classList.remove('hidden');
+            }
+        });
     }
     
     closeTab(tabId) {
@@ -208,39 +276,81 @@ class TabManager {
     renderTabs() {
         if (!this.tabBar) return;
         
-        // Clear existing tabs
-        const existingTabs = this.tabBar.querySelectorAll('.tab');
-        existingTabs.forEach(tabEl => tabEl.remove());
+        // Get existing tab elements
+        const existingTabs = Array.from(this.tabBar.querySelectorAll('.tab'));
+        const existingTabIds = new Set(existingTabs.map(el => el.dataset.tabId));
+        const currentTabIds = new Set(this.tabs.map(tab => tab.id));
         
-        // Create tab elements
-        this.tabs.forEach(tab => {
-            const tabElement = document.createElement('div');
-            tabElement.className = `tab ${tab.id === this.activeTabId ? 'active' : ''}`;
-            tabElement.dataset.tabId = tab.id;
+        // Remove tabs that no longer exist
+        existingTabs.forEach(tabEl => {
+            if (!currentTabIds.has(tabEl.dataset.tabId)) {
+                tabEl.remove();
+            }
+        });
+        
+        // Update or create tabs
+        this.tabs.forEach((tab, index) => {
+            let tabElement = this.tabBar.querySelector(`[data-tab-id="${tab.id}"]`);
             
-            tabElement.innerHTML = `
-                <div class="tab-favicon">
-                    <div class="favicon-placeholder"></div>
-                </div>
-                <div class="tab-title">${tab.title}</div>
-                <div class="tab-close">×</div>
-            `;
+            if (!tabElement) {
+                // Create new tab element
+                tabElement = document.createElement('div');
+                tabElement.className = 'tab';
+                tabElement.dataset.tabId = tab.id;
+                
+                tabElement.innerHTML = `
+                    <div class="tab-favicon">
+                        <div class="favicon-placeholder"></div>
+                        <div class="tab-loading"></div>
+                    </div>
+                    <div class="tab-engine-indicator"></div>
+                    <div class="tab-title"></div>
+                    <div class="tab-close" data-tab-id="${tab.id}">×</div>
+                `;
+                
+                // Add event listeners only once
+                tabElement.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('tab-close')) {
+                        this.switchToTab(tab.id);
+                    }
+                });
+                
+                const closeButton = tabElement.querySelector('.tab-close');
+                closeButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.closeTab(tab.id);
+                });
+                
+                // Mark as having listeners to prevent duplicates
+                tabElement.dataset.listenersAdded = 'true';
+                
+                // Insert before the new tab button
+                this.tabBar.insertBefore(tabElement, this.newTabBtn);
+            }
             
-            // Add event listeners
-            tabElement.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('tab-close')) {
-                    this.switchToTab(tab.id);
-                }
-            });
+            // Update tab content
+            const titleEl = tabElement.querySelector('.tab-title');
+            const loadingEl = tabElement.querySelector('.tab-loading');
+            const indicatorEl = tabElement.querySelector('.tab-engine-indicator');
             
-            const closeButton = tabElement.querySelector('.tab-close');
-            closeButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.closeTab(tab.id);
-            });
+            if (titleEl) titleEl.textContent = tab.title || 'New Tab';
+            if (loadingEl) {
+                loadingEl.className = `tab-loading ${tab.isLoading ? 'loading' : ''}`;
+            }
+            if (indicatorEl) {
+                // Remove all engine classes first
+                indicatorEl.className = 'tab-engine-indicator';
+                // Add the correct engine class
+                const engine = tab.engine || 'firefox';
+                indicatorEl.classList.add(engine);
+            }
             
-            // Insert before new tab button
-            this.tabBar.insertBefore(tabElement, this.newTabBtn);
+            // Update active state
+            if (tab.id === this.activeTabId) {
+                tabElement.classList.add('active');
+            } else {
+                tabElement.classList.remove('active');
+            }
         });
     }
     
