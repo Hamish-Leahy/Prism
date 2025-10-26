@@ -213,7 +213,9 @@ function setupEventListeners() {
         if (tab && tab.url) {
             await ipcRenderer.invoke('engine:reload', tab.id);
         } else {
-            showStartPage();
+            // Show tab home directly
+            startPage.classList.remove('hidden');
+            addressBar.value = '';
         }
     });
 
@@ -511,7 +513,10 @@ function setupQuickLinks() {
     ipcRenderer.on('navigate-back', () => backBtn.click());
     ipcRenderer.on('navigate-forward', () => forwardBtn.click());
     ipcRenderer.on('navigate-refresh', () => refreshBtn.click());
-    ipcRenderer.on('navigate-home', () => showStartPage());
+    ipcRenderer.on('navigate-home', () => {
+        startPage.classList.remove('hidden');
+        addressBar.value = '';
+    });
     
     // History Modal
     if (closeHistory) {
@@ -599,64 +604,55 @@ function createNewTab() {
     renderTabs();
     updateEngineBadge();
     
-    // CRITICAL: Hide ALL other tabs immediately to prevent content bleeding
-    console.log('🔒 Creating new tab - hiding all other tabs');
+    // Hide ALL other tabs (independent of loading state)
     tabs.forEach(otherTab => {
         if (otherTab.id !== tabId && otherTab.visible && otherTab.view) {
-            console.log('Hiding tab:', otherTab.id);
-            ipcRenderer.invoke('engine:hideTab', otherTab.id).catch(err => {
-                console.error('Failed to hide tab:', err);
-            });
+            ipcRenderer.invoke('engine:hideTab', otherTab.id);
             otherTab.visible = false;
         }
     });
     
-    // CRITICAL: Hide all BrowserViews to ensure clean state
-    ipcRenderer.invoke('engine:hideAllViews').catch(err => {
-        console.error('Failed to hide all views:', err);
-    });
-    
-    // Show start page
+    // Show tab home immediately (independent of loading)
     startPage.classList.remove('hidden');
     addressBar.value = '';
+    
+    // Hide ALL web content and force webview refresh (independent of loading)
+    tabs.forEach(t => {
+        if (t.view && t.visible) {
+            ipcRenderer.invoke('engine:hideTab', t.id);
+            t.visible = false;
+        }
+    });
+    
+    // Force webview area refresh in Electron (independent of loading)
+    ipcRenderer.invoke('engine:hideAllViews').then(() => {
+        startPage.classList.remove('hidden');
+    });
     
     // Create engine tab in background
     ipcRenderer.invoke('engine:createTab', tabId, defaultEngine, {})
         .then(result => {
             tab.view = result.view;
-            tab.visible = true;
-            console.log('✅ Tab created successfully');
+            console.log('✅ Engine tab created successfully:', tabId);
         })
         .catch(error => {
-            console.error('Failed to create tab:', error);
-            // Remove failed tab
-            const index = tabs.findIndex(t => t.id === tabId);
-            if (index > -1) {
-                tabs.splice(index, 1);
-                if (tabs.length > 0) {
-                    switchToTab(tabs[tabs.length - 1].id);
-                } else {
-                    activeTabId = null;
-                }
-                renderTabs();
-            }
+            console.error('❌ Failed to create engine tab:', error);
+            // If engine tab creation fails, ensure we still have a functional tab
+            // The tab will work with start page functionality
         });
 }
 
+// Removed conflicting forceWebviewRefresh function - using direct tab management instead
+
 function switchToTab(tabId) {
-    const oldActiveTabId = activeTabId;
     activeTabId = tabId;
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
     
-    // Update active tab styling
+    // INSTANT UI update - no delays
     const allTabs = tabBar.querySelectorAll('.tab');
     allTabs.forEach(tabEl => {
-        if (tabEl.dataset.tabId === tabId) {
-            tabEl.classList.add('active');
-        } else {
-            tabEl.classList.remove('active');
-        }
+        tabEl.classList.toggle('active', tabEl.dataset.tabId === tabId);
     });
     
     updateEngineBadge();
@@ -666,6 +662,13 @@ function switchToTab(tabId) {
         aiPage.style.display = 'flex';
         startPage.classList.add('hidden');
         addressBar.value = 'prism://ai';
+        // Hide all web content when switching to AI tab
+        tabs.forEach(t => {
+            if (t.view && t.visible) {
+                ipcRenderer.invoke('engine:hideTab', t.id);
+                t.visible = false;
+            }
+        });
         return;
     }
     
@@ -674,6 +677,13 @@ function switchToTab(tabId) {
         if (extensionsPage) extensionsPage.style.display = 'flex';
         startPage.classList.add('hidden');
         addressBar.value = 'prism://extensions';
+        // Hide all web content when switching to extensions tab
+        tabs.forEach(t => {
+            if (t.view && t.visible) {
+                ipcRenderer.invoke('engine:hideTab', t.id);
+                t.visible = false;
+            }
+        });
         return;
     }
     
@@ -682,48 +692,57 @@ function switchToTab(tabId) {
     const extensionsPage = document.getElementById('extensionsPage');
     if (extensionsPage) extensionsPage.style.display = 'none';
     
-    // Update address bar
+    // CRITICAL: Hide ALL other tabs first to prevent white screen
+    tabs.forEach(t => {
+        if (t.id !== tabId && t.visible && t.view) {
+            ipcRenderer.invoke('engine:hideTab', t.id);
+            t.visible = false;
+        }
+    });
+    
+    // SIMPLE: If tab has URL, show web content. Otherwise show tab home.
     if (tab.url) {
+        // Show web content
         addressBar.value = tab.url;
         updateSecurityIndicator(tab.url);
         startPage.classList.add('hidden');
+        
+        if (tab.view) {
+            // Ensure the tab is properly shown
+            ipcRenderer.invoke('engine:showTab', tabId)
+                .then(() => {
+                    tab.visible = true;
+                })
+                .catch(error => {
+                    console.error('Failed to show tab:', error);
+                    // Fallback: show start page if tab fails to show
+                    startPage.classList.remove('hidden');
+                });
+        } else {
+            // Tab doesn't have a view yet, show start page
+            startPage.classList.remove('hidden');
+        }
     } else {
+        // Show tab home - hide ALL web content
         addressBar.value = '';
         updateSecurityIndicator('');
         startPage.classList.remove('hidden');
-    }
-    
-    // Hide other tabs and show current tab
-    if (tab.view) {
-        // CRITICAL: Hide ALL other tabs first to prevent content bleeding
-        console.log('🔒 Switching to tab - hiding all other tabs');
+        
+        // Hide ALL web content
         tabs.forEach(t => {
-            if (t.id !== tabId && t.visible && t.view) {
-                console.log('Hiding tab:', t.id);
-                ipcRenderer.invoke('engine:hideTab', t.id).catch(err => {
-                    console.error('Failed to hide tab:', err);
-                });
+            if (t.view && t.visible) {
+                ipcRenderer.invoke('engine:hideTab', t.id);
                 t.visible = false;
             }
         });
         
-        // CRITICAL: Use hideOtherViews to ensure clean state
-        ipcRenderer.invoke('engine:hideOtherViews', tabId)
-            .then(() => {
-                // Show current tab
-                return ipcRenderer.invoke('engine:showTab', tabId);
-            })
-            .then(() => {
-                tab.visible = true;
-                updateNavButtons();
-                console.log('✅ Tab switched successfully');
-            })
-            .catch(error => {
-                console.error('Failed to switch tab:', error);
-            });
-    } else {
-        updateNavButtons();
+        // Force webview area refresh in Electron
+        ipcRenderer.invoke('engine:hideAllViews').then(() => {
+            startPage.classList.remove('hidden');
+        });
     }
+    
+    updateNavButtons();
 }
 
 async function navigateTo(input) {
@@ -774,36 +793,24 @@ async function navigateTo(input) {
         url = 'https://' + url;
     }
 
-    // Update tab state immediately
+    // Fast UI update
     tab.url = url;
     tab.isLoading = true;
-    
-    // Update UI immediately
     addressBar.value = url;
     updateSecurityIndicator(url);
     startPage.classList.add('hidden');
     renderTabs();
 
-    // Navigate and ensure BrowserView is visible
+    // Fast navigation (no error handling for speed)
     ipcRenderer.invoke('engine:navigate', tab.id, url)
+        .then(() => ipcRenderer.invoke('engine:showTab', tab.id))
         .then(() => {
-            // Ensure the tab is visible after navigation
-            return ipcRenderer.invoke('engine:showTab', tab.id);
-        })
-        .then(() => {
-            // Don't set isLoading = false here - let the engine events handle it
-            hideNoInternetPage(); // Hide no internet page on successful navigation
+            tab.visible = true;
+            hideNoInternetPage();
         })
         .catch(error => {
-            console.error('Navigation failed:', error);
             tab.isLoading = false;
-            
-            // Check if it's a network error
-            if (error.message && (
-                error.message.includes('net::') ||
-                error.message.includes('ERR_INTERNET_DISCONNECTED') ||
-                error.message.includes('ERR_NETWORK_CHANGED')
-            )) {
+            if (error.message && error.message.includes('net::')) {
                 showNoInternetPage();
             }
         });
@@ -845,7 +852,8 @@ async function closeTab(tabId) {
 
     if (tabs.length === 0) {
         // Show start page instead of creating a new tab
-        showStartPage();
+        startPage.classList.remove('hidden');
+        addressBar.value = '';
         activeTabId = null;
         renderTabs();
     } else if (activeTabId === tabId) {
@@ -1058,16 +1066,25 @@ async function switchToTabDebounced(tabId) {
         isSwitchingTab = false;
         // Force update UI in case it got stuck
         updateNavButtons();
+        
+        // Emergency fallback: show start page if we're stuck
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab && !tab.visible) {
+            console.log('Emergency fallback: showing start page');
+            startPage.classList.remove('hidden');
+        }
     }, 2000);
     
     try {
         await switchToTab(tabId);
     } catch (error) {
         console.error('Failed to switch tab in debounced function:', error);
-        // Force recovery
+        // Force recovery - ensure we have a visible state
         const tab = tabs.find(t => t.id === tabId);
         if (tab) {
-            tab.visible = true;
+            // If tab switching failed, show start page as fallback
+            startPage.classList.remove('hidden');
+            tab.visible = false; // Reset visibility state
         }
         updateNavButtons();
     } finally {
@@ -1358,13 +1375,17 @@ async function navigateTo(input) {
             return ipcRenderer.invoke('engine:showTab', tab.id);
         })
         .then(() => {
+            // Mark tab as visible and hide no internet page
+            tab.visible = true;
+            hideNoInternetPage();
+            
             // Don't set isLoading = false here - let the engine events handle it
             // This prevents premature loading state clearing that causes white screens
-            hideNoInternetPage(); // Hide no internet page on successful navigation
         })
         .catch(error => {
             console.error('Navigation failed:', error);
             tab.isLoading = false;
+            tab.visible = false; // Ensure tab is marked as not visible on error
             
             // Check if it's a network error
             if (error.message && (
@@ -1375,6 +1396,9 @@ async function navigateTo(input) {
                 error.message.includes('ERR_NAME_NOT_RESOLVED')
             )) {
                 showNoInternetPage();
+            } else {
+                // For other errors, show start page as fallback
+                startPage.classList.remove('hidden');
             }
             
             renderTabs();
@@ -1415,7 +1439,8 @@ async function handlePrismProtocol(url) {
             await performPrismSearch(query);
         }
     } else if (path === 'home') {
-        showStartPage();
+        startPage.classList.remove('hidden');
+        addressBar.value = '';
     } else {
         alert('Unknown Prism protocol: ' + path);
     }
@@ -1439,38 +1464,7 @@ async function hideOtherViews(currentTabId) {
     }
 }
 
-async function showStartPage() {
-    // Prevent multiple simultaneous calls
-    if (isShowingStartPage) {
-        console.log('🏠 Start page already being shown, skipping...');
-        return;
-    }
-    
-    isShowingStartPage = true;
-    
-    try {
-        console.log('🏠 Showing start page...');
-        
-        // CRITICAL: Hide all views to prevent content bleeding
-        hideAllViews().catch(err => console.error('Failed to hide views:', err));
-        
-        // Show start page IMMEDIATELY
-        startPage.classList.remove('hidden');
-        addressBar.value = '';
-        
-        // Re-setup quick links to ensure they work (NON-BLOCKING)
-        setupQuickLinks();
-        
-        console.log('✅ Start page shown successfully');
-    } catch (error) {
-        console.error('❌ Failed to show start page:', error);
-        // Fallback: just show the page even if other operations fail
-        startPage.classList.remove('hidden');
-        addressBar.value = '';
-    } finally {
-        isShowingStartPage = false;
-    }
-}
+// Removed conflicting showStartPage function - using direct DOM manipulation instead
 
 // No internet page management
 function showNoInternetPage() {
@@ -1608,19 +1602,10 @@ function handleEngineEvent(eventName, data) {
             break;
         case 'loading-start':
             tab.isLoading = true;
-            // Update loading spinner if this is the active tab
-            if (tab.id === activeTabId) {
-                updateLoadingSpinner(true);
-            }
-            // Only update tab bar, don't call full renderTabs() to prevent interference
-            // renderTabs();
+            // Update loading state independently - don't interfere with tab operations
             break;
         case 'loading-stop':
             tab.isLoading = false;
-            // Update loading spinner if this is the active tab
-            if (tab.id === activeTabId) {
-                updateLoadingSpinner(false);
-            }
             // Add to browsing history when page finishes loading
             // NEVER track Tor browsing - complete amnesia mode
             if (data.url && data.url !== 'about:blank' && !data.url.startsWith('prism://') && tab.engine !== 'tor') {
@@ -1628,12 +1613,17 @@ function handleEngineEvent(eventName, data) {
                     console.error('Failed to add to history:', err);
                 });
             }
-            updateNavButtons();
-            // Don't call renderTabs() here to prevent interference with web content
-            // renderTabs();
             break;
         case 'favicon-updated':
             // TODO: Handle favicon
+            break;
+        case 'media-playing':
+            // Background video/audio playing - don't interrupt
+            console.log('Media playing in background tab:', data.tabId);
+            break;
+        case 'media-paused':
+            // Media paused in background tab
+            console.log('Media paused in background tab:', data.tabId);
             break;
     }
 }
