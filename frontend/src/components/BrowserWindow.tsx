@@ -9,7 +9,7 @@ interface BrowserWindowProps {
   onNavigation?: (url: string) => void
 }
 
-export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine, onTabUpdate, onNavigation }) => {
+export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab }) => {
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)

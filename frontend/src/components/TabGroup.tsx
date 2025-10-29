@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { TabGroup as TabGroupType, Tab } from '../types/Tab'
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, X, Pin, Copy, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, X, Pin, Copy } from 'lucide-react'
 
 interface TabGroupProps {
   group: TabGroupType

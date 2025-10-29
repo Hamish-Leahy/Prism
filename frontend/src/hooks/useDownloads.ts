@@ -35,7 +35,7 @@ export const useDownloads = () => {
       
       const response = await apiService.createDownload(url, filename)
       if (response.success && response.data) {
-        setDownloads(prev => [response.data, ...prev])
+        setDownloads(prev => [response.data!, ...prev])
         return response.data
       } else {
         setError(response.error || 'Failed to create download')
@@ -143,7 +143,7 @@ export const useDownloads = () => {
 
   const getFailedDownloads = (): Download[] => {
     return downloads.filter(download => 
-      download.status === 'error' || download.status === 'cancelled'
+      download.status === 'failed' || download.status === 'cancelled'
     )
   }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Plus, Palette, Tag, X } from 'lucide-react'
+import { Palette, Tag, X } from 'lucide-react'
 
 interface GroupCreatorProps {
   onCreateGroup: (name: string, color: string, icon?: string) => void

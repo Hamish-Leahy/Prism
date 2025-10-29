@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Bookmark } from '../types/Bookmark'
 import { apiService } from '../services/api'
-import { Plus, Search, Folder, Star, Edit2, Trash2, ExternalLink, X } from 'lucide-react'
+import { Plus, Search, Star, Edit2, Trash2, ExternalLink, X } from 'lucide-react'
 
 interface BookmarkManagerProps {
   onClose: () => void
@@ -56,7 +56,7 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
       )
       
       if (response.success && response.data) {
-        setBookmarks(prev => [response.data, ...prev])
+        setBookmarks(prev => [response.data!, ...prev])
         setNewBookmark({ title: '', url: '' })
         setShowAddForm(false)
         setError(null)
@@ -75,7 +75,7 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
       if (response.success && response.data) {
         setBookmarks(prev =>
           prev.map(bookmark =>
-            bookmark.id === id ? response.data : bookmark
+            bookmark.id === id ? response.data! : bookmark
           )
         )
         setEditingBookmark(null)
@@ -308,8 +308,7 @@ const EditBookmarkForm: React.FC<EditBookmarkFormProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     title: bookmark.title,
-    url: bookmark.url,
-    description: bookmark.description || ''
+    url: bookmark.url
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -334,12 +333,6 @@ const EditBookmarkForm: React.FC<EditBookmarkFormProps> = ({
         className="input w-full text-sm"
         placeholder="https://example.com"
         required
-      />
-      <textarea
-        value={formData.description}
-        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-        className="input w-full text-sm h-16 resize-none"
-        placeholder="Bookmark description"
       />
       <div className="flex justify-end space-x-2">
         <button

@@ -9,7 +9,6 @@ interface SettingsPanelProps {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('general')
   const {
-    settings,
     loading,
     error,
     updateSetting,
@@ -26,7 +25,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     await updateSetting(key, value, category)
   }
 
-  const handleMultipleSettingsChange = async (settingsToUpdate: Record<string, any>) => {
+  const _handleMultipleSettingsChange = async (settingsToUpdate: Record<string, any>) => {
     await updateSettings(settingsToUpdate)
   }
 
@@ -61,7 +60,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const privacySettings = getPrivacySettings()
   const appearanceSettings = getAppearanceSettings()
   const performanceSettings = getPerformanceSettings()
-  const securitySettings = getSecuritySettings()
+  const _securitySettings = getSecuritySettings()
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

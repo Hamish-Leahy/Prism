@@ -252,7 +252,7 @@ export function CommandPalette({
               <div className="px-4 py-2 bg-gray-800 text-gray-400 text-xs uppercase tracking-wider font-medium">
                 {category}
               </div>
-              {commands.map((command, index) => {
+              {commands.map((command, _index) => {
                 const globalIndex = filteredCommands.findIndex(c => c.id === command.id)
                 return (
                   <button

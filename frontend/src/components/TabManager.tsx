@@ -16,8 +16,7 @@ export const TabManager: React.FC<TabManagerProps> = ({
   activeTabId,
   onTabCreate,
   onTabClose,
-  onTabSelect,
-  onTabUpdate
+  onTabSelect
 }) => {
   return (
     <div className="h-12 bg-arc-surface border-b border-arc-border flex items-center px-4 space-x-2 overflow-x-auto">

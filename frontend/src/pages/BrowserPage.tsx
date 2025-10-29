@@ -7,7 +7,6 @@ import { EngineSelector } from '../components/EngineSelector';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { useTabs } from '../hooks/useTabs';
 import { useEngine } from '../hooks/useEngine';
-import { useSettings } from '../hooks/useSettings';
 import { useDownloads } from '../hooks/useDownloads';
 import { Tab } from '../types/Tab';
 
@@ -20,7 +19,6 @@ export const BrowserPage: React.FC = () => {
   
   const { tabs, createTab, closeTab, updateTab, navigateTab, setActiveTab } = useTabs();
   const { engines, currentEngine, switchEngine } = useEngine();
-  const { updateSetting } = useSettings();
   const { downloads, pauseDownload, resumeDownload, cancelDownload, deleteDownload, getProgress } = useDownloads();
 
   // Initialize with a default tab

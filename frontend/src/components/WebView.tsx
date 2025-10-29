@@ -202,3 +202,5 @@ export const WebView = forwardRef<HTMLWebViewElement, WebViewProps>(({
     </div>
   )
 })
+
+WebView.displayName = 'WebView'
