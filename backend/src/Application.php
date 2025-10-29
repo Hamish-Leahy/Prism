@@ -175,11 +175,6 @@ class Application
     {
         $container = $this->app->getContainer();
         
-        // Ensure container is not null
-        if ($container === null) {
-            throw new \RuntimeException('Container is null. App may not be properly initialized.');
-        }
-        
         // Database service
         $container->set('database', function () {
             return new DatabaseService($this->config['database']);
