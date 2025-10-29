@@ -16,8 +16,7 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null)
   const [newBookmark, setNewBookmark] = useState({
     title: '',
-    url: '',
-    description: ''
+    url: ''
   })
 
   useEffect(() => {
@@ -53,13 +52,12 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
     try {
       const response = await apiService.createBookmark(
         newBookmark.title,
-        newBookmark.url,
-        newBookmark.description
+        newBookmark.url
       )
       
       if (response.success && response.data) {
         setBookmarks(prev => [response.data, ...prev])
-        setNewBookmark({ title: '', url: '', description: '' })
+        setNewBookmark({ title: '', url: '' })
         setShowAddForm(false)
         setError(null)
       } else {
@@ -210,17 +208,6 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-arc-text mb-2">
-                    Description (optional)
-                  </label>
-                  <textarea
-                    value={newBookmark.description}
-                    onChange={(e) => setNewBookmark(prev => ({ ...prev, description: e.target.value }))}
-                    className="input w-full h-20 resize-none"
-                    placeholder="Bookmark description"
-                  />
-                </div>
                 <div className="flex justify-end space-x-2">
                   <button
                     type="button"
@@ -279,11 +266,6 @@ export const BookmarkManager: React.FC<BookmarkManagerProps> = ({ onClose }) => 
                         <p className="text-xs text-arc-text-secondary truncate">
                           {bookmark.url}
                         </p>
-                        {bookmark.description && (
-                          <p className="text-xs text-arc-text-secondary mt-1">
-                            {bookmark.description}
-                          </p>
-                        )}
                       </div>
                       <div className="flex items-center space-x-1 ml-4">
                         <button

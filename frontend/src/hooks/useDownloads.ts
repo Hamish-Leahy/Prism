@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiService } from '../services/api'
-
-export interface Download {
-  id: string
-  filename: string
-  url: string
-  file_path: string
-  file_size: number | null
-  downloaded_size: number
-  status: 'pending' | 'downloading' | 'paused' | 'completed' | 'cancelled' | 'error'
-  created_at: string
-  completed_at: string | null
-  error_message: string | null
-}
+import { Download } from '../types/Download'
 
 export const useDownloads = () => {
   const [downloads, setDownloads] = useState<Download[]>([])
@@ -190,6 +178,25 @@ export const useDownloads = () => {
     return formatFileSize(bytesPerSecond) + '/s'
   }
 
+  const clearCompletedDownloads = async (): Promise<number> => {
+    try {
+      const completedDownloads = getCompletedDownloads()
+      let clearedCount = 0
+      
+      for (const download of completedDownloads) {
+        const success = await deleteDownload(download.id)
+        if (success) {
+          clearedCount++
+        }
+      }
+      
+      return clearedCount
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear completed downloads')
+      return 0
+    }
+  }
+
   return {
     downloads,
     loading,
@@ -210,6 +217,7 @@ export const useDownloads = () => {
     getProgress,
     formatFileSize,
     formatSpeed,
-    refreshDownloads: loadDownloads
+    refreshDownloads: loadDownloads,
+    clearCompletedDownloads
   }
 }

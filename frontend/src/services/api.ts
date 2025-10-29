@@ -1,5 +1,7 @@
 const API_BASE_URL = 'http://localhost:8000/api'
 
+import { Download } from '../types/Download'
+
 export interface ApiResponse<T = any> {
   data?: T
   error?: string
@@ -46,8 +48,8 @@ export interface Bookmark {
   url: string
   favicon?: string
   description?: string
-  created_at: string
-  updated_at: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface User {
@@ -111,7 +113,7 @@ class ApiService {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...(options.headers as Record<string, string> || {}),
       }
 
       // Add authorization header if we have an access token
@@ -313,25 +315,25 @@ class ApiService {
   }
 
   // Downloads API
-  async getDownloads(status?: string, limit?: number, offset?: number): Promise<ApiResponse<any[]>> {
+  async getDownloads(status?: string, limit?: number, offset?: number): Promise<ApiResponse<Download[]>> {
     const params = new URLSearchParams()
     if (status) params.append('status', status)
     if (limit) params.append('limit', limit.toString())
     if (offset) params.append('offset', offset.toString())
     
     const endpoint = params.toString() ? `/downloads?${params}` : '/downloads'
-    return this.request<any[]>(endpoint)
+    return this.request<Download[]>(endpoint)
   }
 
-  async createDownload(url: string, filename?: string): Promise<ApiResponse<any>> {
-    return this.request<any>('/downloads', {
+  async createDownload(url: string, filename?: string): Promise<ApiResponse<Download>> {
+    return this.request<Download>('/downloads', {
       method: 'POST',
       body: JSON.stringify({ url, filename }),
     })
   }
 
-  async getDownload(id: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/downloads/${id}`)
+  async getDownload(id: string): Promise<ApiResponse<Download>> {
+    return this.request<Download>(`/downloads/${id}`)
   }
 
   async pauseDownload(id: string): Promise<ApiResponse<{ success: boolean }>> {

@@ -10,8 +10,6 @@ import { useEngine } from '../hooks/useEngine';
 import { useSettings } from '../hooks/useSettings';
 import { useDownloads } from '../hooks/useDownloads';
 import { Tab } from '../types/Tab';
-import { Engine } from '../types/Engine';
-import { Settings } from '../types/Settings';
 
 export const BrowserPage: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
@@ -21,9 +19,9 @@ export const BrowserPage: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   
   const { tabs, createTab, closeTab, updateTab, navigateTab, setActiveTab } = useTabs();
-  const { engines, currentEngine, switchEngine, getEngineInfo } = useEngine();
-  const { settings, updateSetting, resetSettings } = useSettings();
-  const { downloads, pauseDownload, resumeDownload, cancelDownload, deleteDownload } = useDownloads();
+  const { engines, currentEngine, switchEngine } = useEngine();
+  const { updateSetting } = useSettings();
+  const { downloads, pauseDownload, resumeDownload, cancelDownload, deleteDownload, getProgress } = useDownloads();
 
   // Initialize with a default tab
   useEffect(() => {
@@ -58,7 +56,10 @@ export const BrowserPage: React.FC = () => {
 
   const handleTabSelect = (tabId: string) => {
     setActiveTabId(tabId);
-    setActiveTab(tabId);
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) {
+      setActiveTab(tab);
+    }
   };
 
   const handleTabUpdate = (tabId: string, updates: Partial<Tab>) => {
@@ -73,10 +74,6 @@ export const BrowserPage: React.FC = () => {
 
   const handleEngineSwitch = (engineId: string) => {
     switchEngine(engineId);
-  };
-
-  const handleSettingUpdate = (key: string, value: any) => {
-    updateSetting(key, value);
   };
 
   const handleDownloadAction = (downloadId: string, action: 'pause' | 'resume' | 'cancel' | 'delete') => {
@@ -156,13 +153,11 @@ export const BrowserPage: React.FC = () => {
 
       {/* Address Bar */}
       <AddressBar
-        url={activeTab?.url || ''}
+        currentUrl={activeTab?.url || ''}
         onNavigate={handleNavigation}
         onRefresh={() => activeTabId && navigateTab(activeTabId, activeTab?.url || '')}
         onBack={() => activeTabId && navigateTab(activeTabId, 'javascript:history.back()')}
         onForward={() => activeTabId && navigateTab(activeTabId, 'javascript:history.forward()')}
-        canGoBack={activeTab?.canGoBack || false}
-        canGoForward={activeTab?.canGoForward || false}
       />
 
       {/* Bookmark Bar */}
@@ -183,6 +178,7 @@ export const BrowserPage: React.FC = () => {
         {activeTab ? (
           <BrowserWindow
             tab={activeTab}
+            engine={currentEngine}
             onTabUpdate={handleTabUpdate}
             onNavigation={handleNavigation}
           />
@@ -204,8 +200,6 @@ export const BrowserPage: React.FC = () => {
       {/* Modals */}
       {showSettings && (
         <SettingsPanel
-          settings={settings}
-          onSettingUpdate={handleSettingUpdate}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -237,11 +231,11 @@ export const BrowserPage: React.FC = () => {
                       <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                         <div
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${download.progress}%` }}
+                          style={{ width: `${getProgress(download)}%` }}
                         />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        {download.progress}% - {download.status}
+                        {getProgress(download)}% - {download.status}
                       </p>
                     </div>
                     <div className="flex space-x-2 ml-4">

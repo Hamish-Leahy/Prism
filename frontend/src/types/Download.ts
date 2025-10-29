@@ -3,13 +3,13 @@ export interface Download {
   filename: string;
   url: string;
   status: 'pending' | 'downloading' | 'paused' | 'completed' | 'failed' | 'cancelled';
-  progress: number; // 0-100
-  totalSize: number | null; // in bytes
-  downloadedSize: number; // in bytes
-  filePath: string | null;
-  createdAt: string;
-  updatedAt: string;
-  error?: string;
+  progress?: number; // 0-100
+  file_size: number | null; // in bytes
+  downloaded_size: number; // in bytes
+  file_path: string | null;
+  created_at: string;
+  updated_at?: string;
+  error_message?: string;
   speed?: number; // bytes per second
   eta?: number; // estimated time remaining in seconds
 }
@@ -21,8 +21,8 @@ export interface DownloadStats {
   paused: number;
   failed: number;
   cancelled: number;
-  totalSize: number;
-  downloadedSize: number;
+  file_size: number;
+  downloaded_size: number;
 }
 
 export interface DownloadFilters {
@@ -36,6 +36,6 @@ export interface DownloadFilters {
 }
 
 export interface DownloadSort {
-  field: 'filename' | 'url' | 'status' | 'progress' | 'totalSize' | 'downloadedSize' | 'createdAt' | 'updatedAt';
+  field: 'filename' | 'url' | 'status' | 'progress' | 'file_size' | 'downloaded_size' | 'created_at' | 'updated_at';
   order: 'asc' | 'desc';
 }

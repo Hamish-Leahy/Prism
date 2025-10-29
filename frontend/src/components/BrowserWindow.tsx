@@ -5,9 +5,11 @@ import { Engine } from '../types/Engine'
 interface BrowserWindowProps {
   tab: Tab | null
   engine: Engine | null
+  onTabUpdate?: (tabId: string, updates: Partial<Tab>) => void
+  onNavigation?: (url: string) => void
 }
 
-export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine }) => {
+export const BrowserWindow: React.FC<BrowserWindowProps> = ({ tab, engine, onTabUpdate, onNavigation }) => {
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)

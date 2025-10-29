@@ -1,13 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useDownloads } from '../hooks/useDownloads';
-import { Download } from '../types/Download';
 
 interface DownloadsPageProps {
   onClose: () => void;
 }
 
 export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
-  const { downloads, pauseDownload, resumeDownload, cancelDownload, deleteDownload, clearCompleted } = useDownloads();
+  const { 
+    downloads, 
+    pauseDownload, 
+    resumeDownload, 
+    cancelDownload, 
+    deleteDownload, 
+    clearCompletedDownloads,
+    getProgress,
+    formatFileSize
+  } = useDownloads();
   const [filter, setFilter] = useState<'all' | 'downloading' | 'completed' | 'paused' | 'failed'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'size' | 'status'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -22,13 +30,13 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
     
     switch (sortBy) {
       case 'date':
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         break;
       case 'name':
         comparison = a.filename.localeCompare(b.filename);
         break;
       case 'size':
-        comparison = (a.totalSize || 0) - (b.totalSize || 0);
+        comparison = (a.file_size || 0) - (b.file_size || 0);
         break;
       case 'status':
         comparison = a.status.localeCompare(b.status);
@@ -37,21 +45,6 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
     
     return sortOrder === 'asc' ? comparison : -comparison;
   });
-
-  const formatFileSize = (bytes: number | null): string => {
-    if (!bytes) return 'Unknown';
-    
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let size = bytes;
-    let unitIndex = 0;
-    
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-    
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
-  };
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -104,7 +97,7 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
   };
 
   const handleClearCompleted = () => {
-    clearCompleted();
+    clearCompletedDownloads();
   };
 
   return (
@@ -215,15 +208,15 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
                       {download.status === 'downloading' && (
                         <div className="mb-2">
                           <div className="flex justify-between text-xs text-gray-500 mb-1">
-                            <span>{download.progress}%</span>
+                            <span>{getProgress(download)}%</span>
                             <span>
-                              {formatFileSize(download.downloadedSize)} / {formatFileSize(download.totalSize)}
+                              {formatFileSize(download.downloaded_size)} / {download.file_size ? formatFileSize(download.file_size) : 'Unknown'}
                             </span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${download.progress}%` }}
+                              style={{ width: `${getProgress(download)}%` }}
                             />
                           </div>
                         </div>
@@ -236,14 +229,14 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
                             {download.status.charAt(0).toUpperCase() + download.status.slice(1)}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatDate(download.createdAt)}
+                            {formatDate(download.created_at)}
                           </span>
                         </div>
                         
                         {/* File Size */}
-                        {download.totalSize && (
+                        {download.file_size && (
                           <span className="text-xs text-gray-500">
-                            {formatFileSize(download.totalSize)}
+                            {formatFileSize(download.file_size)}
                           </span>
                         )}
                       </div>
@@ -296,7 +289,7 @@ export const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose }) => {
               {sortedDownloads.length} download{sortedDownloads.length !== 1 ? 's' : ''}
             </span>
             <span>
-              Total size: {formatFileSize(sortedDownloads.reduce((sum, d) => sum + (d.totalSize || 0), 0))}
+              Total size: {formatFileSize(sortedDownloads.reduce((sum, d) => sum + (d.file_size || 0), 0))}
             </span>
           </div>
         </div>
