@@ -3,7 +3,6 @@
 namespace Prism\Backend;
 
 use Slim\Factory\AppFactory;
-use DI\Container;
 use Slim\Middleware\BodyParsingMiddleware;
 use Slim\Middleware\ErrorMiddleware;
 use Prism\Backend\Middleware\CorsMiddleware;
@@ -34,11 +33,8 @@ class Application
     {
         $this->config = require __DIR__ . '/../config/app.php';
         
-        // Create container first
-        $container = new Container();
-        
-        // Create app with container
-        $this->app = AppFactory::createFromContainer($container);
+        // Create app
+        $this->app = AppFactory::create();
         
         $this->setupServices();
         $this->setupMiddleware();
