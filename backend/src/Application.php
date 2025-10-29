@@ -3,6 +3,7 @@
 namespace Prism\Backend;
 
 use Slim\Factory\AppFactory;
+use DI\Container;
 use Slim\Middleware\BodyParsingMiddleware;
 use Slim\Middleware\ErrorMiddleware;
 use Prism\Backend\Middleware\CorsMiddleware;
@@ -32,10 +33,16 @@ class Application
     public function __construct()
     {
         $this->config = require __DIR__ . '/../config/app.php';
-        $this->app = AppFactory::create();
+        
+        // Create container first
+        $container = new Container();
+        
+        // Create app with container
+        $this->app = AppFactory::createFromContainer($container);
+        
+        $this->setupServices();
         $this->setupMiddleware();
         $this->setupRoutes();
-        $this->setupServices();
     }
 
     private function setupMiddleware(): void
@@ -171,6 +178,11 @@ class Application
     private function setupServices(): void
     {
         $container = $this->app->getContainer();
+        
+        // Ensure container is not null
+        if ($container === null) {
+            throw new \RuntimeException('Container is null. App may not be properly initialized.');
+        }
         
         // Database service
         $container->set('database', function () {
