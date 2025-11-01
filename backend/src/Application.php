@@ -3,6 +3,7 @@
 namespace Prism\Backend;
 
 use Slim\Factory\AppFactory;
+use DI\Container;
 use Slim\Middleware\BodyParsingMiddleware;
 use Slim\Middleware\ErrorMiddleware;
 use Prism\Backend\Middleware\CorsMiddleware;
@@ -33,8 +34,11 @@ class Application
     {
         $this->config = require __DIR__ . '/../config/app.php';
         
-        // Create app
-        $this->app = AppFactory::create();
+        // Create container
+        $container = new Container();
+        
+        // Create app with container
+        $this->app = AppFactory::createFromContainer($container);
         
         $this->setupServices();
         $this->setupMiddleware();
@@ -56,12 +60,20 @@ class Application
         
         // Error handling middleware
         $errorMiddleware = $this->app->addErrorMiddleware(true, true, true);
-        $errorMiddleware->setDefaultErrorHandler(function ($request, $exception) use ($logger) {
+        $app = $this->app;
+        $errorMiddleware->setDefaultErrorHandler(function ($request, $exception) use ($logger, $app) {
             $logger->error('Unhandled exception: ' . $exception->getMessage(), [
                 'exception' => $exception,
                 'request' => $request
             ]);
-            return null;
+            
+            $response = $app->getResponseFactory()->createResponse(500);
+            $response->getBody()->write(json_encode([
+                'error' => 'Internal Server Error',
+                'message' => 'An unexpected error occurred'
+            ]));
+            
+            return $response->withHeader('Content-Type', 'application/json');
         });
     }
 
@@ -167,31 +179,33 @@ class Application
         
         // Health check
         $this->app->get('/health', function ($request, $response) {
-            return $response->withJson(['status' => 'ok', 'timestamp' => time()]);
+            $response->getBody()->write(json_encode(['status' => 'ok', 'timestamp' => time()]));
+            return $response->withHeader('Content-Type', 'application/json');
         });
     }
 
     private function setupServices(): void
     {
         $container = $this->app->getContainer();
+        $config = $this->config;
         
         // Database service
-        $container->set('database', function () {
-            return new DatabaseService($this->config['database']);
+        $container->set('database', function () use ($config) {
+            return new DatabaseService($config['database']);
         });
         
         // Engine manager
-        $container->set('engineManager', function () {
-            return new EngineManager($this->config['engines']);
+        $container->set('engineManager', function () use ($config) {
+            return new EngineManager($config['engines']);
         });
         
         // Authentication service
-        $container->set('authService', function () {
+        $container->set('authService', function () use ($config) {
             return new AuthenticationService(
                 $this->app->getContainer()->get('database')->getPdo(),
-                $this->config['jwt']['secret'] ?? 'your-secret-key',
-                $this->config['jwt']['expiration'] ?? 3600,
-                $this->config['jwt']['refresh_expiration'] ?? 604800
+                $config['jwt']['secret'] ?? 'your-secret-key',
+                $config['jwt']['expiration'] ?? 3600,
+                $config['jwt']['refresh_expiration'] ?? 604800
             );
         });
         

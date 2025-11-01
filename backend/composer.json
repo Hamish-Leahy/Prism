@@ -7,7 +7,7 @@
         "firebase/php-jwt": "^6.8",
         "guzzlehttp/guzzle": "^7.8",
         "monolog/monolog": "^3.0",
-        "php-di/php-di": "*",
+        "php-di/php-di": "^7.1",
         "ramsey/uuid": "^4.7",
         "slim/psr7": "^1.6",
         "slim/slim": "^4.12",
