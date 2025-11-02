@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { BrowserWindow } from '../components/BrowserWindow';
 import { TabManager } from '../components/TabManager';
 import { AddressBar } from '../components/AddressBar';
@@ -10,7 +10,7 @@ import { useEngine } from '../hooks/useEngine';
 import { useDownloads } from '../hooks/useDownloads';
 import { Tab } from '../types/Tab';
 
-export const BrowserPage: React.FC = () => {
+export const BrowserPage: React.FC = memo(() => {
   const [showSettings, setShowSettings] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
@@ -24,7 +24,7 @@ export const BrowserPage: React.FC = () => {
   // Initialize with a default tab
   useEffect(() => {
     if (tabs.length === 0) {
-      createTab('https://www.google.com', 'Google');
+      createTab('New Tab', 'about:blank');
     }
   }, [tabs.length, createTab]);
 
@@ -32,15 +32,17 @@ export const BrowserPage: React.FC = () => {
   useEffect(() => {
     if (tabs.length > 0 && !activeTabId) {
       const activeTab = tabs.find(tab => tab.isActive) || tabs[0];
-      setActiveTabId(activeTab.id);
+      if (activeTab) {
+        setActiveTabId(activeTab.id);
+      }
     }
   }, [tabs, activeTabId]);
 
-  const handleTabCreate = () => {
-    createTab('https://www.google.com', 'New Tab');
-  };
+  const handleTabCreate = useCallback(() => {
+    createTab('New Tab', 'about:blank');
+  }, [createTab]);
 
-  const handleTabClose = (tabId: string) => {
+  const handleTabClose = useCallback((tabId: string) => {
     closeTab(tabId);
     if (activeTabId === tabId) {
       const remainingTabs = tabs.filter(tab => tab.id !== tabId);
@@ -50,31 +52,57 @@ export const BrowserPage: React.FC = () => {
         setActiveTabId(null);
       }
     }
-  };
+  }, [closeTab, activeTabId, tabs]);
 
-  const handleTabSelect = (tabId: string) => {
+  const handleTabSelect = useCallback((tabId: string) => {
     setActiveTabId(tabId);
     const tab = tabs.find(t => t.id === tabId);
     if (tab) {
       setActiveTab(tab);
     }
-  };
+  }, [tabs, setActiveTab]);
 
-  const handleTabUpdate = (tabId: string, updates: Partial<Tab>) => {
+  const handleTabUpdate = useCallback((tabId: string, updates: Partial<Tab>) => {
     updateTab(tabId, updates);
-  };
+  }, [updateTab]);
 
-  const handleNavigation = (url: string) => {
+  const handleNavigation = useCallback((url: string) => {
     if (activeTabId) {
       navigateTab(activeTabId, url);
     }
-  };
+  }, [activeTabId, navigateTab]);
 
-  const handleEngineSwitch = (engineId: string) => {
+  const handleRefresh = useCallback(() => {
+    if (activeTabId && activeTab?.url) {
+      navigateTab(activeTabId, activeTab.url);
+    }
+  }, [activeTabId, activeTab?.url, navigateTab]);
+
+  const handleBack = useCallback(() => {
+    if (activeTabId && activeTab?.canGoBack) {
+      // Navigate back - this would need proper implementation
+      const webview = document.querySelector('webview');
+      if (webview) {
+        (webview as any).goBack();
+      }
+    }
+  }, [activeTabId, activeTab?.canGoBack]);
+
+  const handleForward = useCallback(() => {
+    if (activeTabId && activeTab?.canGoForward) {
+      // Navigate forward - this would need proper implementation
+      const webview = document.querySelector('webview');
+      if (webview) {
+        (webview as any).goForward();
+      }
+    }
+  }, [activeTabId, activeTab?.canGoForward]);
+
+  const handleEngineSwitch = useCallback((engineId: string) => {
     switchEngine(engineId);
-  };
+  }, [switchEngine]);
 
-  const handleDownloadAction = (downloadId: string, action: 'pause' | 'resume' | 'cancel' | 'delete') => {
+  const handleDownloadAction = useCallback((downloadId: string, action: 'pause' | 'resume' | 'cancel' | 'delete') => {
     switch (action) {
       case 'pause':
         pauseDownload(downloadId);
@@ -89,14 +117,23 @@ export const BrowserPage: React.FC = () => {
         deleteDownload(downloadId);
         break;
     }
-  };
+  }, [pauseDownload, resumeDownload, cancelDownload, deleteDownload]);
 
-  const activeTab = tabs.find(tab => tab.id === activeTabId);
+  const activeTab = useMemo(() => 
+    tabs.find(tab => tab.id === activeTabId),
+    [tabs, activeTabId]
+  );
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <div 
+      className="h-screen flex flex-col bg-white dark:bg-gray-950"
+      style={{
+        transform: 'translateZ(0)',
+        willChange: 'contents'
+      }}
+    >
       {/* Top Toolbar */}
-      <div className="bg-white border-b border-gray-300 flex items-center justify-between px-4 py-2">
+      <div className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 py-2 h-12 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setShowSettings(true)}
@@ -152,10 +189,13 @@ export const BrowserPage: React.FC = () => {
       {/* Address Bar */}
       <AddressBar
         currentUrl={activeTab?.url || ''}
+        loading={activeTab?.isLoading || false}
+        canGoBack={activeTab?.canGoBack || false}
+        canGoForward={activeTab?.canGoForward || false}
         onNavigate={handleNavigation}
-        onRefresh={() => activeTabId && navigateTab(activeTabId, activeTab?.url || '')}
-        onBack={() => activeTabId && navigateTab(activeTabId, 'javascript:history.back()')}
-        onForward={() => activeTabId && navigateTab(activeTabId, 'javascript:history.forward()')}
+        onRefresh={handleRefresh}
+        onBack={handleBack}
+        onForward={handleForward}
       />
 
       {/* Bookmark Bar */}
@@ -172,7 +212,13 @@ export const BrowserPage: React.FC = () => {
       />
 
       {/* Main Browser Window */}
-      <div className="flex-1 flex">
+      <div 
+        className="flex-1 flex relative overflow-hidden"
+        style={{
+          transform: 'translateZ(0)',
+          willChange: 'contents'
+        }}
+      >
         {activeTab ? (
           <BrowserWindow
             tab={activeTab}
@@ -181,12 +227,12 @@ export const BrowserPage: React.FC = () => {
             onNavigation={handleNavigation}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
+          <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-600 mb-4">No Active Tab</h2>
+              <h2 className="text-2xl font-bold text-gray-600 dark:text-gray-300 mb-4">No Active Tab</h2>
               <button
                 onClick={handleTabCreate}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors transform-gpu active:scale-95"
               >
                 Create New Tab
               </button>
@@ -313,4 +359,6 @@ export const BrowserPage: React.FC = () => {
       )}
     </div>
   );
-};
+});
+
+BrowserPage.displayName = 'BrowserPage';

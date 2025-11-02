@@ -1,17 +1,17 @@
-import { forwardRef, useEffect, useRef } from 'react'
+import { memo, forwardRef, useEffect, useRef, useCallback } from 'react'
 
 interface Tab {
   id: string
   title: string
   url: string
-  favicon: string
+  favicon?: string
   isActive: boolean
-  isPinned: boolean
+  isPinned?: boolean
   groupId?: string
   searchEngine?: string
-  canGoBack: boolean
-  canGoForward: boolean
-  isLoading: boolean
+  canGoBack?: boolean
+  canGoForward?: boolean
+  isLoading?: boolean
 }
 
 interface WebViewProps {
@@ -19,46 +19,117 @@ interface WebViewProps {
   onTitleChange: (title: string) => void
   onFaviconChange: (favicon: string) => void
   onLoadingChange: (isLoading: boolean) => void
+  onNavigationChange?: (url: string) => void
+  onCanGoBackChange?: (canGoBack: boolean) => void
+  onCanGoForwardChange?: (canGoForward: boolean) => void
 }
 
-export const WebView = forwardRef<HTMLWebViewElement, WebViewProps>(({
+const NewTabPage = memo(() => (
+  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="text-center max-w-2xl px-6 py-12">
+      <div className="mb-8">
+        <div className="inline-block p-4 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
+          <span className="text-6xl">🔮</span>
+        </div>
+      </div>
+      
+      <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+        Prism Browser
+      </h1>
+      
+      <p className="text-xl text-gray-600 dark:text-gray-300 mb-12">
+        Revolutionary multi-engine browser with AI-powered features
+      </p>
+      
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+          <div className="text-3xl mb-2">🚀</div>
+          <div className="font-semibold text-gray-900 dark:text-white">Multi-Engine</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">3 engines</div>
+        </div>
+        <div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+          <div className="text-3xl mb-2">🤖</div>
+          <div className="font-semibold text-gray-900 dark:text-white">AI Assistant</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Smart help</div>
+        </div>
+        <div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+          <div className="text-3xl mb-2">🔍</div>
+          <div className="font-semibold text-gray-900 dark:text-white">Smart Search</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">8+ engines</div>
+        </div>
+        <div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+          <div className="text-3xl mb-2">⚡</div>
+          <div className="font-semibold text-gray-900 dark:text-white">Fast & Smooth</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Optimized</div>
+        </div>
+      </div>
+      
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        Type a URL or search query in the address bar above
+      </div>
+    </div>
+  </div>
+))
+
+NewTabPage.displayName = 'NewTabPage'
+
+export const WebView = memo(forwardRef<HTMLWebViewElement, WebViewProps>(({
   tab,
   onTitleChange,
   onFaviconChange,
-  onLoadingChange
-}) => {
+  onLoadingChange,
+  onNavigationChange,
+  onCanGoBackChange,
+  onCanGoForwardChange
+}, forwardedRef) => {
   const webviewRef = useRef<HTMLWebViewElement>(null)
+  const internalRef = webviewRef.current || (forwardedRef as React.RefObject<HTMLWebViewElement>)?.current
+
+  const handleLoadStart = useCallback(() => {
+    onLoadingChange(true)
+  }, [onLoadingChange])
+
+  const handleLoadStop = useCallback(() => {
+    onLoadingChange(false)
+  }, [onLoadingChange])
+
+  const handlePageTitleUpdated = useCallback((event: any) => {
+    onTitleChange(event.title || 'Untitled')
+  }, [onTitleChange])
+
+  const handlePageFaviconUpdated = useCallback((event: any) => {
+    onFaviconChange(event.favicons?.[0] || '🌐')
+  }, [onFaviconChange])
+
+  const handleDidNavigate = useCallback((event: any) => {
+    onLoadingChange(false)
+    if (onNavigationChange && event.url) {
+      onNavigationChange(event.url)
+    }
+  }, [onLoadingChange, onNavigationChange])
+
+  const handleCanGoBackChange = useCallback((event: any) => {
+    if (onCanGoBackChange) {
+      onCanGoBackChange(event.canGoBack ?? false)
+    }
+  }, [onCanGoBackChange])
+
+  const handleCanGoForwardChange = useCallback((event: any) => {
+    if (onCanGoForwardChange) {
+      onCanGoForwardChange(event.canGoForward ?? false)
+    }
+  }, [onCanGoForwardChange])
 
   useEffect(() => {
-    const webview = webviewRef.current
+    const webview = internalRef
     if (!webview) return
 
-    const handleLoadStart = () => {
-      onLoadingChange(true)
-    }
-
-    const handleLoadStop = () => {
-      onLoadingChange(false)
-    }
-
-    const handlePageTitleUpdated = (event: any) => {
-      onTitleChange(event.title || 'Untitled')
-    }
-
-    const handlePageFaviconUpdated = (event: any) => {
-      onFaviconChange(event.favicons?.[0] || '🌐')
-    }
-
-    const handleDidNavigate = () => {
-      onLoadingChange(false)
-    }
-
-    // Add event listeners
     webview.addEventListener('did-start-loading', handleLoadStart)
     webview.addEventListener('did-stop-loading', handleLoadStop)
     webview.addEventListener('page-title-updated', handlePageTitleUpdated)
     webview.addEventListener('page-favicon-updated', handlePageFaviconUpdated)
     webview.addEventListener('did-navigate', handleDidNavigate)
+    webview.addEventListener('did-navigate-in-page', handleDidNavigate)
 
     return () => {
       webview.removeEventListener('did-start-loading', handleLoadStart)
@@ -66,141 +137,65 @@ export const WebView = forwardRef<HTMLWebViewElement, WebViewProps>(({
       webview.removeEventListener('page-title-updated', handlePageTitleUpdated)
       webview.removeEventListener('page-favicon-updated', handlePageFaviconUpdated)
       webview.removeEventListener('did-navigate', handleDidNavigate)
+      webview.removeEventListener('did-navigate-in-page', handleDidNavigate)
     }
-  }, [onTitleChange, onFaviconChange, onLoadingChange])
+  }, [internalRef, handleLoadStart, handleLoadStop, handlePageTitleUpdated, handlePageFaviconUpdated, handleDidNavigate])
 
   useEffect(() => {
-    const webview = webviewRef.current
+    const webview = internalRef
     if (!webview || !tab.url) return
 
-    if (tab.url === 'about:blank') {
-      // Show a beautiful new tab page
-      webview.innerHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Prism Browser</title>
-          <style>
-            body {
-              margin: 0;
-              padding: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-            }
-            .container {
-              text-align: center;
-              max-width: 600px;
-              padding: 2rem;
-            }
-            .logo {
-              font-size: 4rem;
-              margin-bottom: 1rem;
-              background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-              -webkit-background-clip: text;
-              -webkit-text-fill-color: transparent;
-              background-clip: text;
-            }
-            .title {
-              font-size: 2.5rem;
-              font-weight: 300;
-              margin-bottom: 1rem;
-            }
-            .subtitle {
-              font-size: 1.2rem;
-              opacity: 0.8;
-              margin-bottom: 2rem;
-            }
-            .features {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-              gap: 1rem;
-              margin-top: 2rem;
-            }
-            .feature {
-              background: rgba(255, 255, 255, 0.1);
-              padding: 1rem;
-              border-radius: 10px;
-              backdrop-filter: blur(10px);
-            }
-            .feature-icon {
-              font-size: 2rem;
-              margin-bottom: 0.5rem;
-            }
-            .feature-title {
-              font-weight: 600;
-              margin-bottom: 0.5rem;
-            }
-            .feature-desc {
-              font-size: 0.9rem;
-              opacity: 0.8;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="logo">🔮</div>
-            <h1 class="title">Prism Browser</h1>
-            <p class="subtitle">The revolutionary browser with AI-powered features</p>
-            
-            <div class="features">
-              <div class="feature">
-                <div class="feature-icon">🚀</div>
-                <div class="feature-title">Multi-Engine</div>
-                <div class="feature-desc">Prism, Chromium, Firefox engines</div>
-              </div>
-              <div class="feature">
-                <div class="feature-icon">🤖</div>
-                <div class="feature-title">AI Assistant</div>
-                <div class="feature-desc">Intelligent browsing assistance</div>
-              </div>
-              <div class="feature">
-                <div class="feature-icon">🔍</div>
-                <div class="feature-title">Smart Search</div>
-                <div class="feature-desc">8+ search engines integrated</div>
-              </div>
-              <div class="feature">
-                <div class="feature-icon">⚡</div>
-                <div class="feature-title">Performance</div>
-                <div class="feature-desc">Real-time monitoring & optimization</div>
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `
-    } else {
-      // Load the actual URL
+    if (tab.url === 'about:blank' || tab.url === '') {
+      return // NewTabPage component will handle this
+    }
+
+    // Only update src if it's different to avoid unnecessary reloads
+    if ((webview as any).src !== tab.url) {
       (webview as any).src = tab.url
     }
-  }, [tab.url])
+  }, [tab.url, internalRef])
+
+  if (tab.url === 'about:blank' || tab.url === '') {
+    return <NewTabPage />
+  }
 
   return (
-    <div className="h-full w-full relative">
+    <div 
+      className="h-full w-full relative bg-white dark:bg-gray-950"
+      style={{
+        willChange: 'contents',
+        transform: 'translateZ(0)'
+      }}
+    >
       <webview
         ref={webviewRef}
         className="h-full w-full"
-        style={{ display: 'flex' }}
+        style={{ 
+          display: 'flex',
+          willChange: 'auto'
+        }}
         partition="persist:main"
         allowpopups
-        webpreferences="contextIsolation=no, nodeIntegration=yes"
+        webpreferences="contextIsolation=no, nodeIntegration=yes, webviewTag=true"
       />
       
       {/* Loading Overlay */}
       {tab.isLoading && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-white text-lg">Loading...</span>
+        <div 
+          className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm flex items-center justify-center z-10"
+          style={{
+            willChange: 'opacity',
+            transform: 'translateZ(0)'
+          }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span className="text-gray-700 dark:text-gray-300 font-medium">Loading...</span>
           </div>
         </div>
       )}
     </div>
   )
-})
+}))
 
 WebView.displayName = 'WebView'

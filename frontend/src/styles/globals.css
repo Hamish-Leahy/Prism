@@ -1,16 +1,24 @@
-/* Global Styles */
+/* Global Styles - Optimized for Performance */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+/* GPU Acceleration & Performance */
 html, body {
   height: 100%;
   overflow: hidden;
-  /* Smooth scrolling optimizations */
-  scroll-behavior: smooth;
+  /* Disable smooth scrolling for better performance */
+  scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Reduce layout thrashing */
+  will-change: scroll-position;
 }
 
 #root {
@@ -18,73 +26,155 @@ html, body {
   width: 100vw;
   display: flex;
   flex-direction: column;
+  /* GPU layer */
+  transform: translateZ(0);
+  isolation: isolate;
 }
 
 /* Native macOS styling */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-  background: #1a1a1a;
-  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #ffffff;
+  color: #000000;
+  /* Performance optimizations */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Reduce paint operations */
+  contain: layout style paint;
 }
 
-/* Scrollbar styling */
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0a0a0a;
+    color: #ffffff;
+  }
+}
+
+/* Optimized scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #2a2a2a;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
-  /* Smooth scrolling for scrollbar */
-  transition: background 0.2s ease;
+  /* GPU acceleration for smooth scrolling */
+  transform: translateZ(0);
+  will-change: background;
+  transition: background 0.15s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a5a5a;
+  background: rgba(0, 0, 0, 0.3);
 }
 
-/* Smooth scrolling for all scrollable elements */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Disable smooth scrolling globally for performance */
 * {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Focus styles */
-*:focus {
-  outline: 2px solid #007AFF;
+/* Focus styles - only on keyboard navigation */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* Button base styles */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Button base styles - optimized */
 button {
   border: none;
   background: none;
   cursor: pointer;
   font-family: inherit;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  /* Reduce paint */
+  will-change: transform, background-color;
+  /* Prevent text selection on double click */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Input base styles */
+button:active {
+  transform: translateZ(0) scale(0.98);
+}
+
+/* Input base styles - optimized */
 input {
   border: none;
   background: none;
   font-family: inherit;
   color: inherit;
+  /* GPU acceleration */
+  transform: translateZ(0);
 }
 
 input:focus {
   outline: none;
 }
 
-/* WebView styling */
+/* WebView styling - optimized */
 webview {
   display: flex;
   width: 100%;
   height: 100%;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: auto;
+  /* Isolation for performance */
+  isolation: isolate;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Performance: Contain layout */
+.component-container {
+  contain: layout style paint;
+}
+
+/* Optimize animations */
+@keyframes spin {
+  from {
+    transform: translateZ(0) rotate(0deg);
+  }
+  to {
+    transform: translateZ(0) rotate(360deg);
+  }
 }
