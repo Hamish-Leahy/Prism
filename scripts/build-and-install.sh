@@ -13,26 +13,31 @@ npx electron-builder --mac --dir
 
 echo "📦 Installing to Applications..."
 
-# Remove old version if exists
+# Remove old versions if they exist
 if [ -d "/Applications/Prism Browser.app" ]; then
     rm -rf "/Applications/Prism Browser.app"
-    echo "   Removed old version"
+    echo "   Removed old Prism Browser.app"
 fi
 
-# Copy new version
-cp -R "dist-electron/mac-arm64/Prism Browser.app" /Applications/
-echo "   ✅ Copied to Applications"
+if [ -d "/Applications/Prism.app" ]; then
+    rm -rf "/Applications/Prism.app"
+    echo "   Removed old Prism.app"
+fi
+
+# Copy new version and rename to Prism.app
+cp -R "dist-electron/mac-arm64/Prism Browser.app" /Applications/Prism.app
+echo "   ✅ Copied to Applications as Prism.app"
 
 # Install custom icon
-cp electron/icon.icns "/Applications/Prism Browser.app/Contents/Resources/electron.icns"
+cp electron/icon.icns "/Applications/Prism.app/Contents/Resources/electron.icns"
 echo "   ✅ Icon installed"
 
 # Refresh Dock
-touch "/Applications/Prism Browser.app"
+touch "/Applications/Prism.app"
 killall Dock 2>/dev/null || true
 
 echo ""
-echo "✨ Prism Browser v$(node -p "require('./package.json').version") is now installed!"
-echo "   Location: /Applications/Prism Browser.app"
+echo "✨ Prism v$(node -p "require('./package.json').version") is now installed!"
+echo "   Location: /Applications/Prism.app"
 echo ""
 
