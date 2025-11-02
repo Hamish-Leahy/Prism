@@ -129,14 +129,24 @@ class DatabaseService
         $sql = "
             CREATE TABLE IF NOT EXISTS tabs (
                 id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36),
                 title VARCHAR(255) NOT NULL,
                 url TEXT NOT NULL,
                 is_active BOOLEAN DEFAULT FALSE,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ";
         $this->pdo->exec($sql);
+        
+        // Add user_id column if it doesn't exist (for existing databases)
+        try {
+            $this->pdo->exec("ALTER TABLE tabs ADD COLUMN user_id VARCHAR(36)");
+            $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_tabs_user_id ON tabs(user_id)");
+        } catch (\Exception $e) {
+            // Column might already exist, ignore
+        }
 
         // Users table for authentication
         $sql = "
@@ -216,6 +226,7 @@ class DatabaseService
         $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_folder_id ON bookmarks(folder_id)");
         $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status)");
         $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)");
+        $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_tabs_user_id ON tabs(user_id)");
 
         // Insert default settings
         $this->insertDefaultSettings();
