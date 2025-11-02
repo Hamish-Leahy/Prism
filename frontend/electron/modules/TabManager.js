@@ -10,10 +10,19 @@ class TabManager {
         this.tabIdCounter = 0;
         this.isCreatingTab = false;
         this.isSwitchingTab = false;
+        this.switchTimeout = null;
+        this.currentSwitchRequestId = 0; // Track current switch request to ignore stale results
+        
+        // DOM element cache for performance
+        this.tabElementCache = new Map();
         
         // DOM elements
         this.tabBar = document.getElementById('tabBar');
         this.newTabBtn = document.getElementById('newTabBtn');
+        
+        // Throttle tab switching to prevent rapid clicks (optimized for 120Hz)
+        this.lastSwitchTime = 0;
+        this.switchThrottleMs = 16; // ~60fps minimum, allows faster switching on high refresh rate displays
         
         this.setupEventListeners();
     }
@@ -110,10 +119,26 @@ class TabManager {
     }
     
     async switchToTab(tabId) {
-        if (this.isSwitchingTab) {
-            console.log('Tab switching already in progress, skipping...');
+        // Throttle rapid clicks
+        const now = Date.now();
+        if (now - this.lastSwitchTime < this.switchThrottleMs) {
             return;
         }
+        this.lastSwitchTime = now;
+        
+        // If switching to same tab, ignore
+        if (this.activeTabId === tabId) {
+            return;
+        }
+        
+        // Cancel any previous switch operation
+        if (this.switchTimeout) {
+            clearTimeout(this.switchTimeout);
+            this.switchTimeout = null;
+        }
+        
+        // Increment switch request ID to invalidate any pending switch operations
+        const switchRequestId = ++this.currentSwitchRequestId;
         
         this.isSwitchingTab = true;
         
@@ -124,26 +149,19 @@ class TabManager {
             return;
         }
         
-        console.log('Switching to tab:', tabId, 'URL:', tab.url, 'Has view:', !!tab.view, 'Visible:', tab.visible);
-        
-        this.activeTabId = tabId;
-        
-        // Update UI immediately
-        this.updateTabUI();
-        
-        // CRITICAL: Hide ALL other tabs first
-        const hidePromises = [];
-        this.tabs.forEach(t => {
-            if (t.id !== tabId && t.visible && t.view) {
-                console.log('Hiding other tab:', t.id);
-                hidePromises.push(
-                    ipcRenderer.invoke('engine:hideTab', t.id).then(() => {
-                        t.visible = false;
-                    })
-                );
+        // Set timeout to prevent getting stuck (especially with heavy sites like YouTube)
+        this.switchTimeout = setTimeout(() => {
+            // Only reset if this is still the current switch request
+            if (switchRequestId === this.currentSwitchRequestId) {
+                console.warn('Tab switch timeout, forcing reset');
+                this.isSwitchingTab = false;
+                this.switchTimeout = null;
             }
-        });
-        await Promise.all(hidePromises);
+        }, 3000);
+        
+        // Update active tab and UI IMMEDIATELY (non-blocking)
+        this.activeTabId = tabId;
+        this.updateTabUI();
         
         // Hide start page immediately
         const startPage = document.getElementById('startPage');
@@ -151,42 +169,113 @@ class TabManager {
             startPage.classList.add('hidden');
         }
         
-        // Handle tab content based on what it has
-        if (tab.url && tab.view) {
-            // Tab has content and view - show it
-            console.log('Tab has content and view, showing content');
-            await this.showTabContent(tab);
-        } else if (tab.url && !tab.view) {
-            // Tab has URL but no view yet - try to create view or show start page
-            console.log('Tab has URL but no view, attempting to create view');
-            try {
-                await this.createEngineTab(tabId);
-                // Check again after creating view
-                const updatedTab = this.tabs.find(t => t.id === tabId);
-                if (updatedTab && updatedTab.view) {
-                    await this.showTabContent(updatedTab);
-                } else {
+        // Hide other tabs asynchronously (don't wait)
+        // This prevents blocking, especially with heavy sites like YouTube
+        const hidePromises = [];
+        this.tabs.forEach(t => {
+            if (t.id !== tabId && t.visible && t.view) {
+                // Don't await - just fire and forget for performance
+                hidePromises.push(
+                    ipcRenderer.invoke('engine:hideTab', t.id).catch(err => {
+                        console.warn('Failed to hide tab:', t.id, err);
+                    }).then(() => {
+                        // Only update visibility if this is still the current switch
+                        if (switchRequestId === this.currentSwitchRequestId) {
+                            t.visible = false;
+                        }
+                    })
+                );
+            }
+        });
+        
+        // Handle tab content - show new tab FIRST, then hide others
+        // This makes switching feel instant
+        try {
+            // Check if this switch is still valid before proceeding
+            if (switchRequestId !== this.currentSwitchRequestId) {
+                console.log('Switch canceled - newer switch in progress');
+                return;
+            }
+            
+            if (tab.url && tab.view) {
+                // Tab has content and view - show it immediately
+                // OPTIMIZATION: If tab is already visible, showTabContent will handle it efficiently
+                await this.showTabContent(tab, switchRequestId);
+            } else if (tab.url && !tab.view) {
+                // Tab has URL but no view yet - try to create view
+                try {
+                    await this.createEngineTab(tabId);
+                    
+                    // Check again after async operation
+                    if (switchRequestId !== this.currentSwitchRequestId) {
+                        console.log('Switch canceled - newer switch in progress');
+                        return;
+                    }
+                    
+                    const updatedTab = this.tabs.find(t => t.id === tabId);
+                    if (updatedTab && updatedTab.view) {
+                        await this.showTabContent(updatedTab, switchRequestId);
+                    } else {
+                        if (switchRequestId === this.currentSwitchRequestId) {
+                            this.showStartPage();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to create view for tab:', error);
+                    if (switchRequestId === this.currentSwitchRequestId) {
+                        this.showStartPage();
+                    }
+                }
+            } else {
+                // Tab is empty - show start page
+                if (switchRequestId === this.currentSwitchRequestId) {
                     this.showStartPage();
                 }
-            } catch (error) {
-                console.error('Failed to create view for tab:', error);
+            }
+        } catch (error) {
+            console.error('Error during tab switch:', error);
+            // Fallback: show start page only if this is still the current switch
+            if (switchRequestId === this.currentSwitchRequestId) {
                 this.showStartPage();
             }
-        } else {
-            // Tab is empty - show start page
-            console.log('Tab is empty, showing start page');
-            this.showStartPage();
         }
         
-        this.isSwitchingTab = false;
+        // Wait for hide operations in background (don't block)
+        Promise.all(hidePromises).catch(err => {
+            console.warn('Some tabs failed to hide:', err);
+        }).finally(() => {
+            // Clear switching flag after a short delay, but only if this is still the current switch
+            setTimeout(() => {
+                if (switchRequestId === this.currentSwitchRequestId) {
+                    this.isSwitchingTab = false;
+                    if (this.switchTimeout) {
+                        clearTimeout(this.switchTimeout);
+                        this.switchTimeout = null;
+                    }
+                }
+            }, 100);
+        });
     }
     
     updateTabUI() {
-        // Update tab bar active states
-        const allTabs = this.tabBar.querySelectorAll('.tab');
-        allTabs.forEach(tabEl => {
-            tabEl.classList.toggle('active', tabEl.dataset.tabId === this.activeTabId);
+        // Update tab bar active states using cache for performance
+        this.tabElementCache.forEach((tabEl, tabId) => {
+            if (tabEl && tabEl.parentNode) {
+                tabEl.classList.toggle('active', tabId === this.activeTabId);
+            }
         });
+        
+        // Fallback: if cache misses, query DOM (should be rare)
+        if (this.tabBar) {
+            const allTabs = this.tabBar.querySelectorAll('.tab');
+            allTabs.forEach(tabEl => {
+                const tabId = tabEl.dataset.tabId;
+                if (tabId && !this.tabElementCache.has(tabId)) {
+                    this.tabElementCache.set(tabId, tabEl);
+                }
+                tabEl.classList.toggle('active', tabId === this.activeTabId);
+            });
+        }
         
         // Update address bar and engine badge
         const tab = this.tabs.find(t => t.id === this.activeTabId);
@@ -222,9 +311,7 @@ class TabManager {
         }
     }
     
-    async showTabContent(tab) {
-        console.log('Showing tab content for:', tab.id, 'URL:', tab.url, 'Has view:', !!tab.view);
-        
+    async showTabContent(tab, switchRequestId = null) {
         // Hide start page immediately
         const startPage = document.getElementById('startPage');
         if (startPage) {
@@ -239,42 +326,79 @@ class TabManager {
         
         // Show tab content if view exists
         if (tab.view) {
-            console.log('Calling engine:showTab for:', tab.id);
             try {
-                await ipcRenderer.invoke('engine:showTab', tab.id);
-                console.log('Successfully showed tab:', tab.id);
-                tab.visible = true;
+                // OPTIMIZATION: If tab is already visible, skip IPC call for better performance
+                if (tab.visible && (!switchRequestId || switchRequestId === this.currentSwitchRequestId)) {
+                    // Tab is already shown, just update UI
+                    const addressBar = document.getElementById('addressBar');
+                    if (addressBar && tab.url) {
+                        addressBar.value = tab.url;
+                    }
+                    return; // Early return - no need to show already visible tab
+                }
                 
-                // Update address bar with tab's URL
-                const addressBar = document.getElementById('addressBar');
-                if (addressBar && tab.url) {
-                    addressBar.value = tab.url;
+                // Use Promise.race with timeout for heavy sites like YouTube
+                // This prevents tab switching from getting stuck
+                const showPromise = ipcRenderer.invoke('engine:showTab', tab.id);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Show tab timeout')), 2000)
+                );
+                
+                await Promise.race([showPromise, timeoutPromise]);
+                
+                // Only update if this is still the current switch request
+                if (!switchRequestId || switchRequestId === this.currentSwitchRequestId) {
+                    tab.visible = true;
+                    
+                    // Update address bar with tab's URL
+                    const addressBar = document.getElementById('addressBar');
+                    if (addressBar && tab.url) {
+                        addressBar.value = tab.url;
+                    }
                 }
             } catch (error) {
-                console.error('Failed to show tab:', error);
-                // Fallback: try to recreate view or show start page
-                if (tab.url) {
-                    try {
-                        await this.createEngineTab(tab.id);
-                        const updatedTab = this.tabs.find(t => t.id === tab.id);
-                        if (updatedTab && updatedTab.view) {
-                            await ipcRenderer.invoke('engine:navigate', tab.id, tab.url);
-                            await ipcRenderer.invoke('engine:showTab', tab.id);
-                            updatedTab.visible = true;
-                        } else {
-                            this.showStartPage();
-                        }
-                    } catch (recreateError) {
-                        console.error('Failed to recreate tab view:', recreateError);
-                        this.showStartPage();
+                // Only update if this is still the current switch request
+                if (!switchRequestId || switchRequestId === this.currentSwitchRequestId) {
+                    console.warn('Show tab had issues (may still work):', error.message);
+                    // Mark as visible anyway - the tab might still be showing
+                    // This is especially important for heavy sites like YouTube
+                    tab.visible = true;
+                    
+                    // Update address bar even if show failed
+                    const addressBar = document.getElementById('addressBar');
+                    if (addressBar && tab.url) {
+                        addressBar.value = tab.url;
                     }
-                } else {
-                    this.showStartPage();
+                    
+                    // Only show start page if it's a critical error
+                    if (!error.message.includes('timeout')) {
+                        // For non-timeout errors, try fallback
+                        try {
+                            await this.createEngineTab(tab.id);
+                            
+                            // Check again after async operation
+                            if (switchRequestId && switchRequestId !== this.currentSwitchRequestId) {
+                                return; // Canceled by newer switch
+                            }
+                            
+                            const updatedTab = this.tabs.find(t => t.id === tab.id);
+                            if (updatedTab && updatedTab.view) {
+                                await ipcRenderer.invoke('engine:navigate', tab.id, tab.url);
+                                await ipcRenderer.invoke('engine:showTab', tab.id).catch(() => {});
+                                if (switchRequestId === null || switchRequestId === this.currentSwitchRequestId) {
+                                    updatedTab.visible = true;
+                                }
+                            }
+                        } catch (recreateError) {
+                            console.error('Failed to recreate tab view:', recreateError);
+                        }
+                    }
                 }
             }
         } else {
-            console.log('No view for tab:', tab.id, 'showing start page');
-            this.showStartPage(); // No view yet
+            if (!switchRequestId || switchRequestId === this.currentSwitchRequestId) {
+                this.showStartPage(); // No view yet
+            }
         }
     }
     
@@ -316,6 +440,13 @@ class TabManager {
         
         const tab = this.tabs[index];
         
+        // Remove from cache immediately
+        const tabElement = this.tabElementCache.get(tabId);
+        if (tabElement && tabElement.parentNode) {
+            tabElement.remove();
+        }
+        this.tabElementCache.delete(tabId);
+        
         // Close engine tab
         if (tab.view) {
             ipcRenderer.invoke('engine:closeTab', tab.id).catch(err => {
@@ -339,29 +470,45 @@ class TabManager {
             }
         }
         
+        // Render tabs efficiently
         this.renderTabs();
     }
     
     renderTabs() {
         if (!this.tabBar) return;
         
-        // Get existing tab elements
-        const existingTabs = Array.from(this.tabBar.querySelectorAll('.tab'));
-        const existingTabIds = new Set(existingTabs.map(el => el.dataset.tabId));
+        // Use requestAnimationFrame for smooth rendering (works with any refresh rate)
+        if (this.renderAnimationFrame) {
+            cancelAnimationFrame(this.renderAnimationFrame);
+        }
+        
+        // Optimize for high refresh rate displays (120Hz, 144Hz, etc.)
+        this.renderAnimationFrame = requestAnimationFrame(() => {
+            this._renderTabsSync();
+            this.renderAnimationFrame = null;
+        });
+    }
+    
+    _renderTabsSync() {
+        if (!this.tabBar) return;
+        
         const currentTabIds = new Set(this.tabs.map(tab => tab.id));
         
-        // Remove tabs that no longer exist
-        existingTabs.forEach(tabEl => {
-            if (!currentTabIds.has(tabEl.dataset.tabId)) {
-                tabEl.remove();
+        // Remove tabs from cache and DOM that no longer exist
+        for (const [tabId, tabElement] of this.tabElementCache.entries()) {
+            if (!currentTabIds.has(tabId)) {
+                if (tabElement && tabElement.parentNode) {
+                    tabElement.remove();
+                }
+                this.tabElementCache.delete(tabId);
             }
-        });
+        }
         
-        // Update or create tabs
+        // Update or create tabs efficiently
         this.tabs.forEach((tab, index) => {
-            let tabElement = this.tabBar.querySelector(`[data-tab-id="${tab.id}"]`);
+            let tabElement = this.tabElementCache.get(tab.id);
             
-            if (!tabElement) {
+            if (!tabElement || !tabElement.parentNode) {
                 // Create new tab element
                 tabElement = document.createElement('div');
                 tabElement.className = 'tab';
@@ -385,37 +532,54 @@ class TabManager {
                 });
                 
                 const closeButton = tabElement.querySelector('.tab-close');
-                closeButton.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.closeTab(tab.id);
-                });
-                
-                // Mark as having listeners to prevent duplicates
-                tabElement.dataset.listenersAdded = 'true';
+                if (closeButton) {
+                    closeButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.closeTab(tab.id);
+                    });
+                }
                 
                 // Insert before the new tab button
-                this.tabBar.insertBefore(tabElement, this.newTabBtn);
+                if (this.newTabBtn && this.newTabBtn.parentNode) {
+                    this.tabBar.insertBefore(tabElement, this.newTabBtn);
+                } else {
+                    this.tabBar.appendChild(tabElement);
+                }
+                
+                // Cache the element
+                this.tabElementCache.set(tab.id, tabElement);
             }
             
-            // Update tab content
+            // Update tab content efficiently (only if changed)
             const titleEl = tabElement.querySelector('.tab-title');
             const loadingEl = tabElement.querySelector('.tab-loading');
             const indicatorEl = tabElement.querySelector('.tab-engine-indicator');
             
-            if (titleEl) titleEl.textContent = tab.title || 'New Tab';
-            if (loadingEl) {
-                loadingEl.className = `tab-loading ${tab.isLoading ? 'loading' : ''}`;
+            // Only update if content changed (performance optimization)
+            if (titleEl && titleEl.textContent !== (tab.title || 'New Tab')) {
+                titleEl.textContent = tab.title || 'New Tab';
             }
+            
+            if (loadingEl) {
+                const isLoading = tab.isLoading;
+                const hasLoadingClass = loadingEl.classList.contains('loading');
+                if (isLoading !== hasLoadingClass) {
+                    loadingEl.className = `tab-loading ${isLoading ? 'loading' : ''}`;
+                }
+            }
+            
             if (indicatorEl) {
-                // Remove all engine classes first
-                indicatorEl.className = 'tab-engine-indicator';
-                // Add the correct engine class
                 const engine = tab.engine || 'firefox';
-                indicatorEl.classList.add(engine);
+                const currentEngine = indicatorEl.className.replace('tab-engine-indicator ', '');
+                if (currentEngine !== engine) {
+                    indicatorEl.className = 'tab-engine-indicator';
+                    indicatorEl.classList.add(engine);
+                }
             }
             
             // Update active state
-            if (tab.id === this.activeTabId) {
+            const isActive = tab.id === this.activeTabId;
+            if (isActive) {
                 tabElement.classList.add('active');
             } else {
                 tabElement.classList.remove('active');

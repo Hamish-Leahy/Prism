@@ -299,11 +299,11 @@ function createWindow() {
       hardwareAcceleration: true,
       // WebAuthn / Passkeys support
       enableWebAuthn: true,
-      // AGGRESSIVE performance optimizations
+      // AGGRESSIVE performance optimizations for high refresh rate displays
       enableSmoothScrolling: true,
       backgroundThrottling: false,
       offscreen: false,
-      // Force 60fps rendering
+      // Allow native refresh rate (works with 60Hz, 120Hz, 144Hz, etc.)
       enableLazyLoading: false,
       // Force hardware acceleration
       webgl: true,
@@ -331,7 +331,7 @@ function createWindow() {
     vibrancy: 'light',
     // Keep traffic lights visible even when window is unfocused
     hiddenInsetTitleBarButtonsOnBlur: false,
-    // CRITICAL: Force 60fps rendering
+    // Allow native refresh rate rendering (60Hz, 120Hz, 144Hz, etc.)
     paintWhenInitiallyHidden: false,
     // Disable background throttling
     backgroundThrottling: false,
