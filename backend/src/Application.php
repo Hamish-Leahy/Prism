@@ -54,8 +54,7 @@ class Application
         $this->app->add(new BodyParsingMiddleware());
         
         // Logging middleware
-        $logger = new Logger('prism');
-        $logger->pushHandler(new StreamHandler($this->config['logging']['path'], $this->config['logging']['level']));
+        $logger = $this->app->getContainer()->get(Logger::class);
         $this->app->add(new LoggingMiddleware($logger));
         
         // Error handling middleware
@@ -189,14 +188,35 @@ class Application
         $container = $this->app->getContainer();
         $config = $this->config;
         
+        // Logger service
+        $logger = new Logger('prism');
+        $logger->pushHandler(new StreamHandler($config['logging']['path'], $config['logging']['level']));
+        $container->set(Logger::class, $logger);
+        $container->set('logger', $logger);
+        
         // Database service
         $container->set('database', function () use ($config) {
+            return new DatabaseService($config['database']);
+        });
+        $container->set(DatabaseService::class, function () use ($config) {
             return new DatabaseService($config['database']);
         });
         
         // Engine manager
         $container->set('engineManager', function () use ($config) {
             return new EngineManager($config['engines']);
+        });
+        $container->set(EngineManager::class, function () use ($config) {
+            return new EngineManager($config['engines']);
+        });
+        
+        // Tab Controller
+        $container->set(TabController::class, function () use ($container, $config) {
+            return new TabController(
+                $container->get(EngineManager::class),
+                $container->get(DatabaseService::class),
+                $container->get(Logger::class)
+            );
         });
         
         // Authentication service

@@ -82,11 +82,26 @@ class TabManager {
     
     async createEngineTab(tabId) {
         try {
-            const result = await ipcRenderer.invoke('engine:createTab', tabId, 'firefox', {});
             const tab = this.tabs.find(t => t.id === tabId);
+            if (!tab) {
+                console.error('Tab not found when creating engine tab:', tabId);
+                return;
+            }
+            
+            const result = await ipcRenderer.invoke('engine:createTab', tabId, tab.engine || 'firefox', {});
             if (tab) {
                 tab.view = result.view;
                 console.log('✅ Engine tab created:', tabId);
+                
+                // If tab has a URL, navigate to it immediately
+                if (tab.url) {
+                    try {
+                        await ipcRenderer.invoke('engine:navigate', tabId, tab.url);
+                        console.log('✅ Navigated restored tab to:', tab.url);
+                    } catch (navError) {
+                        console.error('Failed to navigate restored tab:', navError);
+                    }
+                }
             }
         } catch (error) {
             console.error('❌ Failed to create engine tab:', error);
@@ -94,7 +109,7 @@ class TabManager {
         }
     }
     
-    switchToTab(tabId) {
+    async switchToTab(tabId) {
         if (this.isSwitchingTab) {
             console.log('Tab switching already in progress, skipping...');
             return;
@@ -117,23 +132,46 @@ class TabManager {
         this.updateTabUI();
         
         // CRITICAL: Hide ALL other tabs first
+        const hidePromises = [];
         this.tabs.forEach(t => {
             if (t.id !== tabId && t.visible && t.view) {
                 console.log('Hiding other tab:', t.id);
-                ipcRenderer.invoke('engine:hideTab', t.id);
-                t.visible = false;
+                hidePromises.push(
+                    ipcRenderer.invoke('engine:hideTab', t.id).then(() => {
+                        t.visible = false;
+                    })
+                );
             }
         });
+        await Promise.all(hidePromises);
+        
+        // Hide start page immediately
+        const startPage = document.getElementById('startPage');
+        if (startPage) {
+            startPage.classList.add('hidden');
+        }
         
         // Handle tab content based on what it has
         if (tab.url && tab.view) {
             // Tab has content and view - show it
             console.log('Tab has content and view, showing content');
-            this.showTabContent(tab);
+            await this.showTabContent(tab);
         } else if (tab.url && !tab.view) {
-            // Tab has URL but no view yet - show start page until view is ready
-            console.log('Tab has URL but no view, showing start page');
-            this.showStartPage();
+            // Tab has URL but no view yet - try to create view or show start page
+            console.log('Tab has URL but no view, attempting to create view');
+            try {
+                await this.createEngineTab(tabId);
+                // Check again after creating view
+                const updatedTab = this.tabs.find(t => t.id === tabId);
+                if (updatedTab && updatedTab.view) {
+                    await this.showTabContent(updatedTab);
+                } else {
+                    this.showStartPage();
+                }
+            } catch (error) {
+                console.error('Failed to create view for tab:', error);
+                this.showStartPage();
+            }
         } else {
             // Tab is empty - show start page
             console.log('Tab is empty, showing start page');
@@ -184,25 +222,56 @@ class TabManager {
         }
     }
     
-    showTabContent(tab) {
+    async showTabContent(tab) {
         console.log('Showing tab content for:', tab.id, 'URL:', tab.url, 'Has view:', !!tab.view);
         
-        // Hide start page
+        // Hide start page immediately
         const startPage = document.getElementById('startPage');
-        if (startPage) startPage.classList.add('hidden');
+        if (startPage) {
+            startPage.classList.add('hidden');
+        }
+        
+        // Hide no-internet page too
+        const noInternetPage = document.getElementById('noInternetPage');
+        if (noInternetPage) {
+            noInternetPage.classList.add('hidden');
+        }
         
         // Show tab content if view exists
         if (tab.view) {
             console.log('Calling engine:showTab for:', tab.id);
-            ipcRenderer.invoke('engine:showTab', tab.id)
-                .then(() => {
-                    console.log('Successfully showed tab:', tab.id);
-                    tab.visible = true;
-                })
-                .catch(error => {
-                    console.error('Failed to show tab:', error);
-                    this.showStartPage(); // Fallback
-                });
+            try {
+                await ipcRenderer.invoke('engine:showTab', tab.id);
+                console.log('Successfully showed tab:', tab.id);
+                tab.visible = true;
+                
+                // Update address bar with tab's URL
+                const addressBar = document.getElementById('addressBar');
+                if (addressBar && tab.url) {
+                    addressBar.value = tab.url;
+                }
+            } catch (error) {
+                console.error('Failed to show tab:', error);
+                // Fallback: try to recreate view or show start page
+                if (tab.url) {
+                    try {
+                        await this.createEngineTab(tab.id);
+                        const updatedTab = this.tabs.find(t => t.id === tab.id);
+                        if (updatedTab && updatedTab.view) {
+                            await ipcRenderer.invoke('engine:navigate', tab.id, tab.url);
+                            await ipcRenderer.invoke('engine:showTab', tab.id);
+                            updatedTab.visible = true;
+                        } else {
+                            this.showStartPage();
+                        }
+                    } catch (recreateError) {
+                        console.error('Failed to recreate tab view:', recreateError);
+                        this.showStartPage();
+                    }
+                } else {
+                    this.showStartPage();
+                }
+            }
         } else {
             console.log('No view for tab:', tab.id, 'showing start page');
             this.showStartPage(); // No view yet
@@ -241,7 +310,7 @@ class TabManager {
         });
     }
     
-    closeTab(tabId) {
+    async closeTab(tabId) {
         const index = this.tabs.findIndex(t => t.id === tabId);
         if (index === -1) return;
         
@@ -266,7 +335,7 @@ class TabManager {
             const newActiveIndex = Math.min(index, this.tabs.length - 1);
             const newActiveTab = this.tabs[newActiveIndex];
             if (newActiveTab) {
-                this.switchToTab(newActiveTab.id);
+                await this.switchToTab(newActiveTab.id);
             }
         }
         
@@ -309,9 +378,9 @@ class TabManager {
                 `;
                 
                 // Add event listeners only once
-                tabElement.addEventListener('click', (e) => {
+                tabElement.addEventListener('click', async (e) => {
                     if (!e.target.classList.contains('tab-close')) {
-                        this.switchToTab(tab.id);
+                        await this.switchToTab(tab.id);
                     }
                 });
                 

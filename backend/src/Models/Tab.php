@@ -9,14 +9,39 @@ class Tab
     private string $url;
     private bool $isActive;
     private \DateTime $createdAt;
+    private \DateTime $updatedAt;
+    private ?string $userId;
 
-    public function __construct(string $id, string $title, string $url, bool $isActive = false)
+    public function __construct(string $id, string $title, string $url, bool $isActive = false, ?string $userId = null)
     {
         $this->id = $id;
         $this->title = $title;
         $this->url = $url;
         $this->isActive = $isActive;
+        $this->userId = $userId;
         $this->createdAt = new \DateTime();
+        $this->updatedAt = new \DateTime();
+    }
+
+    public static function fromArray(array $data): Tab
+    {
+        $tab = new Tab(
+            $data['id'],
+            $data['title'],
+            $data['url'],
+            (bool)($data['is_active'] ?? false),
+            $data['user_id'] ?? null
+        );
+        
+        if (isset($data['created_at'])) {
+            $tab->createdAt = \DateTime::createFromFormat('Y-m-d H:i:s', $data['created_at']);
+        }
+        
+        if (isset($data['updated_at'])) {
+            $tab->updatedAt = \DateTime::createFromFormat('Y-m-d H:i:s', $data['updated_at']);
+        }
+        
+        return $tab;
     }
 
     public function getId(): string
@@ -32,6 +57,7 @@ class Tab
     public function setTitle(string $title): void
     {
         $this->title = $title;
+        $this->updatedAt = new \DateTime();
     }
 
     public function getUrl(): string
@@ -42,6 +68,7 @@ class Tab
     public function setUrl(string $url): void
     {
         $this->url = $url;
+        $this->updatedAt = new \DateTime();
     }
 
     public function isActive(): bool
@@ -52,6 +79,23 @@ class Tab
     public function setActive(bool $isActive): void
     {
         $this->isActive = $isActive;
+        $this->updatedAt = new \DateTime();
+    }
+
+    public function getUpdatedAt(): string
+    {
+        return $this->updatedAt->format('Y-m-d H:i:s');
+    }
+
+    public function getUserId(): ?string
+    {
+        return $this->userId;
+    }
+
+    public function setUserId(?string $userId): void
+    {
+        $this->userId = $userId;
+        $this->updatedAt = new \DateTime();
     }
 
     public function getCreatedAt(): string
@@ -66,7 +110,9 @@ class Tab
             'title' => $this->title,
             'url' => $this->url,
             'is_active' => $this->isActive,
-            'created_at' => $this->getCreatedAt()
+            'created_at' => $this->getCreatedAt(),
+            'updated_at' => $this->getUpdatedAt(),
+            'user_id' => $this->userId
         ];
     }
 }
